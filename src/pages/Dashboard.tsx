@@ -1,168 +1,162 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { SUPPORT_WHATSAPP, LEARN_ROUTE, PLANS, type Region } from '../data/config';
 import { track } from '../utils/analytics';
-
-const recentSessions = [
-  { subject:'Maths', topic:'Fractions and percentages', time:'2 hours ago', icon:'📐' },
-  { subject:'Science', topic:'How volcanoes erupt', time:'Yesterday', icon:'🔬' },
-  { subject:'English', topic:'Essay structure', time:'2 days ago', icon:'📖' },
-];
+import { subjects } from '../data/subjects';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [question, setQuestion] = useState('');
+  const location = useLocation();
+  const planId = (location.state?.planId ?? 'annual') as string;
+  const region = (location.state?.region ?? 'us') as Region;
+
+  const plan = PLANS.find(p => p.id === planId) ?? PLANS[1];
+  const pd = plan.monthly[region];
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--dim)' }}>
-      {/* Top bar */}
+      {/* Topbar */}
       <header className="bg-white h-16 flex items-center justify-between px-6 sticky top-0 z-50" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="font-black text-[20px]"><span className="grad-text">studdy</span> lab</div>
         <div className="flex items-center gap-3">
           <a
-            href="https://wa.me/441234567890"
+            href={SUPPORT_WHATSAPP}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-[13px] font-bold flex items-center gap-2 px-4 py-2 rounded-full"
             style={{ background: 'var(--dim)', color: 'var(--soft)' }}
             onClick={() => track('whatsapp_support_click')}
           >
             💬 Support
           </a>
-          <button
-            className="text-[13px] font-bold px-4 py-2 rounded-full"
-            style={{ background: 'var(--dim)', color: 'var(--soft)' }}
-            onClick={() => navigate('/')}
-          >
-            ← Website
+          <button className="text-[13px] font-bold px-4 py-2 rounded-full" style={{ background: 'var(--dim)', color: 'var(--soft)' }} onClick={() => navigate('/')}>
+            ← Back
           </button>
         </div>
       </header>
 
       <div className="max-w-[1100px] mx-auto px-6 py-8">
-        {/* Welcome banner */}
-        <div
-          className="rounded-3xl p-8 mb-6 relative overflow-hidden"
-          style={{ background: 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)', border: '1.5px solid var(--border)' }}
-        >
+        {/* Welcome */}
+        <div className="rounded-3xl p-8 mb-6 relative overflow-hidden" style={{ background: 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)', border: '1.5px solid var(--border)' }}>
           <div className="absolute top-0 left-0 right-0 h-1" style={{ background: 'var(--grad)' }} />
-          <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
-              <div className="eyebrow mb-3">Your private dashboard</div>
-              <h1 className="font-black mb-2" style={{ fontSize: 'clamp(24px,3vw,36px)', letterSpacing: '-0.8px' }}>Welcome back! 👋</h1>
-              <p className="text-[15px]" style={{ color: 'var(--soft)' }}>Your trial is active. 5 days remaining.</p>
+              <div className="eyebrow mb-3">Your learning dashboard</div>
+              <h1 className="font-black mb-2" style={{ fontSize: 'clamp(22px,3vw,34px)', letterSpacing: '-0.8px' }}>Welcome — your trial has started. 🎉</h1>
+              <p className="text-[14.5px]" style={{ color: 'var(--soft)' }}>
+                {`${7} free days · ${plan.name} plan · ${pd.symbol}0 charged today`}
+              </p>
             </div>
             <button
               className="gbtn text-[15px]"
-              onClick={() => { track('dashboard_opened'); window.open('https://studdyai.com', '_blank'); }}
+              onClick={() => { track('dashboard_opened'); navigate(LEARN_ROUTE); }}
             >
-              Start Learning →
+              Start First Session →
             </button>
           </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-5">
-          {/* Main column */}
+          {/* Main */}
           <div className="lg:col-span-2 space-y-5">
             {/* Ask a question */}
             <div className="bg-white rounded-2xl p-6" style={{ border: '1.5px solid var(--border)' }}>
-              <h2 className="font-black text-[17px] mb-4">Ask a question</h2>
+              <h2 className="font-black text-[17px] mb-4">Ask your first question</h2>
               <div className="flex gap-3">
                 <input
                   type="text"
-                  placeholder="Type any question — Maths, Science, coding, Excel..."
-                  value={question}
-                  onChange={e => setQuestion(e.target.value)}
+                  placeholder="Type any question — maths, science, coding, Excel..."
                   className="flex-1 px-4 py-3 rounded-xl text-[14px]"
                   style={{ border: '1.5px solid var(--border)', background: 'var(--dim)' }}
+                  aria-label="Ask Studdy a question"
                 />
-                <button className="gbtn px-5 text-[14px]" onClick={() => window.open('https://studdyai.com', '_blank')}>Ask →</button>
+                <button
+                  className="gbtn px-5 text-[14px]"
+                  onClick={() => navigate(LEARN_ROUTE)}
+                  aria-label="Submit question"
+                >
+                  Ask →
+                </button>
               </div>
             </div>
 
-            {/* Login details */}
+            {/* Starter prompts */}
             <div className="bg-white rounded-2xl p-6" style={{ border: '1.5px solid var(--border)' }}>
-              <h2 className="font-black text-[17px] mb-4">Login details</h2>
-              {[
-                { label:'Login URL', value:'studdyai.com/sign-in' },
-                { label:'Email', value:'your-email@example.com' },
-                { label:'Password', value:'••••••••••' },
-              ].map(({ label, value }) => (
-                <div key={label} className="mb-3">
-                  <div className="text-[11.5px] font-black uppercase tracking-wide mb-1.5" style={{ color: 'var(--soft)' }}>{label}</div>
-                  <div className="rounded-xl px-4 py-3 font-mono text-[13.5px] flex justify-between items-center" style={{ background: 'var(--dim)', border: '1px dashed var(--border)' }}>
-                    <span>{value}</span>
-                    <button className="text-[12px] font-bold" style={{ color: 'var(--g3)' }}>Copy</button>
-                  </div>
-                </div>
-              ))}
+              <h2 className="font-black text-[17px] mb-4">Try one of these to get started</h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {[
+                  'Explain photosynthesis with a diagram',
+                  'Debug a simple Python error',
+                  'Help me structure an essay',
+                  'Build an Excel VLOOKUP formula',
+                ].map(q => (
+                  <button
+                    key={q}
+                    className="text-left p-4 rounded-xl text-[13.5px] font-semibold transition-all"
+                    style={{ background: 'var(--dim)', border: '1.5px solid var(--border)', color: 'var(--ink)' }}
+                    onClick={() => navigate(LEARN_ROUTE)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Recent sessions */}
+            {/* No sessions yet */}
             <div className="bg-white rounded-2xl p-6" style={{ border: '1.5px solid var(--border)' }}>
-              <h2 className="font-black text-[17px] mb-4">Recent learning sessions</h2>
-              {recentSessions.map((s, i) => (
-                <div key={i} className="flex items-center gap-4 py-3" style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[20px]" style={{ background: 'var(--dim)' }}>{s.icon}</div>
-                  <div className="flex-1">
-                    <div className="font-bold text-[14px]">{s.topic}</div>
-                    <div className="text-[12px]" style={{ color: 'var(--soft)' }}>{s.subject} · {s.time}</div>
-                  </div>
-                  <button className="text-[12.5px] font-bold" style={{ color: 'var(--g3)' }}>Continue</button>
-                </div>
-              ))}
+              <h2 className="font-black text-[17px] mb-2">Recent sessions</h2>
+              <p className="text-[14px] mb-5" style={{ color: 'var(--soft)' }}>No sessions yet — start your first one above.</p>
+              <button
+                className="gbtn text-[14px]"
+                onClick={() => navigate(LEARN_ROUTE)}
+              >
+                Start Learning →
+              </button>
             </div>
           </div>
 
-          {/* Side column */}
+          {/* Sidebar */}
           <div className="space-y-5">
             {/* Trial status */}
             <div className="bg-white rounded-2xl p-6" style={{ border: '1.5px solid var(--border)' }}>
               <h2 className="font-black text-[17px] mb-4">Trial & billing</h2>
               {[
                 { label:'Status', value:'🟢 Trial active' },
-                { label:'Trial ends', value:'19 July 2026' },
-                { label:'Then billed', value:'$9.99/week' },
+                { label:'Plan', value:`${plan.name}` },
+                { label:'Due today', value:`${pd.symbol}0.00` },
+                { label:'After trial', value:pd.trialNote },
               ].map(({ label, value }) => (
                 <div key={label} className="mb-3">
-                  <div className="text-[11.5px] font-black uppercase tracking-wide mb-1" style={{ color: 'var(--soft)' }}>{label}</div>
+                  <div className="text-[11px] font-black uppercase tracking-wide mb-1" style={{ color: 'var(--soft)' }}>{label}</div>
                   <div className="rounded-xl px-4 py-2.5 text-[13.5px] font-semibold" style={{ background: 'var(--dim)' }}>{value}</div>
                 </div>
               ))}
-              <button className="gost w-full mt-2 text-[13px]">Manage billing</button>
-              <button
-                className="w-full mt-2 text-[13px] font-bold py-3 rounded-full"
+              <a
+                href={SUPPORT_WHATSAPP}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center mt-3 py-3 rounded-xl text-[13px] font-bold"
                 style={{ background: '#fff0f0', color: '#b42318', border: '1.5px solid #ffd5d2' }}
+                onClick={() => track('whatsapp_support_click')}
               >
-                Cancel subscription
-              </button>
+                Cancel via WhatsApp
+              </a>
             </div>
 
             {/* Subjects */}
             <div className="bg-white rounded-2xl p-6" style={{ border: '1.5px solid var(--border)' }}>
-              <h2 className="font-black text-[17px] mb-4">Start a subject</h2>
-              {['📐 Maths', '🔬 Science', '📖 English', '💻 Coding', '📊 Excel', '🎯 Exam Prep'].map(s => (
+              <h2 className="font-black text-[17px] mb-4">Start by subject</h2>
+              {subjects.map(s => (
                 <button
-                  key={s}
-                  className="w-full text-left px-4 py-3 rounded-xl text-[14px] font-bold mb-2 hover:opacity-80"
+                  key={s.id}
+                  className="w-full text-left px-4 py-3 rounded-xl text-[13.5px] font-semibold mb-2 transition-colors"
                   style={{ background: 'var(--dim)', color: 'var(--ink)' }}
-                  onClick={() => window.open('https://studdyai.com', '_blank')}
+                  onClick={() => navigate(LEARN_ROUTE)}
+                  aria-label={`Start ${s.label} session`}
                 >
-                  {s}
+                  {s.label}
                 </button>
               ))}
             </div>
-
-            {/* WhatsApp support */}
-            <a
-              href="https://wa.me/441234567890"
-              target="_blank"
-              rel="noreferrer"
-              className="block rounded-2xl p-5 text-center"
-              style={{ background: 'var(--grad)', color: '#fff' }}
-              onClick={() => track('whatsapp_support_click')}
-            >
-              <div className="text-[24px] mb-2">💬</div>
-              <div className="font-black text-[15px] mb-1">WhatsApp Support</div>
-              <div className="text-[12.5px] opacity-85">Cancel, billing or questions — we reply fast</div>
-            </a>
           </div>
         </div>
       </div>

@@ -1,48 +1,47 @@
-import { useState } from 'react';
-import PricingCard from '../components/PricingCard';
+import { useState, useEffect } from 'react';
 import SectionHeading from '../components/SectionHeading';
-import { pricingData, regions, type Region } from '../data/pricing';
+import { PLANS, REGIONS, TRIAL_DAYS, type Region } from '../data/config';
 import { track } from '../utils/analytics';
-import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Pricing() {
   const [region, setRegion] = useState<Region>('us');
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
+    const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) track('pricing_view'); },
       { threshold: 0.3 }
     );
     const el = document.getElementById('pricing');
-    if (el) observer.observe(el);
-    return () => observer.disconnect();
+    if (el) obs.observe(el);
+    return () => obs.disconnect();
   }, []);
 
-  const p = pricingData[region];
+  const handlePlan = (planId: string, event: string) => {
+    track(event as Parameters<typeof track>[0]);
+    navigate('/checkout', { state: { planId, region } });
+  };
 
   return (
     <section id="pricing" className="py-24 px-6">
       <div className="max-w-[1000px] mx-auto">
         <SectionHeading
           eyebrow="Pricing"
-          heading="Start today. $0 due right now."
-          sub="7 days completely free. We'll WhatsApp you before anything is charged."
+          heading="Start learning today."
+          sub={`${TRIAL_DAYS} days completely free. We'll message you before anything is charged.`}
           center
         />
 
         {/* Region toggle */}
         <div className="flex justify-center mb-10">
           <div className="flex gap-1 p-1 rounded-full" style={{ background: 'var(--dim)', border: '1.5px solid var(--border)' }}>
-            {regions.map(r => (
+            {REGIONS.map(r => (
               <button
                 key={r.key}
                 onClick={() => setRegion(r.key)}
                 className="px-5 py-2 rounded-full text-[13px] font-bold transition-all"
-                style={{
-                  background: region === r.key ? '#fff' : 'transparent',
-                  color: region === r.key ? 'var(--ink)' : 'var(--soft)',
-                  boxShadow: region === r.key ? '0 2px 8px rgba(0,0,0,.08)' : 'none',
-                }}
+                style={{ background: region === r.key ? '#fff' : 'transparent', color: region === r.key ? 'var(--ink)' : 'var(--soft)', boxShadow: region === r.key ? '0 2px 8px rgba(0,0,0,.08)' : 'none' }}
               >
                 {r.flag} {r.label}
               </button>
@@ -50,55 +49,85 @@ export default function Pricing() {
           </div>
         </div>
 
-        {p.trial ? (
-          <div className="grid md:grid-cols-3 gap-5">
-            <PricingCard
-              name="Monthly"
-              price={`${p.symbol}0`}
-              priceNote={`Then ${p.symbol}${p.weekly}/week after 7 days free`}
-              afterNote={`First charge: ${p.symbol}${p.weekly} on day 8`}
-              features={['Full tutor access','All subjects & work tasks','Unlimited questions','WhatsApp support','Cancel anytime']}
-              ctaLabel="Start Free Trial"
-              trackEvent="monthly_plan_click"
-            />
-            <PricingCard
-              name="Annual"
-              price={`${p.symbol}0`}
-              priceNote={`Then ${p.symbol}${p.yearlyWeek}/week · ${p.symbol}${p.yearlyTotal}/year`}
-              afterNote={`First charge: ${p.symbol}${p.yearlyTotal} on day 8`}
-              features={['Everything in Monthly','Save 68% vs monthly','WhatsApp reminder before billing','Priority support']}
-              badge="Most Families Choose This"
-              featured
-              ctaLabel="Start Free Trial"
-              trackEvent="annual_plan_click"
-            />
-            <PricingCard
-              name="Human Tutor"
-              price="$180+"
-              priceNote="Typical hourly rate"
-              afterNote="Availability varies"
-              features={['Fixed schedule only','One explanation style','Wait for next session','Hourly cost adds up']}
-              dimmed
-              ctaLabel="Comparison only"
-            />
-          </div>
-        ) : (
-          <div className="max-w-[420px] mx-auto">
-            <PricingCard
-              name="Annual"
-              price={`${p.symbol}${p.yearlyTotal}`}
-              priceNote="One-time payment — no recurring card charges"
-              afterNote="Pay once, use all year"
-              features={['Full tutor access','All subjects & work tasks','Unlimited questions','WhatsApp support']}
-              badge="Best Value"
-              featured
-              ctaLabel="Get Started"
-            />
-          </div>
-        )}
+        <div className="grid md:grid-cols-3 gap-5 items-stretch">
+          {/* Monthly */}
+          {(() => {
+            const plan = PLANS[0];
+            const pd = plan.monthly[region];
+            return (
+              <div className="rounded-2xl p-8 flex flex-col" style={{ border: '1.5px solid var(--border)', background: '#fff' }}>
+                <div className="text-[12px] font-black uppercase tracking-wide mb-3" style={{ color: 'var(--soft)' }}>{plan.name}</div>
+                <div className="font-black mb-1" style={{ fontSize: '38px', letterSpacing: '-1.5px' }}>
+                  {pd.symbol}0 <span className="text-[14px] font-medium" style={{ color: 'var(--soft)' }}>today</span>
+                </div>
+                <p className="text-[13px] mb-6 flex-1" style={{ color: 'var(--soft)' }}>{pd.trialNote}</p>
+                <ul className="space-y-2 mb-6">
+                  {['Full tutor access','All subjects','Unlimited questions','WhatsApp support','Cancel anytime'].map(f => (
+                    <li key={f} className="flex gap-2 text-[13.5px]" style={{ color: 'var(--soft)' }}>
+                      <span style={{ color: 'var(--g4)' }}>✓</span> {f}
+                    </li>
+                  ))}
+                </ul>
+                <button className="gost w-full justify-center" onClick={() => handlePlan('monthly', 'monthly_plan_click')}>
+                  Start Free Trial
+                </button>
+              </div>
+            );
+          })()}
 
-        <p className="text-center text-[13.5px] mt-6 font-semibold" style={{ color: 'var(--soft)' }}>
-          🛡️ $0 due today · WhatsApp reminder before billing · Cancel anytime, no calls or forms
+          {/* Annual — Best Value */}
+          {(() => {
+            const plan = PLANS[1];
+            const pd = plan.monthly[region];
+            return (
+              <div
+                className="rounded-2xl p-8 flex flex-col relative"
+                style={{ border: '2px solid transparent', background: 'linear-gradient(#fff,#fff) padding-box, var(--grad) border-box', boxShadow: '0 20px 60px rgba(140,121,224,.15)' }}
+              >
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-white text-[11px] font-black px-4 py-1.5 rounded-full whitespace-nowrap" style={{ background: 'var(--grad)' }}>
+                  Best Value
+                </div>
+                <div className="text-[12px] font-black uppercase tracking-wide mb-3" style={{ color: 'var(--soft)' }}>{plan.name}</div>
+                <div className="font-black mb-1" style={{ fontSize: '38px', letterSpacing: '-1.5px' }}>
+                  {pd.symbol}0 <span className="text-[14px] font-medium" style={{ color: 'var(--soft)' }}>today</span>
+                </div>
+                <p className="text-[13px] mb-6 flex-1" style={{ color: 'var(--soft)' }}>{pd.trialNote}</p>
+                <ul className="space-y-2 mb-6">
+                  {['Full tutor access','All subjects','Unlimited questions','Save 50% vs monthly','WhatsApp reminder before billing'].map(f => (
+                    <li key={f} className="flex gap-2 text-[13.5px]" style={{ color: 'var(--soft)' }}>
+                      <span style={{ color: 'var(--g4)' }}>✓</span> {f}
+                    </li>
+                  ))}
+                </ul>
+                <button className="gbtn w-full justify-center" onClick={() => handlePlan('annual', 'annual_plan_click')}>
+                  Start Free Trial
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Human Tutor — comparison only */}
+          <div className="rounded-2xl p-8 flex flex-col" style={{ border: '1.5px solid var(--border)', background: '#fff', opacity: 0.55 }}>
+            <div className="text-[12px] font-black uppercase tracking-wide mb-3" style={{ color: 'var(--soft)' }}>Human Tutor</div>
+            <div className="font-black mb-1" style={{ fontSize: '38px', letterSpacing: '-1.5px' }}>
+              Varies <span className="text-[14px] font-medium" style={{ color: 'var(--soft)' }}>per hour</span>
+            </div>
+            <p className="text-[13px] mb-6 flex-1" style={{ color: 'var(--soft)' }}>Typical tutoring billed hourly with fixed scheduling.</p>
+            <ul className="space-y-2 mb-6">
+              {['Fixed appointment times','Single teaching style','One explanation per session','Availability varies','Best for deep personal mentoring'].map(f => (
+                <li key={f} className="flex gap-2 text-[13.5px]" style={{ color: 'var(--soft)' }}>
+                  <span style={{ color: 'var(--border)' }}>–</span> {f}
+                </li>
+              ))}
+            </ul>
+            <button className="gost w-full justify-center opacity-50" disabled aria-label="Human tutor comparison — no action">
+              Comparison only
+            </button>
+          </div>
+        </div>
+
+        <p className="text-center text-[13px] mt-6 font-semibold" style={{ color: 'var(--soft)' }}>
+          🛡️ $0 due today · Reminder before billing · Cancel anytime · No calls or forms
         </p>
       </div>
     </section>

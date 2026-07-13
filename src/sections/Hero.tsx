@@ -1,169 +1,233 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
+import { Play, Zap, Eye, Clock } from 'lucide-react';
+import Modal from '../components/Modal';
+import LazyVideo from '../components/LazyVideo';
 import { track } from '../utils/analytics';
 
-const floatingLabels = [
-  { text: 'School subjects', icon: '📚', delay: 0 },
-  { text: 'Coding & engineering', icon: '💻', delay: 0.3 },
-  { text: 'Homework & exam help', icon: '🎯', delay: 0.6 },
-  { text: 'Excel & work tasks', icon: '📊', delay: 0.9 },
-  { text: 'Visual explanations', icon: '✏️', delay: 1.2 },
-  { text: 'Available 24/7', icon: '⚡', delay: 1.5 },
+const USE_CASES = [
+  { label: 'Biology diagram', hint: 'Draw the process of photosynthesis step by step...' },
+  { label: 'Python debugging', hint: 'Here is the error in your code. Let me trace through it...' },
+  { label: 'English answer', hint: 'Your argument is clear. Let me show how to strengthen it...' },
+  { label: 'Excel formula', hint: 'To build a commission formula, start with IF and VLOOKUP...' },
 ];
 
-const writeLines = [
-  { text: 'Let\'s understand fractions.', delay: 0.3, cls: 'text-[var(--ink)] font-semibold text-[17px]' },
-  { text: 'Split a whole into equal parts.', delay: 1.0, cls: 'text-[var(--soft)] text-[15px] pl-4 border-l-[3px] border-[var(--g3)]' },
-  { text: '1 part out of 4 = 1/4', delay: 1.7, cls: 'text-[var(--soft)] text-[15px] pl-4 border-l-[3px] border-[var(--g3)]' },
-  { text: 'Answer: one-quarter ✓', delay: 2.4, cls: 'text-[var(--g1)] font-black text-[18px]' },
-  { text: 'Want to try one yourself?', delay: 3.1, cls: 'text-[var(--g4)] text-[14px] font-bold' },
+const FLOAT_LABELS = [
+  { icon: Zap,  text: 'Learn anything' },
+  { icon: Eye,  text: 'Visual explanations' },
+  { icon: Clock,text: 'Available 24/7' },
 ];
 
 export default function Hero() {
-  const copyRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const headlineRef = useRef<HTMLDivElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [caseIdx, setCaseIdx] = useState(0);
+  const [demoOpen, setDemoOpen] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Rotate use cases
   useEffect(() => {
-    if (!copyRef.current) return;
-    gsap.from(copyRef.current.children, {
-      opacity: 0, y: 30, duration: 0.8, stagger: 0.12, ease: 'power3.out', delay: 0.2,
+    intervalRef.current = setInterval(() => setCaseIdx(i => (i + 1) % USE_CASES.length), 3200);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
+
+  // Entrance animation
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      gsap.from(headlineRef.current, { opacity: 0, y: 40, duration: 1, ease: 'power3.out', delay: 0.15 });
+      gsap.from(ctaRef.current, { opacity: 0, y: 24, duration: 0.8, ease: 'power3.out', delay: 0.45 });
+      gsap.from(stageRef.current, { opacity: 0, scale: 0.97, duration: 1, ease: 'power3.out', delay: 0.2 });
     });
+    return () => ctx.revert();
+  }, []);
+
+  const handleTrial = useCallback(() => {
+    track('checkout_started');
+    navigate('/checkout');
+  }, [navigate]);
+
+  const handleDemo = useCallback(() => {
+    track('full_demo_open');
+    setDemoOpen(true);
   }, []);
 
   return (
-    <section
-      className="relative min-h-screen flex items-center pt-24 pb-16 overflow-hidden"
-      style={{
-        background: 'radial-gradient(ellipse 75% 55% at 65% 0%, rgba(140,121,224,.1), transparent 65%), radial-gradient(ellipse 55% 40% at 5% 80%, rgba(239,85,182,.07), transparent 60%), #fff',
-      }}
-    >
-      {/* Whiteboard grid overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)',
-          backgroundSize: '60px 60px',
-          opacity: 0.25,
-        }}
-      />
+    <>
+      <section
+        className="relative w-full overflow-hidden"
+        style={{ minHeight: '100svh', background: '#fff' }}
+      >
+        {/* Whiteboard grid — full viewport */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          aria-hidden="true"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(140,121,224,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(140,121,224,.06) 1px, transparent 1px)',
+            backgroundSize: '64px 64px',
+          }}
+        />
 
-      <div className="max-w-[1200px] mx-auto px-6 w-full">
-        <div className="grid lg:grid-cols-2 gap-14 items-center">
+        {/* Gradient wash */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          aria-hidden="true"
+          style={{
+            background: 'radial-gradient(ellipse 80% 60% at 70% 10%, rgba(140,121,224,.08), transparent 65%), radial-gradient(ellipse 50% 40% at 5% 85%, rgba(239,85,182,.06), transparent 60%)',
+          }}
+        />
 
-          {/* Left copy */}
-          <div ref={copyRef}>
-            <div className="eyebrow mb-6">
-              <span className="w-2 h-2 rounded-full pulse-dot" style={{ background: 'var(--grad)' }} />
-              Your personal AI tutor, available 24/7
-            </div>
+        <div className="relative z-10 max-w-[1280px] mx-auto px-6 h-full flex flex-col lg:flex-row items-center gap-12 pt-32 pb-20">
+
+          {/* ── LEFT: headline + CTAs ── */}
+          <div ref={headlineRef} className="flex-none w-full lg:w-[420px] xl:w-[480px]">
+            <div className="eyebrow mb-6">Your personal AI tutor · available 24/7</div>
 
             <h1
-              className="font-black leading-[1.06] mb-5"
-              style={{ fontSize: 'clamp(38px, 5.2vw, 62px)', letterSpacing: '-2px' }}
+              className="font-black leading-[1.04] mb-6"
+              style={{ fontSize: 'clamp(36px, 5vw, 58px)', letterSpacing: '-2px', color: 'var(--ink)' }}
             >
-              The tutor that explains it<br />
+              The tutor that explains it{' '}
               <span className="grad-text">until it finally makes sense.</span>
             </h1>
 
-            <p className="mb-8 leading-relaxed max-w-[500px]" style={{ fontSize: 'clamp(16px, 1.8vw, 19px)', color: 'var(--soft)' }}>
-              Ask by voice, text or image. Learn through live visual explanations, step-by-step guidance and follow-up questions.
+            <p className="mb-8 leading-relaxed" style={{ fontSize: 'clamp(16px, 1.6vw, 18px)', color: 'var(--soft)', maxWidth: '420px' }}>
+              Ask by voice, text or image. Learn through live visual explanations and unlimited follow-up questions.
             </p>
 
-            <div className="flex flex-wrap gap-3 mb-6">
-              <button
-                className="gbtn text-[15px]"
-                onClick={() => { track('hero_demo_play'); document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' }); }}
-              >
+            <div ref={ctaRef} className="flex flex-col sm:flex-row gap-3 mb-8">
+              <button className="gbtn text-[15px] px-7 py-4" onClick={handleTrial}>
                 Start Free Trial
               </button>
               <button
-                className="gost text-[15px]"
-                onClick={() => { track('full_demo_open'); document.getElementById('proof')?.scrollIntoView({ behavior: 'smooth' }); }}
+                className="gost text-[15px] px-6 py-4 flex items-center gap-2"
+                onClick={handleDemo}
+                aria-label="Watch full product demo"
               >
-                ▶ Watch Full Demo
+                <Play size={16} />
+                Watch Full Demo
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-4">
-              {['Voice conversations', 'Visual whiteboard', 'All subjects & work tasks', 'Available 24/7'].map(t => (
-                <span key={t} className="flex items-center gap-1.5 text-[12.5px] font-bold" style={{ color: 'var(--soft)' }}>
-                  <span style={{ color: 'var(--g3)' }}>✓</span> {t}
-                </span>
+            {/* Float labels */}
+            <div className="flex flex-col gap-2">
+              {FLOAT_LABELS.map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: 'var(--soft)' }}>
+                  <Icon size={14} style={{ color: 'var(--g3)' }} aria-hidden="true" />
+                  {text}
+                </div>
               ))}
             </div>
           </div>
 
-          {/* Right - Living Whiteboard */}
-          <div className="relative">
-            {/* Glow */}
+          {/* ── RIGHT: Living Whiteboard stage ── */}
+          <div ref={stageRef} className="flex-1 w-full relative">
+            {/* Glow behind stage */}
             <div
-              className="absolute -inset-10 rounded-full pointer-events-none"
-              style={{ background: 'radial-gradient(ellipse, rgba(239,85,182,.14), rgba(140,121,224,.1) 45%, rgba(37,168,244,.07) 70%, transparent)', filter: 'blur(30px)' }}
+              className="absolute -inset-8 pointer-events-none rounded-full"
+              aria-hidden="true"
+              style={{ background: 'radial-gradient(ellipse, rgba(239,85,182,.12), rgba(140,121,224,.08) 45%, transparent 70%)', filter: 'blur(28px)' }}
             />
 
             <div
-              className="relative z-10 rounded-[32px] p-4"
-              style={{ background: 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)', boxShadow: '0 44px 90px -20px rgba(140,121,224,.32)' }}
+              className="relative z-10 rounded-[28px] overflow-hidden"
+              style={{
+                background: '#fff',
+                border: '1.5px solid var(--border)',
+                boxShadow: '0 40px 80px -20px rgba(140,121,224,.25)',
+                minHeight: '480px',
+              }}
             >
-              {/* Whiteboard inner */}
-              <div className="rounded-[22px] overflow-hidden bg-white relative" style={{ minHeight: '440px' }}>
-                {/* Whiteboard lines */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{ backgroundImage: 'linear-gradient(rgba(140,121,224,.06) 1px, transparent 1px)', backgroundSize: '100% 38px', backgroundPosition: '0 20px' }}
+              {/* Top accent bar */}
+              <div className="h-[3px] w-full" style={{ background: 'var(--grad)' }} />
+
+              {/* Whiteboard lines inside */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                aria-hidden="true"
+                style={{
+                  backgroundImage: 'linear-gradient(rgba(140,121,224,.05) 1px, transparent 1px)',
+                  backgroundSize: '100% 40px',
+                  backgroundPosition: '0 24px',
+                }}
+              />
+
+              {/* Video area — hero muted montage */}
+              <div className="relative" style={{ aspectRatio: '16/9' }}>
+                <LazyVideo
+                  label="Hero Video — 12–15 sec muted montage"
+                  meta="Replace with final muted hero reel"
+                  className="w-full h-full"
+                  aspectRatio="16/9"
                 />
+                <div
+                  className="absolute bottom-0 inset-x-0 h-1/3 pointer-events-none"
+                  style={{ background: 'linear-gradient(transparent, rgba(255,255,255,.9))' }}
+                />
+              </div>
 
-                <div className="p-7 relative z-10 flex flex-col" style={{ minHeight: '440px' }}>
-                  {/* Question chip */}
-                  <div className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-[14px] font-bold mb-6 max-w-fit" style={{ background: 'var(--dim)', border: '1px solid var(--border)', color: 'var(--soft)' }}>
-                    <span className="text-[18px]">🧒</span> Explain fractions to me
+              {/* Rotating use-case hint */}
+              <div className="px-6 py-5">
+                <div
+                  className="text-[11px] font-black uppercase tracking-widest mb-3"
+                  style={{ color: 'var(--soft)', letterSpacing: '.12em' }}
+                >
+                  Now explaining
+                </div>
+                <div className="transition-all duration-500">
+                  <div className="font-bold text-[15px] mb-1" style={{ color: 'var(--ink)' }}>
+                    {USE_CASES[caseIdx].label}
                   </div>
-
-                  {/* Animated writing */}
-                  <div className="flex-1 flex flex-col gap-3">
-                    {writeLines.map((l, i) => (
-                      <div
-                        key={i}
-                        className={`write-in ${l.cls}`}
-                        style={{ animationDelay: `${l.delay}s` }}
-                      >
-                        {l.text}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Alfrenzo avatar bar */}
-                  <div className="flex items-center gap-3 mt-6 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-[14px]" style={{ background: 'var(--grad)' }}>A</div>
-                    <div>
-                      <div className="font-bold text-[13px]">Alfrenzo</div>
-                      <div className="text-[11px]" style={{ color: 'var(--soft)' }}>Your AI tutor</div>
-                    </div>
-                    <div className="ml-auto flex gap-2">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-[14px]" style={{ background: 'var(--dim)' }}>💬</div>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-[14px]" style={{ background: 'var(--dim)' }}>🔊</div>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-[14px] text-white" style={{ background: 'var(--g1)' }}>🎙️</div>
-                    </div>
+                  <div className="text-[13px] italic" style={{ color: 'var(--soft)' }}>
+                    "{USE_CASES[caseIdx].hint}"
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Floating use-case labels — desktop only */}
-            <div className="hidden xl:flex flex-col gap-2.5 absolute -right-40 top-1/2 -translate-y-1/2 z-20">
-              {floatingLabels.map((l, i) => (
-                <div
-                  key={l.text}
-                  className="float-anim bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-[0_8px_30px_rgba(0,0,0,.1)] min-w-[185px]"
-                  style={{ animationDelay: `${i * 0.4}s` }}
-                >
-                  <span className="text-[17px]">{l.icon}</span>
-                  <span className="font-bold text-[13px]" style={{ color: 'var(--ink)' }}>{l.text}</span>
-                </div>
-              ))}
+              {/* Use-case dots */}
+              <div className="px-6 pb-5 flex gap-2">
+                {USE_CASES.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCaseIdx(i)}
+                    aria-label={`Show ${USE_CASES[i].label} example`}
+                    className="w-2 h-2 rounded-full transition-all duration-300"
+                    style={{ background: i === caseIdx ? 'var(--g1)' : 'var(--border)', transform: i === caseIdx ? 'scale(1.4)' : 'scale(1)' }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+
+        {/* Bottom trust strip */}
+        <div
+          className="relative z-10 border-t px-6 py-3 flex flex-wrap justify-center gap-6 text-[12.5px] font-semibold"
+          style={{ borderColor: 'var(--border)', color: 'var(--soft)' }}
+        >
+          {['$0 due today', 'WhatsApp reminder before billing', 'Cancel anytime'].map(t => (
+            <span key={t} className="flex items-center gap-1.5">
+              <span style={{ color: 'var(--g4)' }}>✓</span> {t}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* Full demo modal */}
+      <Modal open={demoOpen} onClose={() => setDemoOpen(false)} title="Full Product Demo">
+        <div className="p-6 md:p-8">
+          <h3 className="font-black text-[20px] mb-2">See Studdy explain from start to finish.</h3>
+          <p className="text-[14px] mb-5" style={{ color: 'var(--soft)' }}>One real question. Visual whiteboard. Voice explanation. Follow-up answered.</p>
+          <LazyVideo
+            label="Full Demo Video — 90–100 sec"
+            meta="Replace with complete product session recording"
+            className="w-full rounded-2xl"
+            aspectRatio="16/9"
+          />
+        </div>
+      </Modal>
+    </>
   );
 }

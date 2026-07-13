@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
+
+const NAV_LINKS = [
+  { label: 'Experience', href: '#demo' },
+  { label: 'Use Cases', href: '#subjects' },
+  { label: 'Reviews', href: '#reviews' },
+  { label: 'Pricing', href: '#pricing' },
+];
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -7,49 +15,46 @@ export default function Header() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 40);
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
+    const h = () => setScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', h, { passive: true });
+    return () => window.removeEventListener('scroll', h);
   }, []);
 
-  const navLinks = [
-    { label: 'Experience', href: '#demo' },
-    { label: 'Use Cases', href: '#subjects' },
-    { label: 'How It Works', href: '#hiw' },
-    { label: 'Why Studdy', href: '#compare' },
-    { label: 'Reviews', href: '#reviews' },
-    { label: 'Pricing', href: '#pricing' },
-  ];
+  // Close menu on resize
+  useEffect(() => {
+    const h = () => { if (window.innerWidth >= 768) setMenuOpen(false); };
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
 
   return (
     <>
       <nav
         className="fixed top-0 left-0 right-0 z-[100] transition-all duration-300"
         style={{
-          height: scrolled ? '64px' : '72px',
-          background: scrolled ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.88)',
+          height: scrolled ? '60px' : '70px',
+          background: scrolled ? 'rgba(255,255,255,.97)' : 'rgba(255,255,255,.9)',
           backdropFilter: 'blur(18px)',
-          borderBottom: `1px solid ${scrolled ? 'var(--border)' : 'transparent'}`,
-          boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,.06)' : 'none',
+          borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent',
+          boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,.05)' : 'none',
         }}
+        role="navigation"
+        aria-label="Main navigation"
       >
-        <div className="max-w-[1200px] mx-auto px-6 h-full flex items-center justify-between">
-          <div
-            className="font-black text-[22px] cursor-pointer"
-            style={{ letterSpacing: '-0.5px' }}
+        <div className="max-w-[1280px] mx-auto px-6 h-full flex items-center justify-between">
+          <button
+            className="font-black text-[21px] cursor-pointer"
+            style={{ letterSpacing: '-0.5px', background: 'none', border: 'none', padding: 0 }}
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            aria-label="Go to top"
           >
             <span className="grad-text">studdy</span> lab
-          </div>
+          </button>
 
           {/* Desktop nav */}
           <div className="hidden md:flex gap-7 text-[14px] font-semibold" style={{ color: 'var(--soft)' }}>
-            {navLinks.map(l => (
-              <a
-                key={l.label}
-                href={l.href}
-                className="hover:text-[var(--ink)] transition-colors"
-              >
+            {NAV_LINKS.map(l => (
+              <a key={l.label} href={l.href} className="hover:text-[var(--ink)] transition-colors">
                 {l.label}
               </a>
             ))}
@@ -58,45 +63,59 @@ export default function Header() {
           <div className="hidden md:flex items-center gap-3">
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-[14px] font-bold px-4 py-2 rounded-full hover:bg-gray-100 transition-colors"
+              className="text-[13.5px] font-bold px-4 py-2 rounded-full transition-colors hover:bg-gray-50"
               style={{ color: 'var(--soft)' }}
             >
               Log In
             </button>
-            <button className="gbtn text-[13.5px] px-5 py-2.5" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
+            <button
+              className="gbtn text-[13.5px] px-5 py-2.5"
+              onClick={() => navigate('/checkout')}
+            >
               Start Free Trial
             </button>
           </div>
 
           {/* Mobile hamburger */}
-          <button className="md:hidden p-2" onClick={() => setMenuOpen(o => !o)}>
-            <div className="w-5 h-0.5 bg-[var(--ink)] mb-1 transition-all" style={{ transform: menuOpen ? 'rotate(45deg) translateY(5px)' : 'none' }} />
-            <div className="w-5 h-0.5 bg-[var(--ink)] mb-1" style={{ opacity: menuOpen ? 0 : 1 }} />
-            <div className="w-5 h-0.5 bg-[var(--ink)]" style={{ transform: menuOpen ? 'rotate(-45deg) translateY(-5px)' : 'none' }} />
+          <button
+            className="md:hidden p-2 rounded-xl"
+            style={{ background: 'var(--dim)' }}
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile dropdown */}
         {menuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b py-4 px-6" style={{ borderColor: 'var(--border)' }}>
-            {navLinks.map(l => (
+          <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b py-2 px-6 shadow-lg" style={{ borderColor: 'var(--border)' }}>
+            {NAV_LINKS.map(l => (
               <a
                 key={l.label}
                 href={l.href}
-                className="block py-3 font-semibold border-b text-[15px]"
+                className="block py-3.5 font-semibold text-[15px] border-b last:border-0"
                 style={{ borderColor: 'var(--border)', color: 'var(--soft)' }}
                 onClick={() => setMenuOpen(false)}
               >
                 {l.label}
               </a>
             ))}
+            <div className="py-3 flex gap-3">
+              <button className="gost flex-1 text-[14px] py-3" onClick={() => navigate('/dashboard')}>Log In</button>
+              <button className="gbtn flex-1 text-[14px] py-3" onClick={() => { navigate('/checkout'); setMenuOpen(false); }}>Start Free Trial</button>
+            </div>
           </div>
         )}
       </nav>
 
       {/* Mobile sticky bottom CTA */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] p-3 bg-white/95 backdrop-blur-md border-t" style={{ borderColor: 'var(--border)' }}>
-        <button className="gbtn w-full text-[15px] py-4" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
+      <div
+        className="md:hidden fixed bottom-0 left-0 right-0 z-[100] px-4 py-3 bg-white/96 backdrop-blur-md"
+        style={{ borderTop: '1px solid var(--border)' }}
+      >
+        <button className="gbtn w-full text-[15px] py-4" onClick={() => navigate('/checkout')}>
           Start Free Trial
         </button>
       </div>

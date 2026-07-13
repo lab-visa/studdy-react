@@ -1,49 +1,78 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import SectionHeading from '../components/SectionHeading';
-import { demoTabs, type DemoStep } from '../data/subjects';
+import LazyVideo from '../components/LazyVideo';
+import { DEMO_QUESTIONS, type DemoTab } from '../data/subjects';
 import { track } from '../utils/analytics';
 
-type Tab = 'school' | 'college' | 'work';
+const TABS: { key: DemoTab; label: string }[] = [
+  { key: 'school',  label: 'School' },
+  { key: 'college', label: 'College' },
+  { key: 'work',    label: 'Work' },
+];
+
+type DemoState = 'idle' | 'typing' | 'thinking' | 'playing';
 
 export default function AskStuddy() {
-  const [activeTab, setActiveTab] = useState<Tab>('school');
-  const [activeStep, setActiveStep] = useState<DemoStep | null>(null);
-  const [thinking, setThinking] = useState(false);
-  const [done, setDone] = useState(false);
+  const [tab, setTab] = useState<DemoTab>('school');
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [state, setState] = useState<DemoState>('idle');
+  const [inputVal, setInputVal] = useState('');
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleQuestion = (step: DemoStep) => {
-    track('interactive_question_selected', { question: step.q, tab: activeTab });
-    setActiveStep(step);
-    setThinking(true);
-    setDone(false);
-    setTimeout(() => { setThinking(false); setDone(true); }, 1800);
+  const questions = DEMO_QUESTIONS.filter(q => q.tab === tab);
+  const active = DEMO_QUESTIONS.find(q => q.id === activeId);
+
+  const clearTimers = () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+
+  useEffect(() => () => clearTimers(), []);
+
+  const handleQuestion = (q: typeof DEMO_QUESTIONS[0]) => {
+    clearTimers();
+    track('interactive_question_selected', { id: q.id });
+    setActiveId(q.id);
+    setState('typing');
+    setInputVal('');
+    setShowFollowUp(false);
+
+    // Simulate typing the prompt
+    let i = 0;
+    const type = () => {
+      if (i <= q.q.length) {
+        setInputVal(q.q.slice(0, i));
+        i++;
+        timeoutRef.current = setTimeout(type, 28);
+      } else {
+        setState('thinking');
+        timeoutRef.current = setTimeout(() => {
+          setState('playing');
+          timeoutRef.current = setTimeout(() => setShowFollowUp(true), 1200);
+        }, 700);
+      }
+    };
+    type();
   };
-
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'school', label: '🎒 School' },
-    { key: 'college', label: '🎓 College' },
-    { key: 'work', label: '💼 Work' },
-  ];
 
   return (
     <section id="demo" className="py-24 px-6" style={{ background: 'var(--dim)' }}>
       <div className="max-w-[1100px] mx-auto">
-        <SectionHeading eyebrow="Try it yourself" heading="Try asking Studdy." sub="Select a question and watch how Studdy explains it — this is a preview." center />
+        <SectionHeading
+          eyebrow="Try it yourself"
+          heading="Ask Studdy anything."
+          sub="Choose a question and watch how Studdy responds — this is a preview of the real product."
+          center
+        />
 
-        <div className="grid lg:grid-cols-2 gap-14 items-start">
+        <div className="grid lg:grid-cols-[340px_1fr] gap-8 items-start">
           {/* Left — tabs + questions */}
           <div>
-            {/* Tab switcher */}
-            <div className="flex gap-2 mb-6 p-1 rounded-full inline-flex" style={{ background: '#fff', border: '1.5px solid var(--border)' }}>
-              {tabs.map(t => (
+            <div className="flex gap-1 p-1 rounded-full mb-5" style={{ background: '#fff', border: '1.5px solid var(--border)', display: 'inline-flex' }}>
+              {TABS.map(t => (
                 <button
                   key={t.key}
-                  onClick={() => { setActiveTab(t.key); setActiveStep(null); setDone(false); }}
-                  className="px-5 py-2 rounded-full text-[13.5px] font-bold transition-all"
-                  style={{
-                    background: activeTab === t.key ? 'var(--ink)' : 'transparent',
-                    color: activeTab === t.key ? '#fff' : 'var(--soft)',
-                  }}
+                  onClick={() => { setTab(t.key); setActiveId(null); setState('idle'); }}
+                  className="px-5 py-2 rounded-full text-[13px] font-bold transition-all"
+                  style={{ background: tab === t.key ? 'var(--ink)' : 'transparent', color: tab === t.key ? '#fff' : 'var(--soft)' }}
                 >
                   {t.label}
                 </button>
@@ -51,82 +80,112 @@ export default function AskStuddy() {
             </div>
 
             <div className="flex flex-col gap-3">
-              {demoTabs[activeTab].map((step, i) => (
+              {questions.map(q => (
                 <button
-                  key={i}
-                  onClick={() => handleQuestion(step)}
-                  className="text-left p-4 rounded-2xl font-bold text-[14.5px] transition-all flex items-center gap-3"
+                  key={q.id}
+                  onClick={() => handleQuestion(q)}
+                  className="text-left p-4 rounded-2xl text-[14.5px] font-semibold transition-all"
                   style={{
-                    background: activeStep?.q === step.q ? 'rgba(239,85,182,.05)' : '#fff',
-                    border: `1.5px solid ${activeStep?.q === step.q ? 'var(--g1)' : 'var(--border)'}`,
+                    background: activeId === q.id ? 'rgba(239,85,182,.05)' : '#fff',
+                    border: `1.5px solid ${activeId === q.id ? 'var(--g1)' : 'var(--border)'}`,
                     color: 'var(--ink)',
                   }}
+                  aria-pressed={activeId === q.id}
                 >
-                  <span className="text-[22px]">💬</span>
-                  {step.q}
+                  {q.q}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Right — demo player */}
-          <div className="bg-white rounded-3xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,.06)]" style={{ border: '1.5px solid var(--border)' }}>
-            {/* topbar */}
-            <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--border)', background: '#fdfcff' }}>
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-[14px]" style={{ background: 'var(--grad)' }}>A</div>
+          {/* Right — product stage */}
+          <div className="bg-white rounded-3xl overflow-hidden" style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.06)' }}>
+            {/* Topbar */}
+            <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1px solid var(--border)', background: '#fdfcff' }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-[13px]" style={{ background: 'var(--grad)' }}>S</div>
               <div>
-                <div className="font-bold text-[14px]">Studdy</div>
-                <div className="text-[12px]" style={{ color: 'var(--soft)' }}>
-                  {thinking ? '⏳ Thinking...' : done ? 'Response ready' : 'Click a question to start'}
+                <div className="font-bold text-[13.5px]">Studdy</div>
+                <div className="text-[11.5px]" style={{ color: 'var(--soft)' }}>
+                  {state === 'thinking' ? 'Processing...' : state === 'playing' ? 'Explaining now' : 'Click a question to begin'}
                 </div>
+              </div>
+              {state === 'thinking' && (
+                <div className="ml-auto flex gap-1">
+                  {[0,1,2].map(i => (
+                    <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--g1)', animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Input field */}
+            <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: 'var(--dim)', border: '1.5px solid var(--border)' }}>
+                <input
+                  type="text"
+                  readOnly
+                  value={inputVal}
+                  placeholder="Select a question above..."
+                  className="flex-1 text-[14px] font-medium bg-transparent outline-none"
+                  style={{ color: 'var(--ink)' }}
+                  aria-label="Question input"
+                />
+                {state === 'thinking' && <div className="w-1 h-4 rounded-full animate-pulse" style={{ background: 'var(--g1)' }} />}
               </div>
             </div>
 
-            <div className="p-6 min-h-[320px]">
-              {!activeStep && (
-                <div className="flex flex-col items-center justify-center h-48 text-center">
-                  <div className="text-[40px] mb-3">👆</div>
-                  <p className="text-[14.5px]" style={{ color: 'var(--soft)' }}>Select a question on the left to see how Studdy explains it.</p>
+            {/* Response area */}
+            <div className="p-5" style={{ minHeight: '300px' }}>
+              {state === 'idle' && (
+                <div className="flex flex-col items-center justify-center h-52 text-center" style={{ color: 'var(--soft)' }}>
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: 'var(--dim)' }}>
+                    <div className="text-[20px]">↑</div>
+                  </div>
+                  <p className="text-[14px]">Choose a question to see how Studdy explains it.</p>
                 </div>
               )}
 
-              {activeStep && (
-                <>
-                  <div className="mb-4">
-                    <div className="text-[11px] font-black uppercase tracking-wide mb-2" style={{ color: 'var(--soft)' }}>You asked</div>
-                    <div className="rounded-2xl p-4 text-[14.5px]" style={{ background: 'var(--dim)' }}>{activeStep.q}</div>
+              {(state === 'typing' || state === 'thinking') && (
+                <div className="flex flex-col items-center justify-center h-52">
+                  <div className="flex gap-2 mb-3">
+                    {[0,1,2].map(i => (
+                      <div key={i} className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ background: 'var(--grad)', animationDelay: `${i * 0.2}s` }} />
+                    ))}
                   </div>
+                  <p className="text-[13px] font-semibold" style={{ color: 'var(--soft)' }}>
+                    {state === 'typing' ? 'Sending...' : 'Studdy is thinking...'}
+                  </p>
+                </div>
+              )}
 
-                  {thinking && (
-                    <div className="flex items-center gap-3 p-4 rounded-2xl" style={{ background: 'linear-gradient(135deg,rgba(239,85,182,.06),rgba(140,121,224,.06))', border: '1px solid rgba(140,121,224,.12)' }}>
-                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--g1)' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--g2)', animationDelay: '0.15s' }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--g3)', animationDelay: '0.3s' }} />
+              {state === 'playing' && active && (
+                <>
+                  <LazyVideo
+                    label={active.videoLabel}
+                    meta="Replace with real recorded response video"
+                    className="w-full rounded-2xl mb-4"
+                    aspectRatio="16/9"
+                  />
+                  {showFollowUp && (
+                    <div className="mt-4 p-4 rounded-2xl" style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
+                      <p className="text-[12px] font-black uppercase tracking-wide mb-2" style={{ color: 'var(--soft)' }}>Follow-up</p>
+                      <input
+                        type="text"
+                        placeholder="Ask a follow-up question..."
+                        className="w-full text-[14px] bg-transparent outline-none"
+                        style={{ color: 'var(--ink)' }}
+                        aria-label="Follow-up question field"
+                      />
                     </div>
                   )}
-
-                  {done && (
-                    <>
-                      <div className="text-[11px] font-black uppercase tracking-wide mb-2" style={{ color: 'var(--soft)' }}>Studdy explains</div>
-                      <div className="rounded-2xl p-4 mb-4" style={{ background: 'linear-gradient(135deg,rgba(239,85,182,.06),rgba(140,121,224,.06))', border: '1px solid rgba(140,121,224,.12)' }}>
-                        {/* Progress bar */}
-                        <div className="h-2 rounded-full mb-4 overflow-hidden" style={{ background: '#f0eef5' }}>
-                          <div className="h-full rounded-full transition-all duration-[1.4s]" style={{ width: `${activeStep.fill}%`, background: 'var(--grad)' }} />
-                        </div>
-                        {activeStep.steps.map((s, i) => (
-                          <p key={i} className="text-[14px] mb-2 write-in" style={{ animationDelay: `${i * 0.3}s`, color: 'var(--ink)' }}>
-                            {s}
-                          </p>
-                        ))}
-                      </div>
-                      <div className="p-4 rounded-2xl text-center text-[13.5px] font-bold" style={{ background: 'rgba(239,85,182,.05)', border: '1px solid rgba(239,85,182,.15)', color: 'var(--soft)' }}>
-                        This is a preview. The full tutor covers any topic, any subject, unlimited questions.
-                        <button className="gbtn mt-3 w-full text-[13px]" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
-                          Start Free Trial →
-                        </button>
-                      </div>
-                    </>
-                  )}
+                  <div className="mt-4 p-4 rounded-2xl text-center" style={{ background: 'rgba(239,85,182,.05)', border: '1px solid rgba(239,85,182,.15)' }}>
+                    <p className="text-[13px] mb-3" style={{ color: 'var(--soft)' }}>
+                      This is a preview. Start your free trial for unlimited questions on any topic.
+                    </p>
+                    <button className="gbtn text-[13px] px-5 py-2.5" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
+                      Start Free Trial
+                    </button>
+                  </div>
                 </>
               )}
             </div>
