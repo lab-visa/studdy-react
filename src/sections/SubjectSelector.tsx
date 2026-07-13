@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { subjects } from '../data/subjects';
 import SectionHeading from '../components/SectionHeading';
-import LazyVideo from '../components/LazyVideo';
+import LazyVideo, { VIDEO_SPECS } from '../components/LazyVideo';
 
 export default function SubjectSelector() {
   const [active, setActive] = useState(subjects[0]);
@@ -85,8 +85,8 @@ export default function SubjectSelector() {
 
             {/* Video */}
             <LazyVideo
-              label={`${active.label} — video preview`}
-              meta="Replace with real subject demonstration clip (20–30 sec)"
+              label={`${active.label} — subject preview`}
+              spec={VIDEO_SPECS.subjectPreview}
               className="w-full rounded-2xl"
               aspectRatio="4/3"
             />

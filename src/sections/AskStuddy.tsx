@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import SectionHeading from '../components/SectionHeading';
-import LazyVideo from '../components/LazyVideo';
+import LazyVideo, { VIDEO_SPECS } from '../components/LazyVideo';
 import { DEMO_QUESTIONS, type DemoTab } from '../data/subjects';
 import { track } from '../utils/analytics';
 
@@ -162,7 +162,7 @@ export default function AskStuddy() {
                 <>
                   <LazyVideo
                     label={active.videoLabel}
-                    meta="Replace with real recorded response video"
+                    spec={VIDEO_SPECS.askStuddyResponse}
                     className="w-full rounded-2xl mb-4"
                     aspectRatio="16/9"
                   />

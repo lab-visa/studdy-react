@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import SectionHeading from '../components/SectionHeading';
-import LazyVideo from '../components/LazyVideo';
+import LazyVideo, { VIDEO_SPECS } from '../components/LazyVideo';
 import Modal from '../components/Modal';
 import { track } from '../utils/analytics';
 
@@ -26,9 +26,9 @@ export default function ProductProof() {
           </div>
 
           <LazyVideo
-            label="30-sec Product Proof Video"
-            meta="Replace with real screen recording — whiteboard + voice only"
-            className="w-full min-h-[340px]"
+            label="Product Proof Video"
+            spec={VIDEO_SPECS.productProof}
+            className="w-full min-h-[300px]"
             aspectRatio="16/9"
           />
         </div>

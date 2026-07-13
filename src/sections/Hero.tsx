@@ -1,47 +1,164 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
-import { Play, Zap, Eye, Clock } from 'lucide-react';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { Play, Zap, Eye, Clock, Volume2, VolumeX } from 'lucide-react';
 import Modal from '../components/Modal';
 import LazyVideo from '../components/LazyVideo';
 import { track } from '../utils/analytics';
+gsap.registerPlugin(ScrollTrigger);
 
-const USE_CASES = [
-  { label: 'Biology diagram', hint: 'Draw the process of photosynthesis step by step...' },
-  { label: 'Python debugging', hint: 'Here is the error in your code. Let me trace through it...' },
-  { label: 'English answer', hint: 'Your argument is clear. Let me show how to strengthen it...' },
-  { label: 'Excel formula', hint: 'To build a commission formula, start with IF and VLOOKUP...' },
-];
+/* ─── Hero video component ─────────────────────────────────────────── */
+function HeroVideo({ muted }: { muted: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const prefersReduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const FLOAT_LABELS = [
-  { icon: Zap,  text: 'Learn anything' },
-  { icon: Eye,  text: 'Visual explanations' },
-  { icon: Clock,text: 'Available 24/7' },
-];
-
-export default function Hero() {
-  const navigate = useNavigate();
-  const headlineRef = useRef<HTMLDivElement>(null);
-  const ctaRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const [caseIdx, setCaseIdx] = useState(0);
-  const [demoOpen, setDemoOpen] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Rotate use cases
+  /* Pause when out of viewport */
   useEffect(() => {
-    intervalRef.current = setInterval(() => setCaseIdx(i => (i + 1) % USE_CASES.length), 3200);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    const v = videoRef.current;
+    if (!v || prefersReduced) return;
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) v.play().catch(() => {}); else v.pause(); },
+      { threshold: 0.15 }
+    );
+    obs.observe(v);
+    return () => obs.disconnect();
+  }, [prefersReduced]);
+
+  /* Sync muted toggle */
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) v.muted = muted;
+  }, [muted]);
+
+  if (prefersReduced) {
+    return (
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center"
+        style={{ background:'linear-gradient(135deg,#15131f,#2a2040)' }}
+      >
+        <p className="text-white/50 font-bold text-[12px]">Video paused — reduced motion</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Actual video element */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        poster="/images/hero-poster.jpg"
+        style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+        aria-label="Hero product demonstration video"
+      >
+        <source src="/videos/hero-placeholder.mp4" type="video/mp4" />
+      </video>
+
+      {/* Fallback label shown beneath video when file is missing */}
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center -z-10"
+        style={{ background:'linear-gradient(135deg,#15131f,#2a2040)' }}
+        aria-hidden="true"
+      >
+        <div className="text-white/20 text-[42px] mb-3">▶</div>
+        <p className="text-white/50 font-bold text-[13px]">Hero Video — 12–15 sec</p>
+        <p className="text-white/25 text-[11px] font-mono mt-1">public/videos/hero-placeholder.mp4</p>
+      </div>
+    </>
+  );
+}
+
+/* ─── Floating glass pill ───────────────────────────────────────────── */
+const PILLS = [
+  { Icon: Zap,   label: 'Learn anything',       delay: 0 },
+  { Icon: Eye,   label: 'Visual explanations',  delay: 0.12 },
+  { Icon: Clock, label: 'Available 24/7',        delay: 0.24 },
+];
+
+/* ─── Main Hero component ───────────────────────────────────────────── */
+export default function Hero() {
+  const navigate   = useNavigate();
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const badgeRef   = useRef<HTMLDivElement>(null);
+  const headRef    = useRef<HTMLDivElement>(null);
+  const ctaRef     = useRef<HTMLDivElement>(null);
+  const stageRef   = useRef<HTMLDivElement>(null);
+  const pillsRef   = useRef<HTMLDivElement>(null);
+  const glowRef    = useRef<HTMLDivElement>(null);
+
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [muted, setMuted]       = useState(true);
+
+  /* ── Entrance sequence: badge → headline → CTA → stage → pills ── */
+  useEffect(() => {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) return;
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+      tl.from(badgeRef.current,  { opacity:0, y:18, duration:0.65 })
+        .from(headRef.current,   { opacity:0, y:30, duration:0.85 }, '-=0.35')
+        .from(ctaRef.current,    { opacity:0, y:22, duration:0.70 }, '-=0.45')
+        .from(stageRef.current,  { opacity:0, y:40, scale:0.97, duration:1.0 }, '-=0.50')
+        .from(pillsRef.current?.children ?? [], { opacity:0, y:14, duration:0.55, stagger:0.12 }, '-=0.60');
+    }, sectionRef);
+
+    return () => ctx.revert();
   }, []);
 
-  // Entrance animation
+  /* ── Float animation on the video stage ── */
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.from(headlineRef.current, { opacity: 0, y: 40, duration: 1, ease: 'power3.out', delay: 0.15 });
-      gsap.from(ctaRef.current, { opacity: 0, y: 24, duration: 0.8, ease: 'power3.out', delay: 0.45 });
-      gsap.from(stageRef.current, { opacity: 0, scale: 0.97, duration: 1, ease: 'power3.out', delay: 0.2 });
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced || !stageRef.current) return;
+    gsap.to(stageRef.current, {
+      y: '-7px',
+      duration: 5.5,
+      ease: 'sine.inOut',
+      yoyo: true,
+      repeat: -1,
     });
+  }, []);
+
+  /* ── Scroll parallax: stage scales 1 → 0.96 ── */
+  useEffect(() => {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced || !sectionRef.current || !stageRef.current || !headRef.current) return;
+
+    const ctx = gsap.context(() => {
+      ScrollTrigger.create({
+        trigger: sectionRef.current,
+        start: 'top top',
+        end: 'bottom top',
+        scrub: 0.6,
+        onUpdate: self => {
+          const p = self.progress;
+          gsap.set(stageRef.current, { scale: 1 - p * 0.04, opacity: 1 - p * 0.2 });
+          gsap.set(headRef.current,  { y: -p * 28 });
+        },
+      });
+    }, sectionRef);
+
     return () => ctx.revert();
+  }, []);
+
+  /* ── Subtle mouse parallax on the glow ── */
+  useEffect(() => {
+    const el = glowRef.current;
+    if (!el) return;
+    const handler = (e: MouseEvent) => {
+      const x = (e.clientX / window.innerWidth  - 0.5) * 30;
+      const y = (e.clientY / window.innerHeight - 0.5) * 20;
+      gsap.to(el, { x, y, duration: 1.2, ease: 'power1.out' });
+    };
+    window.addEventListener('mousemove', handler, { passive: true });
+    return () => window.removeEventListener('mousemove', handler);
   }, []);
 
   const handleTrial = useCallback(() => {
@@ -54,155 +171,214 @@ export default function Hero() {
     setDemoOpen(true);
   }, []);
 
+  /* ── Render ── */
   return (
     <>
       <section
+        ref={sectionRef}
         className="relative w-full overflow-hidden"
-        style={{ minHeight: '100svh', background: '#fff' }}
+        style={{
+          minHeight: '100svh',
+          background: '#fafafa',
+          paddingTop: '72px', // clear fixed header
+        }}
       >
-        {/* Whiteboard grid — full viewport */}
+        {/* ── Background layer: grid + colour washes ── */}
         <div
           className="absolute inset-0 pointer-events-none"
           aria-hidden="true"
           style={{
-            backgroundImage: 'linear-gradient(rgba(140,121,224,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(140,121,224,.06) 1px, transparent 1px)',
+            backgroundImage:
+              'linear-gradient(rgba(140,121,224,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(140,121,224,.055) 1px, transparent 1px)',
             backgroundSize: '64px 64px',
           }}
         />
-
-        {/* Gradient wash */}
+        {/* Colour lights */}
         <div
           className="absolute inset-0 pointer-events-none"
           aria-hidden="true"
           style={{
-            background: 'radial-gradient(ellipse 80% 60% at 70% 10%, rgba(140,121,224,.08), transparent 65%), radial-gradient(ellipse 50% 40% at 5% 85%, rgba(239,85,182,.06), transparent 60%)',
+            background:
+              'radial-gradient(ellipse 60% 50% at 50% -10%, rgba(140,121,224,.1), transparent 65%),' +
+              'radial-gradient(ellipse 40% 35% at 10% 90%,  rgba(239,85,182,.07), transparent 60%),' +
+              'radial-gradient(ellipse 40% 35% at 90% 80%,  rgba(37,168,244,.06),  transparent 60%)',
           }}
         />
 
-        <div className="relative z-10 max-w-[1280px] mx-auto px-6 h-full flex flex-col lg:flex-row items-center gap-12 pt-32 pb-20">
+        {/* ── Stacked content: centred column ── */}
+        <div
+          className="relative z-10 flex flex-col items-center text-center px-5"
+          style={{ paddingTop: '40px', paddingBottom: '60px' }}
+        >
+          {/* Badge */}
+          <div ref={badgeRef} className="eyebrow mb-6">
+            Your personal AI tutor · available 24/7
+          </div>
 
-          {/* ── LEFT: headline + CTAs ── */}
-          <div ref={headlineRef} className="flex-none w-full lg:w-[420px] xl:w-[480px]">
-            <div className="eyebrow mb-6">Your personal AI tutor · available 24/7</div>
-
+          {/* Headline */}
+          <div ref={headRef} style={{ maxWidth: '820px', marginBottom: '24px' }}>
             <h1
-              className="font-black leading-[1.04] mb-6"
-              style={{ fontSize: 'clamp(36px, 5vw, 58px)', letterSpacing: '-2px', color: 'var(--ink)' }}
+              className="font-black leading-[1.04]"
+              style={{
+                fontSize: 'clamp(36px, 6vw, 68px)',
+                letterSpacing: '-2.5px',
+                color: 'var(--ink)',
+              }}
             >
               The tutor that explains it{' '}
               <span className="grad-text">until it finally makes sense.</span>
             </h1>
+          </div>
 
-            <p className="mb-8 leading-relaxed" style={{ fontSize: 'clamp(16px, 1.6vw, 18px)', color: 'var(--soft)', maxWidth: '420px' }}>
-              Ask by voice, text or image. Learn through live visual explanations and unlimited follow-up questions.
-            </p>
+          {/* Supporting line */}
+          <p
+            style={{
+              fontSize: 'clamp(16px, 1.8vw, 19px)',
+              color: 'var(--soft)',
+              maxWidth: '520px',
+              lineHeight: 1.6,
+              marginBottom: '32px',
+            }}
+          >
+            Ask anything. Learn through live visual explanations and unlimited follow-up questions.
+          </p>
 
-            <div ref={ctaRef} className="flex flex-col sm:flex-row gap-3 mb-8">
-              <button className="gbtn text-[15px] px-7 py-4" onClick={handleTrial}>
-                Start Free Trial
-              </button>
+          {/* CTAs */}
+          <div
+            ref={ctaRef}
+            className="flex flex-col sm:flex-row gap-3 items-center justify-center"
+            style={{ marginBottom: '52px' }}
+          >
+            <button
+              className="gbtn text-[15px] px-8 py-4"
+              onClick={handleTrial}
+              aria-label="Start your free trial"
+            >
+              Start Free Trial
+            </button>
+            <button
+              className="gost text-[15px] px-7 py-4 flex items-center gap-2"
+              onClick={handleDemo}
+              aria-label="Watch full product demo"
+            >
+              <Play size={16} aria-hidden="true" />
+              Watch Full Demo
+            </button>
+          </div>
+
+          {/* ── LARGE CINEMATIC VIDEO STAGE ── */}
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '900px',    // ~70% of 1280px viewport
+              margin: '0 auto',
+              position: 'relative',
+            }}
+          >
+            {/* Animated glow behind the stage */}
+            <div
+              ref={glowRef}
+              className="absolute pointer-events-none"
+              aria-hidden="true"
+              style={{
+                inset: '-40px',
+                background:
+                  'radial-gradient(ellipse 70% 60% at 50% 55%, rgba(239,85,182,.2), rgba(140,121,224,.15) 45%, rgba(37,168,244,.1) 70%, transparent)',
+                filter: 'blur(32px)',
+                borderRadius: '50%',
+              }}
+            />
+
+            {/* Video frame */}
+            <div
+              ref={stageRef}
+              style={{
+                position: 'relative',
+                borderRadius: '18px',
+                overflow: 'hidden',
+                aspectRatio: '16/9',
+                boxShadow:
+                  '0 2px 0 rgba(255,255,255,.6) inset,' +   // top highlight
+                  '0 48px 100px -24px rgba(140,121,224,.35),' +
+                  '0 0 0 1px rgba(140,121,224,.12)',
+                border: '1px solid rgba(255,255,255,.4)',
+              }}
+            >
+              {/* Top-edge glass shimmer */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0, left: 0, right: 0,
+                  height: '1px',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.7) 40%, rgba(255,255,255,.7) 60%, transparent)',
+                  zIndex: 4,
+                }}
+                aria-hidden="true"
+              />
+
+              {/* The video itself */}
+              <HeroVideo muted={muted} />
+
+              {/* Mute / unmute toggle — bottom right corner */}
               <button
-                className="gost text-[15px] px-6 py-4 flex items-center gap-2"
-                onClick={handleDemo}
-                aria-label="Watch full product demo"
+                onClick={() => setMuted(m => !m)}
+                aria-label={muted ? 'Unmute video' : 'Mute video'}
+                style={{
+                  position: 'absolute',
+                  bottom: '14px',
+                  right: '14px',
+                  zIndex: 10,
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  background: 'rgba(0,0,0,.45)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255,255,255,.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  cursor: 'pointer',
+                }}
               >
-                <Play size={16} />
-                Watch Full Demo
+                {muted
+                  ? <VolumeX size={14} aria-hidden="true" />
+                  : <Volume2 size={14} aria-hidden="true" />
+                }
               </button>
             </div>
 
-            {/* Float labels */}
-            <div className="flex flex-col gap-2">
-              {FLOAT_LABELS.map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: 'var(--soft)' }}>
+            {/* ── Three floating glass pills around the stage ── */}
+            <div
+              ref={pillsRef}
+              className="hidden sm:flex justify-center gap-3 flex-wrap"
+              style={{ marginTop: '20px' }}
+            >
+              {PILLS.map(({ Icon, label }) => (
+                <div
+                  key={label}
+                  className="float-anim flex items-center gap-2"
+                  style={{
+                    background: 'rgba(255,255,255,.72)',
+                    backdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,.6)',
+                    borderRadius: '999px',
+                    padding: '9px 16px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: 'var(--ink)',
+                    boxShadow: '0 4px 18px rgba(140,121,224,.12)',
+                  }}
+                >
                   <Icon size={14} style={{ color: 'var(--g3)' }} aria-hidden="true" />
-                  {text}
+                  {label}
                 </div>
               ))}
             </div>
           </div>
-
-          {/* ── RIGHT: Living Whiteboard stage ── */}
-          <div ref={stageRef} className="flex-1 w-full relative">
-            {/* Glow behind stage */}
-            <div
-              className="absolute -inset-8 pointer-events-none rounded-full"
-              aria-hidden="true"
-              style={{ background: 'radial-gradient(ellipse, rgba(239,85,182,.12), rgba(140,121,224,.08) 45%, transparent 70%)', filter: 'blur(28px)' }}
-            />
-
-            <div
-              className="relative z-10 rounded-[28px] overflow-hidden"
-              style={{
-                background: '#fff',
-                border: '1.5px solid var(--border)',
-                boxShadow: '0 40px 80px -20px rgba(140,121,224,.25)',
-                minHeight: '480px',
-              }}
-            >
-              {/* Top accent bar */}
-              <div className="h-[3px] w-full" style={{ background: 'var(--grad)' }} />
-
-              {/* Whiteboard lines inside */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                aria-hidden="true"
-                style={{
-                  backgroundImage: 'linear-gradient(rgba(140,121,224,.05) 1px, transparent 1px)',
-                  backgroundSize: '100% 40px',
-                  backgroundPosition: '0 24px',
-                }}
-              />
-
-              {/* Video area — hero muted montage */}
-              <div className="relative" style={{ aspectRatio: '16/9' }}>
-                <LazyVideo
-                  label="Hero Video — 12–15 sec muted montage"
-                  meta="Replace with final muted hero reel"
-                  className="w-full h-full"
-                  aspectRatio="16/9"
-                />
-                <div
-                  className="absolute bottom-0 inset-x-0 h-1/3 pointer-events-none"
-                  style={{ background: 'linear-gradient(transparent, rgba(255,255,255,.9))' }}
-                />
-              </div>
-
-              {/* Rotating use-case hint */}
-              <div className="px-6 py-5">
-                <div
-                  className="text-[11px] font-black uppercase tracking-widest mb-3"
-                  style={{ color: 'var(--soft)', letterSpacing: '.12em' }}
-                >
-                  Now explaining
-                </div>
-                <div className="transition-all duration-500">
-                  <div className="font-bold text-[15px] mb-1" style={{ color: 'var(--ink)' }}>
-                    {USE_CASES[caseIdx].label}
-                  </div>
-                  <div className="text-[13px] italic" style={{ color: 'var(--soft)' }}>
-                    "{USE_CASES[caseIdx].hint}"
-                  </div>
-                </div>
-              </div>
-
-              {/* Use-case dots */}
-              <div className="px-6 pb-5 flex gap-2">
-                {USE_CASES.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCaseIdx(i)}
-                    aria-label={`Show ${USE_CASES[i].label} example`}
-                    className="w-2 h-2 rounded-full transition-all duration-300"
-                    style={{ background: i === caseIdx ? 'var(--g1)' : 'var(--border)', transform: i === caseIdx ? 'scale(1.4)' : 'scale(1)' }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Bottom trust strip */}
+        {/* Trust strip */}
         <div
           className="relative z-10 border-t px-6 py-3 flex flex-wrap justify-center gap-6 text-[12.5px] font-semibold"
           style={{ borderColor: 'var(--border)', color: 'var(--soft)' }}
@@ -219,7 +395,9 @@ export default function Hero() {
       <Modal open={demoOpen} onClose={() => setDemoOpen(false)} title="Full Product Demo">
         <div className="p-6 md:p-8">
           <h3 className="font-black text-[20px] mb-2">See Studdy explain from start to finish.</h3>
-          <p className="text-[14px] mb-5" style={{ color: 'var(--soft)' }}>One real question. Visual whiteboard. Voice explanation. Follow-up answered.</p>
+          <p className="text-[14px] mb-5" style={{ color:'var(--soft)' }}>
+            One real question. Visual whiteboard. Voice explanation. Follow-up answered.
+          </p>
           <LazyVideo
             label="Full Demo Video — 90–100 sec"
             meta="Replace with complete product session recording"
