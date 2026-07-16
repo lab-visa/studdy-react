@@ -1,411 +1,433 @@
+/**
+ * Hero.tsx — V3.2 final
+ *
+ * Screen calibration (edit only these four):
+ *   --screen-top:    2.4%
+ *   --screen-left:   9.6%
+ *   --screen-width:  81.4%
+ *   --screen-height: 90.6%
+ */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Play, Zap, Eye, Clock, Volume2, VolumeX } from 'lucide-react';
-import Modal from '../components/Modal';
-import LazyVideo from '../components/LazyVideo';
+import { Play, BookOpen, Zap, MessageSquare, X } from 'lucide-react';
 import { track } from '../utils/analytics';
+import VideoSoundToggle from '../components/VideoSoundToggle';
 gsap.registerPlugin(ScrollTrigger);
 
-/* ─── Hero video component ─────────────────────────────────────────── */
-function HeroVideo({ muted }: { muted: boolean }) {
+const CARDS = [
+  { Icon: BookOpen,      title: 'All subjects', sub: 'Bio, Physics, Math, Econ, etc.' },
+  { Icon: Zap,           title: '1:1 lessons',  sub: 'Interactive, visual & audio'    },
+  { Icon: MessageSquare, title: 'Ask anything', sub: 'Interrupt with any question'    },
+];
+
+/* ─── Laptop + hero video ─── */
+function LaptopStage() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const prefersReduced =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const [muted, setMuted] = useState<boolean>(() => {
+    try { const s = localStorage.getItem('studdy_muted'); return s === null ? true : s === 'true'; }
+    catch { return true; }
+  });
 
-  /* Pause when out of viewport */
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v || prefersReduced) return;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) v.play().catch(() => {}); else v.pause(); },
-      { threshold: 0.15 }
-    );
-    obs.observe(v);
-    return () => obs.disconnect();
-  }, [prefersReduced]);
-
-  /* Sync muted toggle */
   useEffect(() => {
     const v = videoRef.current;
     if (v) v.muted = muted;
   }, [muted]);
 
-  if (prefersReduced) {
-    return (
-      <div
-        className="absolute inset-0 flex flex-col items-center justify-center"
-        style={{ background:'linear-gradient(135deg,#15131f,#2a2040)' }}
-      >
-        <p className="text-white/50 font-bold text-[12px]">Video paused — reduced motion</p>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {/* Actual video element */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        poster="/images/hero-poster.jpg"
-        style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-        aria-label="Hero product demonstration video"
-      >
-        <source src="/videos/hero-placeholder.mp4" type="video/mp4" />
-      </video>
-
-      {/* Fallback label shown beneath video when file is missing */}
-      <div
-        className="absolute inset-0 flex flex-col items-center justify-center -z-10"
-        style={{ background:'linear-gradient(135deg,#15131f,#2a2040)' }}
-        aria-hidden="true"
-      >
-        <div className="text-white/20 text-[42px] mb-3">▶</div>
-        <p className="text-white/50 font-bold text-[13px]">Hero Video — 12–15 sec</p>
-        <p className="text-white/25 text-[11px] font-mono mt-1">public/videos/hero-placeholder.mp4</p>
-      </div>
-    </>
-  );
-}
-
-/* ─── Floating glass pill ───────────────────────────────────────────── */
-const PILLS = [
-  { Icon: Zap,   label: 'Learn anything',       delay: 0 },
-  { Icon: Eye,   label: 'Visual explanations',  delay: 0.12 },
-  { Icon: Clock, label: 'Available 24/7',        delay: 0.24 },
-];
-
-/* ─── Main Hero component ───────────────────────────────────────────── */
-export default function Hero() {
-  const navigate   = useNavigate();
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const badgeRef   = useRef<HTMLDivElement>(null);
-  const headRef    = useRef<HTMLDivElement>(null);
-  const ctaRef     = useRef<HTMLDivElement>(null);
-  const stageRef   = useRef<HTMLDivElement>(null);
-  const pillsRef   = useRef<HTMLDivElement>(null);
-  const glowRef    = useRef<HTMLDivElement>(null);
-
-  const [demoOpen, setDemoOpen] = useState(false);
-  const [muted, setMuted]       = useState(true);
-
-  /* ── Entrance sequence: badge → headline → CTA → stage → pills ── */
-  useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReduced) return;
-
-    const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-      tl.from(badgeRef.current,  { opacity:0, y:18, duration:0.65 })
-        .from(headRef.current,   { opacity:0, y:30, duration:0.85 }, '-=0.35')
-        .from(ctaRef.current,    { opacity:0, y:22, duration:0.70 }, '-=0.45')
-        .from(stageRef.current,  { opacity:0, y:40, scale:0.97, duration:1.0 }, '-=0.50')
-        .from(pillsRef.current?.children ?? [], { opacity:0, y:14, duration:0.55, stagger:0.12 }, '-=0.60');
-    }, sectionRef);
-
-    return () => ctx.revert();
-  }, []);
-
-  /* ── Float animation on the video stage ── */
-  useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReduced || !stageRef.current) return;
-    gsap.to(stageRef.current, {
-      y: '-7px',
-      duration: 5.5,
-      ease: 'sine.inOut',
-      yoyo: true,
-      repeat: -1,
+  const handleToggle = useCallback(() => {
+    setMuted(prev => {
+      const next = !prev;
+      try { localStorage.setItem('studdy_muted', String(next)); } catch {}
+      return next;
     });
   }, []);
 
-  /* ── Scroll parallax: stage scales 1 → 0.96 ── */
+  return (
+    <div
+      style={{
+        '--screen-top':    '2.4%',
+        '--screen-left':   '9.6%',
+        '--screen-width':  '81.4%',
+        '--screen-height': '90.6%',
+        position: 'relative',
+        width: '100%',
+        userSelect: 'none',
+      } as React.CSSProperties}
+    >
+      {/* Screen overlay — z-index 2, above PNG */}
+      <div
+        style={{
+          position: 'absolute',
+          top:    'var(--screen-top)',
+          left:   'var(--screen-left)',
+          width:  'var(--screen-width)',
+          height: 'var(--screen-height)',
+          overflow: 'hidden',
+          borderRadius: '6px',
+          background: '#111',
+          zIndex: 2,
+        }}
+      >
+        <video
+          ref={videoRef}
+          src="/videos/hero-placeholder.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+        {/* Reusable sound toggle — persists "Click to unmute" until first click */}
+        <VideoSoundToggle
+          isMuted={muted}
+          onToggle={handleToggle}
+          top="18px"
+          right="18px"
+        />
+      </div>
+
+      {/* Laptop PNG — z-index 1 */}
+      <img
+        src="/images/Laptop.png"
+        alt="Studdy running on a laptop"
+        style={{ position: 'relative', zIndex: 1, width: '100%', display: 'block', pointerEvents: 'none' }}
+        draggable={false}
+      />
+    </div>
+  );
+}
+
+/* ─── Watch Full Demo modal ─── */
+function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  /* Reset video to start on every open; pause on close */
   useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReduced || !sectionRef.current || !stageRef.current || !headRef.current) return;
+    const v = videoRef.current;
+    if (!v) return;
+    if (open) {
+      v.currentTime = 0;
+    } else {
+      v.pause();
+      v.currentTime = 0;
+    }
+  }, [open]);
 
+  /* ESC closes */
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [open, onClose]);
+
+  /* Prevent body scroll */
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 500,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '20px',
+        animation: 'fadeIn 200ms ease forwards',
+      }}
+    >
+      <style>{`
+        @keyframes fadeIn  { from { opacity:0 } to { opacity:1 } }
+        @keyframes scaleIn { from { opacity:0; transform:scale(.95) } to { opacity:1; transform:scale(1) } }
+      `}</style>
+
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'absolute', inset: 0,
+          background: 'rgba(10,8,20,.82)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Modal panel */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Full product demo"
+        style={{
+          position: 'relative', zIndex: 1,
+          width: '90vw', maxWidth: '1200px', maxHeight: '90vh',
+          background: 'rgba(18,14,30,.96)',
+          border: '1px solid rgba(255,255,255,.1)',
+          borderRadius: '20px',
+          boxShadow: '0 40px 100px rgba(0,0,0,.6), 0 0 0 1px rgba(140,121,224,.15)',
+          overflow: 'hidden',
+          animation: 'scaleIn 220ms cubic-bezier(.16,1,.3,1) forwards',
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
+        {/* Modal header bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 20px',
+          borderBottom: '1px solid rgba(255,255,255,.08)',
+          flexShrink: 0,
+        }}>
+          <div>
+            <div className="font-black" style={{ color: '#fff', fontSize: '16px', marginBottom: '2px' }}>
+              Watch Full Demo
+            </div>
+            <div style={{ color: 'rgba(255,255,255,.45)', fontSize: '12.5px' }}>
+              See Studdy explain from start to finish
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close demo"
+            style={{
+              width: '36px', height: '36px', borderRadius: '50%',
+              background: 'rgba(255,255,255,.08)',
+              border: '1px solid rgba(255,255,255,.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'rgba(255,255,255,.7)', cursor: 'pointer',
+              transition: 'background 150ms',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.15)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,.08)')}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Video */}
+        <div style={{ flex: 1, overflow: 'hidden', background: '#000', position: 'relative' }}>
+          <video
+            ref={videoRef}
+            src="/videos/watch-full-demo.mp4"
+            controls
+            playsInline
+            disablePictureInPicture
+            controlsList="nodownload"
+            style={{
+              width: '100%',
+              height: '100%',
+              maxHeight: 'calc(90vh - 73px)',
+              display: 'block',
+              objectFit: 'contain',
+              background: '#000',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Hero ─── */
+export default function Hero() {
+  const navigate   = useNavigate();
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const copyRef    = useRef<HTMLDivElement>(null);
+  const ctaRef     = useRef<HTMLDivElement>(null);
+  const laptopRef  = useRef<HTMLDivElement>(null);
+  const cardsRef   = useRef<HTMLDivElement>(null);
+  const glowRef    = useRef<HTMLDivElement>(null);
+  const [demoOpen, setDemoOpen] = useState(false);
+
+  /* Entrance animation */
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = gsap.context(() => {
-      ScrollTrigger.create({
-        trigger: sectionRef.current,
-        start: 'top top',
-        end: 'bottom top',
-        scrub: 0.6,
-        onUpdate: self => {
-          const p = self.progress;
-          gsap.set(stageRef.current, { scale: 1 - p * 0.04, opacity: 1 - p * 0.2 });
-          gsap.set(headRef.current,  { y: -p * 28 });
-        },
-      });
+      gsap.timeline({ defaults: { ease: 'power3.out' } })
+        .from(copyRef.current,   { opacity: 0, y: 24, duration: 0.75 })
+        .from(ctaRef.current,    { opacity: 0, y: 16, duration: 0.6  }, '-=0.35')
+        .from(laptopRef.current, { opacity: 0, y: 32, duration: 0.85 }, '-=0.4')
+        .from(
+          cardsRef.current ? Array.from(cardsRef.current.children) : [],
+          { opacity: 0, y: 10, duration: 0.4, stagger: 0.1 }, '-=0.45'
+        );
     }, sectionRef);
-
     return () => ctx.revert();
   }, []);
 
-  /* ── Subtle mouse parallax on the glow ── */
+  /* Scroll scale */
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!sectionRef.current) return;
+    const ctx = gsap.context(() => {
+      ScrollTrigger.create({
+        trigger: sectionRef.current,
+        start: 'top top', end: 'bottom top', scrub: 0.5,
+        onUpdate: self => {
+          const p = self.progress;
+          if (laptopRef.current) gsap.set(laptopRef.current, { scale: 1 - p * 0.02 });
+          if (copyRef.current)   gsap.set(copyRef.current,   { y: -p * 18 });
+        },
+      });
+    }, sectionRef);
+    return () => ctx.revert();
+  }, []);
+
+  /* Mouse parallax on glow — desktop only */
   useEffect(() => {
     const el = glowRef.current;
     if (!el) return;
-    const handler = (e: MouseEvent) => {
-      const x = (e.clientX / window.innerWidth  - 0.5) * 30;
-      const y = (e.clientY / window.innerHeight - 0.5) * 20;
-      gsap.to(el, { x, y, duration: 1.2, ease: 'power1.out' });
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!window.matchMedia('(min-width: 1024px)').matches) return;
+    const h = (e: MouseEvent) => {
+      gsap.to(el, {
+        x: (e.clientX / window.innerWidth  - 0.5) * 22,
+        y: (e.clientY / window.innerHeight - 0.5) * 14,
+        duration: 1.4, ease: 'power1.out',
+      });
     };
-    window.addEventListener('mousemove', handler, { passive: true });
-    return () => window.removeEventListener('mousemove', handler);
+    window.addEventListener('mousemove', h, { passive: true });
+    return () => window.removeEventListener('mousemove', h);
   }, []);
 
-  const handleTrial = useCallback(() => {
-    track('checkout_started');
-    navigate('/checkout');
-  }, [navigate]);
+  const handleTrial = useCallback(() => { track('checkout_started'); navigate('/checkout'); }, [navigate]);
+  const handleDemo  = useCallback(() => { track('full_demo_open');   setDemoOpen(true);    }, []);
+  const closeDemo   = useCallback(() => setDemoOpen(false), []);
 
-  const handleDemo = useCallback(() => {
-    track('full_demo_open');
-    setDemoOpen(true);
-  }, []);
-
-  /* ── Render ── */
   return (
     <>
       <section
         ref={sectionRef}
         className="relative w-full overflow-hidden"
-        style={{
-          minHeight: '100svh',
-          background: '#fafafa',
-          paddingTop: '72px', // clear fixed header
-        }}
+        style={{ background: '#f9f8fc', minHeight: '100svh' }}
       >
-        {/* ── Background layer: grid + colour washes ── */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          aria-hidden="true"
+        {/* Background grid */}
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
           style={{
             backgroundImage:
-              'linear-gradient(rgba(140,121,224,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(140,121,224,.055) 1px, transparent 1px)',
-            backgroundSize: '64px 64px',
+              'linear-gradient(rgba(140,121,224,.05) 1px,transparent 1px),' +
+              'linear-gradient(90deg,rgba(140,121,224,.05) 1px,transparent 1px)',
+            backgroundSize: '60px 60px',
           }}
         />
-        {/* Colour lights */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          aria-hidden="true"
+        {/* Grain */}
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
+          style={{
+            opacity: 0.025,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+            backgroundSize: '200px 200px',
+          }}
+        />
+        {/* Colour wash */}
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
           style={{
             background:
-              'radial-gradient(ellipse 60% 50% at 50% -10%, rgba(140,121,224,.1), transparent 65%),' +
-              'radial-gradient(ellipse 40% 35% at 10% 90%,  rgba(239,85,182,.07), transparent 60%),' +
-              'radial-gradient(ellipse 40% 35% at 90% 80%,  rgba(37,168,244,.06),  transparent 60%)',
+              'radial-gradient(ellipse 55% 45% at 50% -5%,rgba(140,121,224,.11),transparent 65%),' +
+              'radial-gradient(ellipse 35% 30% at 8% 90%,rgba(239,85,182,.08),transparent 60%),' +
+              'radial-gradient(ellipse 35% 30% at 92% 85%,rgba(37,168,244,.07),transparent 60%)',
           }}
         />
 
-        {/* ── Stacked content: centred column ── */}
+        {/* Spacing */}
+        <style>{`
+          #hero-col { padding-top: 20px; }
+          @media (min-width: 768px)  { #hero-col { padding-top: 22px; } }
+          @media (min-width: 1024px) { #hero-col { padding-top: 28px; } }
+        `}</style>
+
         <div
-          className="relative z-10 flex flex-col items-center text-center px-5"
-          style={{ paddingTop: '40px', paddingBottom: '60px' }}
+          id="hero-col"
+          className="relative z-10 flex flex-col items-center text-center"
+          style={{ paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}
         >
-          {/* Badge */}
-          <div ref={badgeRef} className="eyebrow mb-6">
-            Your personal AI tutor · available 24/7
-          </div>
-
-          {/* Headline */}
-          <div ref={headRef} style={{ maxWidth: '820px', marginBottom: '24px' }}>
+          {/* Copy */}
+          <div ref={copyRef} style={{ maxWidth: '760px', marginBottom: '26px' }}>
+            <div className="eyebrow mb-5" style={{ display: 'inline-flex' }}>
+              Learning that finally clicks.
+            </div>
             <h1
-              className="font-black leading-[1.04]"
-              style={{
-                fontSize: 'clamp(36px, 6vw, 68px)',
-                letterSpacing: '-2.5px',
-                color: 'var(--ink)',
-              }}
+              className="font-black leading-[1.06]"
+              style={{ fontSize: 'clamp(34px,5.5vw,62px)', letterSpacing: '-2px', color: 'var(--ink)', marginBottom: '18px' }}
             >
-              The tutor that explains it{' '}
-              <span className="grad-text">until it finally makes sense.</span>
+              Stop memorising.{' '}
+              <span className="grad-text">Start understanding.</span>
             </h1>
+            <p style={{ fontSize: 'clamp(15px,1.6vw,18px)', color: 'var(--soft)', lineHeight: 1.65, maxWidth: '560px', margin: '0 auto' }}>
+              Ask anything. Learn through live visual explanations. Interrupt anytime to ask follow-up questions until it finally makes sense.
+            </p>
           </div>
-
-          {/* Supporting line */}
-          <p
-            style={{
-              fontSize: 'clamp(16px, 1.8vw, 19px)',
-              color: 'var(--soft)',
-              maxWidth: '520px',
-              lineHeight: 1.6,
-              marginBottom: '32px',
-            }}
-          >
-            Ask anything. Learn through live visual explanations and unlimited follow-up questions.
-          </p>
 
           {/* CTAs */}
-          <div
-            ref={ctaRef}
-            className="flex flex-col sm:flex-row gap-3 items-center justify-center"
-            style={{ marginBottom: '52px' }}
-          >
-            <button
-              className="gbtn text-[15px] px-8 py-4"
-              onClick={handleTrial}
-              aria-label="Start your free trial"
-            >
+          <div ref={ctaRef} className="flex flex-col sm:flex-row gap-3 items-center justify-center" style={{ marginBottom: '36px' }}>
+            <button className="gbtn text-[15px] px-8 py-4" onClick={handleTrial} aria-label="Start free trial">
               Start Free Trial
             </button>
-            <button
-              className="gost text-[15px] px-7 py-4 flex items-center gap-2"
-              onClick={handleDemo}
-              aria-label="Watch full product demo"
+            <button className="gost text-[15px] px-7 py-4" onClick={handleDemo} aria-label="Watch full demo"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
-              <Play size={16} aria-hidden="true" />
+              <Play size={15} aria-hidden />
               Watch Full Demo
             </button>
           </div>
 
-          {/* ── LARGE CINEMATIC VIDEO STAGE ── */}
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '900px',    // ~70% of 1280px viewport
-              margin: '0 auto',
-              position: 'relative',
-            }}
-          >
-            {/* Animated glow behind the stage */}
-            <div
-              ref={glowRef}
-              className="absolute pointer-events-none"
-              aria-hidden="true"
+          {/* Laptop + cards */}
+          <div style={{ width: '100%', maxWidth: '1060px', margin: '0 auto', position: 'relative' }}>
+            <div ref={glowRef} className="absolute pointer-events-none" aria-hidden="true"
               style={{
-                inset: '-40px',
+                inset: '-50px',
                 background:
-                  'radial-gradient(ellipse 70% 60% at 50% 55%, rgba(239,85,182,.2), rgba(140,121,224,.15) 45%, rgba(37,168,244,.1) 70%, transparent)',
-                filter: 'blur(32px)',
-                borderRadius: '50%',
+                  'radial-gradient(ellipse 60% 55% at 50% 50%,' +
+                  'rgba(239,85,182,.18) 0%,rgba(140,121,224,.14) 35%,' +
+                  'rgba(37,168,244,.09) 65%,transparent 85%)',
+                filter: 'blur(36px)', borderRadius: '50%', zIndex: 0,
               }}
             />
-
-            {/* Video frame */}
-            <div
-              ref={stageRef}
-              style={{
-                position: 'relative',
-                borderRadius: '18px',
-                overflow: 'hidden',
-                aspectRatio: '16/9',
-                boxShadow:
-                  '0 2px 0 rgba(255,255,255,.6) inset,' +   // top highlight
-                  '0 48px 100px -24px rgba(140,121,224,.35),' +
-                  '0 0 0 1px rgba(140,121,224,.12)',
-                border: '1px solid rgba(255,255,255,.4)',
-              }}
-            >
-              {/* Top-edge glass shimmer */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0, left: 0, right: 0,
-                  height: '1px',
-                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.7) 40%, rgba(255,255,255,.7) 60%, transparent)',
-                  zIndex: 4,
-                }}
-                aria-hidden="true"
-              />
-
-              {/* The video itself */}
-              <HeroVideo muted={muted} />
-
-              {/* Mute / unmute toggle — bottom right corner */}
-              <button
-                onClick={() => setMuted(m => !m)}
-                aria-label={muted ? 'Unmute video' : 'Mute video'}
-                style={{
-                  position: 'absolute',
-                  bottom: '14px',
-                  right: '14px',
-                  zIndex: 10,
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  background: 'rgba(0,0,0,.45)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255,255,255,.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  cursor: 'pointer',
-                }}
-              >
-                {muted
-                  ? <VolumeX size={14} aria-hidden="true" />
-                  : <Volume2 size={14} aria-hidden="true" />
-                }
-              </button>
+            <div ref={laptopRef} style={{ position: 'relative', zIndex: 1 }}>
+              <LaptopStage />
             </div>
 
-            {/* ── Three floating glass pills around the stage ── */}
-            <div
-              ref={pillsRef}
-              className="hidden sm:flex justify-center gap-3 flex-wrap"
-              style={{ marginTop: '20px' }}
-            >
-              {PILLS.map(({ Icon, label }) => (
-                <div
-                  key={label}
-                  className="float-anim flex items-center gap-2"
+            {/* Cards — static */}
+            <div ref={cardsRef} style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
+              {CARDS.map(({ Icon, title, sub }) => (
+                <div key={title}
                   style={{
-                    background: 'rgba(255,255,255,.72)',
-                    backdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255,255,255,.6)',
-                    borderRadius: '999px',
-                    padding: '9px 16px',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    color: 'var(--ink)',
-                    boxShadow: '0 4px 18px rgba(140,121,224,.12)',
+                    background: 'rgba(255,255,255,.82)', backdropFilter: 'blur(14px)',
+                    border: '1px solid rgba(255,255,255,.65)', borderRadius: '16px',
+                    padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px',
+                    boxShadow: '0 4px 20px rgba(140,121,224,.12)', minWidth: '180px', flex: '0 1 auto',
                   }}
                 >
-                  <Icon size={14} style={{ color: 'var(--g3)' }} aria-hidden="true" />
-                  {label}
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--grad)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-hidden="true">
+                    <Icon size={16} color="#fff" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div className="font-black" style={{ fontSize: '13.5px', color: 'var(--ink)', lineHeight: 1.2, marginBottom: '2px' }}>{title}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--soft)', lineHeight: 1.4 }}>{sub}</div>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Trust strip */}
-        <div
-          className="relative z-10 border-t px-6 py-3 flex flex-wrap justify-center gap-6 text-[12.5px] font-semibold"
-          style={{ borderColor: 'var(--border)', color: 'var(--soft)' }}
+        {/* Trust row */}
+        <div className="relative z-10 border-t px-6 py-3 flex flex-wrap justify-center gap-6"
+          style={{ borderColor: 'var(--border)', color: 'var(--soft)', fontSize: '12.5px', fontWeight: 600 }}
         >
-          {['$0 due today', 'WhatsApp reminder before billing', 'Cancel anytime'].map(t => (
-            <span key={t} className="flex items-center gap-1.5">
+          {['$0 due today', 'Reminder before renewal', 'Cancel anytime'].map(t => (
+            <span key={t} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ color: 'var(--g4)' }}>✓</span> {t}
             </span>
           ))}
         </div>
       </section>
 
-      {/* Full demo modal */}
-      <Modal open={demoOpen} onClose={() => setDemoOpen(false)} title="Full Product Demo">
-        <div className="p-6 md:p-8">
-          <h3 className="font-black text-[20px] mb-2">See Studdy explain from start to finish.</h3>
-          <p className="text-[14px] mb-5" style={{ color:'var(--soft)' }}>
-            One real question. Visual whiteboard. Voice explanation. Follow-up answered.
-          </p>
-          <LazyVideo
-            label="Full Demo Video — 90–100 sec"
-            meta="Replace with complete product session recording"
-            className="w-full rounded-2xl"
-            aspectRatio="16/9"
-          />
-        </div>
-      </Modal>
+      {/* Watch Full Demo modal — separate from hero video */}
+      <DemoModal open={demoOpen} onClose={closeDemo} />
     </>
   );
 }

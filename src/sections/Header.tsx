@@ -43,12 +43,12 @@ export default function Header() {
       >
         <div className="max-w-[1280px] mx-auto px-6 h-full flex items-center justify-between">
           <button
-            className="font-black text-[21px] cursor-pointer"
-            style={{ letterSpacing: '-0.5px', background: 'none', border: 'none', padding: 0 }}
+            className="font-black cursor-pointer"
+            style={{ fontSize: 'clamp(21px, 2vw, 24px)', letterSpacing: '-0.5px', background: 'none', border: 'none', padding: 0 }}
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             aria-label="Go to top"
           >
-            <span className="grad-text">studdy</span> lab
+            <span className="grad-text">studdy</span>
           </button>
 
           {/* Desktop nav */}

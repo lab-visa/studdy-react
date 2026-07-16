@@ -42,7 +42,7 @@ export default function EmotionalHook() {
   return (
     <section
       ref={sectionRef}
-      className="relative overflow-hidden py-32 text-center px-6"
+      className="relative overflow-hidden py-20 text-center px-6"
       style={{ background: '#15131F' }}
     >
       {/* Whiteboard lines on dark bg */}
