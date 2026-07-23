@@ -2,15 +2,15 @@ import { lazy, Suspense, Component, type ReactNode, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Home from './pages/Home';
 
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Checkout = lazy(() => import('./pages/Checkout'));
+const Dashboard     = lazy(() => import('./pages/Dashboard'));
+const Checkout      = lazy(() => import('./pages/Checkout'));
 const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
 const LearnPlaceholder = lazy(() => import('./pages/LearnPlaceholder'));
-const PrivacyPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.PrivacyPolicy })));
-const TermsPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.TermsOfService })));
-const RefundPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.RefundPolicy })));
-const CancelPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.CancellationPolicy })));
-const ContactPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.ContactPage })));
+const PrivacyPage   = lazy(() => import('./pages/Legal').then(m => ({ default: m.PrivacyPolicy })));
+const TermsPage     = lazy(() => import('./pages/Legal').then(m => ({ default: m.TermsOfService })));
+const RefundPage    = lazy(() => import('./pages/Legal').then(m => ({ default: m.RefundPolicy })));
+const CancelPage    = lazy(() => import('./pages/Legal').then(m => ({ default: m.CancellationPolicy })));
+const ContactPage   = lazy(() => import('./pages/Legal').then(m => ({ default: m.ContactPage })));
 
 function LoadingFallback() {
   return (
@@ -36,16 +36,52 @@ function NotFound() {
   );
 }
 
-interface EBState { hasError: boolean; }
+interface EBState { hasError: boolean; errorInfo?: string; }
+
+/*
+ * ErrorBoundary — improved:
+ * - logs error info in development so crashes are traceable
+ * - provides a reset button that clears the boundary WITHOUT a full
+ *   page reload, allowing React to re-mount cleanly
+ * - does NOT suppress or swallow errors; still shows the boundary UI
+ *   but makes recovery possible without a hard refresh
+ */
 class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
   state: EBState = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
+
+  static getDerivedStateFromError(): EBState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Log in development so the real cause is visible in the console
+    if (import.meta.env.DEV) {
+      console.error('[ErrorBoundary] caught:', error, info.componentStack);
+    }
+  }
+
+  handleReset = () => {
+    // Also ensure body scroll is never left locked
+    document.body.style.overflow = '';
+    this.setState({ hasError: false });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
           <h1 className="font-black text-[24px] mb-3">Something went wrong.</h1>
-          <button className="gbtn mt-4" onClick={() => window.location.reload()}>Refresh page</button>
+          <p className="mb-6 text-[15px]" style={{ color: 'var(--soft)' }}>
+            Try continuing — the page may recover without a full reload.
+          </p>
+          <div className="flex gap-3 flex-wrap justify-center">
+            <button className="gbtn" onClick={this.handleReset}>
+              Try again
+            </button>
+            <button className="gost" onClick={() => window.location.reload()}>
+              Refresh page
+            </button>
+          </div>
         </div>
       );
     }
@@ -65,17 +101,17 @@ function AppRoutes() {
       <ScrollRestoration />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/"               element={<Home />} />
+          <Route path="/dashboard"      element={<Dashboard />} />
+          <Route path="/checkout"       element={<Checkout />} />
           <Route path="/checkout-success" element={<CheckoutSuccess />} />
-          <Route path="/learn" element={<LearnPlaceholder />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/refund" element={<RefundPage />} />
-          <Route path="/cancellation" element={<CancelPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="/learn"          element={<LearnPlaceholder />} />
+          <Route path="/privacy"        element={<PrivacyPage />} />
+          <Route path="/terms"          element={<TermsPage />} />
+          <Route path="/refund"         element={<RefundPage />} />
+          <Route path="/cancellation"   element={<CancelPage />} />
+          <Route path="/contact"        element={<ContactPage />} />
+          <Route path="*"              element={<NotFound />} />
         </Routes>
       </Suspense>
     </>
