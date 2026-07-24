@@ -1,5 +1,5 @@
 /**
- * Hero.tsx — V3.2 stable
+ * Hero.tsx — V3.2 crash-safe
  *
  * Screen calibration:
  *   --screen-top:    2.4%
@@ -22,7 +22,7 @@ const CARDS = [
   { Icon: MessageSquare, title: 'Ask anything', sub: 'Interrupt with any question'    },
 ];
 
-/* ─── Laptop stage with hero video ─── */
+/* ─── Laptop stage ─── */
 function LaptopStage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState<boolean>(() => {
@@ -55,37 +55,20 @@ function LaptopStage() {
         userSelect: 'none',
       } as React.CSSProperties}
     >
-      <div
-        style={{
-          position: 'absolute',
-          top:    'var(--screen-top)',
-          left:   'var(--screen-left)',
-          width:  'var(--screen-width)',
-          height: 'var(--screen-height)',
-          overflow: 'hidden',
-          borderRadius: '6px',
-          background: '#111',
-          zIndex: 2,
-        }}
-      >
+      <div style={{
+        position: 'absolute',
+        top: 'var(--screen-top)', left: 'var(--screen-left)',
+        width: 'var(--screen-width)', height: 'var(--screen-height)',
+        overflow: 'hidden', borderRadius: '6px', background: '#111', zIndex: 2,
+      }}>
         <video
           ref={videoRef}
           src="/videos/hero-placeholder.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
+          autoPlay muted loop playsInline preload="auto"
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
-        <VideoSoundToggle
-          isMuted={muted}
-          onToggle={handleToggle}
-          top="18px"
-          right="18px"
-        />
+        <VideoSoundToggle isMuted={muted} onToggle={handleToggle} top="18px" right="18px" />
       </div>
-
       <img
         src="/images/Laptop.png"
         alt="Studdy running on a laptop"
@@ -98,39 +81,41 @@ function LaptopStage() {
 
 /* ─── Watch Full Demo modal ─────────────────────────────────────────────────
  *
- * FIX: Always rendered (never conditionally unmounted).
+ * REVERTED to conditional mount (if !open return null).
  *
- * The previous implementation returned null when !open, which unmounted the
- * component and set videoRef.current to null.  On iOS Safari, fullscreenchange
- * and webkitfullscreenchange fire asynchronously AFTER the component unmounts,
- * causing React state updates on an unmounted component → Error Boundary.
+ * The "always mounted" approach introduced a poster regression because the
+ * browser decoded the first video frame in the background while the modal
+ * was hidden, replacing the poster image before the user ever opened it.
  *
- * By always keeping the component in the tree and using visibility/display to
- * hide it, the videoRef stays valid through fullscreen transitions.  All
- * play/pause/reset operations are guarded with `if (!v) return` for safety.
+ * The previous crash was NOT caused by DemoModal's mounting strategy.
+ * It was caused by ScrollStory's GSAP ScrollTrigger accessing a detached
+ * DOM node during orientation change (fixed separately in ScrollStory.tsx).
  *
- * body overflow:
- * Using a single useEffect that always runs keeps the cleanup path simple —
- * the cleanup fn always fires when the component unmounts OR when `open`
- * changes, and always resets overflow to ''.
+ * All ref operations are guarded: `const v = videoRef.current; if (!v) return;`
+ * Body overflow is reset in the useEffect cleanup, which runs on close.
  * ─────────────────────────────────────────────────────────────────────────── */
 function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mountedRef = useRef(true);
 
-  /* Reset / pause video on open/close transitions */
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  /* Reset / pause video */
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
     if (open) {
       v.currentTime = 0;
-      // Do NOT autoplay — user must press play themselves
     } else {
       v.pause();
       v.currentTime = 0;
     }
   }, [open]);
 
-  /* ESC closes */
+  /* ESC key */
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -138,42 +123,29 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     return () => window.removeEventListener('keydown', h);
   }, [open, onClose]);
 
-  /*
-   * Body scroll lock.
-   * Cleanup always resets overflow regardless of how the component
-   * disappears (close button, ESC, fullscreen exit, orientation change).
-   */
+  /* Body scroll lock — cleanup always resets regardless of how modal closes */
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+      return () => { document.body.style.overflow = ''; };
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    document.body.style.overflow = '';
   }, [open]);
 
-  /*
-   * FIX: Use visibility + pointer-events instead of conditional unmount.
-   * The modal DOM and videoRef remain live through all lifecycle events.
-   */
+  /* Conditional mount — restores poster-on-first-open behaviour */
+  if (!open) return null;
+
   return (
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 500,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '20px',
-        /* Hidden when closed — but NOT unmounted */
-        visibility: open ? 'visible' : 'hidden',
-        pointerEvents: open ? 'auto' : 'none',
-        opacity: open ? 1 : 0,
-        transition: 'opacity 200ms ease, visibility 0ms linear ' + (open ? '0ms' : '200ms'),
+        animation: 'st-fade-in 200ms ease forwards',
       }}
-      aria-hidden={!open}
     >
-      {/* CSS keyframe for panel scale-in */}
       <style>{`
+        @keyframes st-fade-in  { from { opacity:0 } to { opacity:1 } }
         @keyframes st-scale-in { from { opacity:0; transform:scale(.95) } to { opacity:1; transform:scale(1) } }
       `}</style>
 
@@ -189,11 +161,9 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         aria-hidden="true"
       />
 
-      {/* Modal panel */}
+      {/* Panel */}
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Full product demo"
+        role="dialog" aria-modal="true" aria-label="Full product demo"
         style={{
           position: 'relative', zIndex: 1,
           width: '90vw', maxWidth: '1200px', maxHeight: '90vh',
@@ -203,10 +173,10 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           boxShadow: '0 40px 100px rgba(0,0,0,.6), 0 0 0 1px rgba(140,121,224,.15)',
           overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
-          animation: open ? 'st-scale-in 220ms cubic-bezier(.16,1,.3,1) both' : 'none',
+          animation: 'st-scale-in 220ms cubic-bezier(.16,1,.3,1) forwards',
         }}
       >
-        {/* Header bar */}
+        {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '16px 20px',
@@ -214,25 +184,19 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           flexShrink: 0,
         }}>
           <div>
-            <div className="font-black" style={{ color: '#fff', fontSize: '16px', marginBottom: '2px' }}>
-              Watch Full Demo
-            </div>
-            <div style={{ color: 'rgba(255,255,255,.45)', fontSize: '12.5px' }}>
-              See Studdy explain from start to finish
-            </div>
+            <div className="font-black" style={{ color: '#fff', fontSize: '16px', marginBottom: '2px' }}>Watch Full Demo</div>
+            <div style={{ color: 'rgba(255,255,255,.45)', fontSize: '12.5px' }}>See Studdy explain from start to finish</div>
           </div>
           <button
             onClick={onClose}
             aria-label="Close demo"
-            tabIndex={open ? 0 : -1}
             style={{
               width: '36px', height: '36px', borderRadius: '50%',
               background: 'rgba(255,255,255,.08)',
               border: '1px solid rgba(255,255,255,.12)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'rgba(255,255,255,.7)', cursor: 'pointer',
-              transition: 'background 150ms',
-              flexShrink: 0,
+              transition: 'background 150ms', flexShrink: 0,
             }}
             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.15)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,.08)')}
@@ -241,7 +205,7 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </button>
         </div>
 
-        {/* Video container */}
+        {/* Video */}
         <div style={{ flex: 1, overflow: 'hidden', background: '#000', position: 'relative' }}>
           <video
             ref={videoRef}
@@ -250,14 +214,10 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             playsInline
             disablePictureInPicture
             controlsList="nodownload"
-            tabIndex={open ? 0 : -1}
             style={{
-              width: '100%',
-              height: '100%',
+              width: '100%', height: '100%',
               maxHeight: 'calc(90vh - 73px)',
-              display: 'block',
-              objectFit: 'contain',
-              background: '#000',
+              display: 'block', objectFit: 'contain', background: '#000',
             }}
           />
         </div>
@@ -311,7 +271,7 @@ export default function Hero() {
     return () => ctx.revert();
   }, []);
 
-  /* Mouse parallax on glow — desktop only */
+  /* Mouse parallax — desktop only */
   useEffect(() => {
     const el = glowRef.current;
     if (!el) return;
@@ -372,19 +332,15 @@ export default function Hero() {
           @media (min-width: 1024px) { #hero-col { padding-top: 28px; } }
         `}</style>
 
-        <div
-          id="hero-col"
-          className="relative z-10 flex flex-col items-center text-center"
-          style={{ paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}
-        >
+        <div id="hero-col" className="relative z-10 flex flex-col items-center text-center"
+          style={{ paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}>
+
           <div ref={copyRef} style={{ maxWidth: '760px', marginBottom: '26px' }}>
             <div className="eyebrow mb-5" style={{ display: 'inline-flex' }}>
               Learning that finally clicks.
             </div>
-            <h1
-              className="font-black leading-[1.06]"
-              style={{ fontSize: 'clamp(34px,5.5vw,62px)', letterSpacing: '-2px', color: 'var(--ink)', marginBottom: '18px' }}
-            >
+            <h1 className="font-black leading-[1.06]"
+              style={{ fontSize: 'clamp(34px,5.5vw,62px)', letterSpacing: '-2px', color: 'var(--ink)', marginBottom: '18px' }}>
               Stop memorising.{' '}
               <span className="grad-text">Start understanding.</span>
             </h1>
@@ -398,8 +354,7 @@ export default function Hero() {
               Start Free Trial
             </button>
             <button className="gost text-[15px] px-7 py-4" onClick={handleDemo} aria-label="Watch full demo"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Play size={15} aria-hidden />
               Watch Full Demo
             </button>
@@ -422,15 +377,14 @@ export default function Hero() {
 
             <div ref={cardsRef} style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
               {CARDS.map(({ Icon, title, sub }) => (
-                <div key={title}
-                  style={{
-                    background: 'rgba(255,255,255,.82)', backdropFilter: 'blur(14px)',
-                    border: '1px solid rgba(255,255,255,.65)', borderRadius: '16px',
-                    padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px',
-                    boxShadow: '0 4px 20px rgba(140,121,224,.12)', minWidth: '180px', flex: '0 1 auto',
-                  }}
-                >
-                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--grad)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-hidden="true">
+                <div key={title} style={{
+                  background: 'rgba(255,255,255,.82)', backdropFilter: 'blur(14px)',
+                  border: '1px solid rgba(255,255,255,.65)', borderRadius: '16px',
+                  padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px',
+                  boxShadow: '0 4px 20px rgba(140,121,224,.12)', minWidth: '180px', flex: '0 1 auto',
+                }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--grad)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-hidden="true">
                     <Icon size={16} color="#fff" strokeWidth={2} />
                   </div>
                   <div>
@@ -444,8 +398,7 @@ export default function Hero() {
         </div>
 
         <div className="relative z-10 border-t px-6 py-3 flex flex-wrap justify-center gap-6"
-          style={{ borderColor: 'var(--border)', color: 'var(--soft)', fontSize: '12.5px', fontWeight: 600 }}
-        >
+          style={{ borderColor: 'var(--border)', color: 'var(--soft)', fontSize: '12.5px', fontWeight: 600 }}>
           {['$0 due today', 'Reminder before renewal', 'Cancel anytime'].map(t => (
             <span key={t} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ color: 'var(--g4)' }}>✓</span> {t}
@@ -454,7 +407,7 @@ export default function Hero() {
         </div>
       </section>
 
-      {/* DemoModal is ALWAYS in the tree — never conditionally unmounted */}
+      {/* DemoModal: conditionally mounted — restores poster-on-first-open */}
       <DemoModal open={demoOpen} onClose={closeDemo} />
     </>
   );
