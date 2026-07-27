@@ -1,11 +1,14 @@
 /**
- * Hero.tsx — V3.2 crash-safe
+ * Hero.tsx — V3.2 crash-safe + Bunny Stream
  *
- * Screen calibration:
+ * Screen calibration (unchanged):
  *   --screen-top:    2.4%
  *   --screen-left:   9.6%
  *   --screen-width:  81.4%
  *   --screen-height: 90.6%
+ *
+ * Video sources: Bunny Stream embed iframes.
+ * Local files remain in public/videos for rollback but are not referenced.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,8 +16,17 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Play, BookOpen, Zap, MessageSquare, X } from 'lucide-react';
 import { track } from '../utils/analytics';
-import VideoSoundToggle from '../components/VideoSoundToggle';
 gsap.registerPlugin(ScrollTrigger);
+
+/* ── Bunny Stream embed URLs ───────────────────────────────────────────────
+ * Use https://player.mediadelivery.net/embed/... exactly as supplied.
+ * Do not change to /play/... Do not download. Do not bundle.
+ * ──────────────────────────────────────────────────────────────────────── */
+const HERO_LAPTOP_VIDEO_URL =
+  'https://player.mediadelivery.net/embed/712849/8e42019d-a6fa-43d2-ad9f-74d9a54286a6?autoplay=true&muted=true&loop=true&preload=true&playsinline=true&rememberPosition=false&compactControls=true';
+
+const HERO_FULL_DEMO_URL =
+  'https://player.mediadelivery.net/embed/712849/9ddc752f-6ff6-49b2-9e84-cb7c5aa5a87c?autoplay=false&muted=false&loop=false&preload=false&playsinline=true&rememberPosition=false';
 
 const CARDS = [
   { Icon: BookOpen,      title: 'All subjects', sub: 'Bio, Physics, Math, Econ, etc.' },
@@ -22,27 +34,16 @@ const CARDS = [
   { Icon: MessageSquare, title: 'Ask anything', sub: 'Interrupt with any question'    },
 ];
 
-/* ─── Laptop stage ─── */
+/* ─── Laptop stage ─────────────────────────────────────────────────────────
+ * A1: The local <video> is replaced by a Bunny Stream iframe.
+ * The screen container, laptop PNG, calibration variables, overflow:hidden,
+ * border-radius and z-indices are all unchanged.
+ *
+ * pointer-events: none  — decorative iframe; user cannot click into it.
+ * The VideoSoundToggle is removed because mute is controlled by Bunny's
+ * own player via the URL param muted=true. The laptop is decorative.
+ * ──────────────────────────────────────────────────────────────────────── */
 function LaptopStage() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState<boolean>(() => {
-    try { const s = localStorage.getItem('studdy_muted'); return s === null ? true : s === 'true'; }
-    catch { return true; }
-  });
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (v) v.muted = muted;
-  }, [muted]);
-
-  const handleToggle = useCallback(() => {
-    setMuted(prev => {
-      const next = !prev;
-      try { localStorage.setItem('studdy_muted', String(next)); } catch {}
-      return next;
-    });
-  }, []);
-
   return (
     <div
       style={{
@@ -55,20 +56,38 @@ function LaptopStage() {
         userSelect: 'none',
       } as React.CSSProperties}
     >
-      <div style={{
-        position: 'absolute',
-        top: 'var(--screen-top)', left: 'var(--screen-left)',
-        width: 'var(--screen-width)', height: 'var(--screen-height)',
-        overflow: 'hidden', borderRadius: '6px', background: '#111', zIndex: 2,
-      }}>
-        <video
-          ref={videoRef}
-          src="/videos/hero-placeholder.mp4"
-          autoPlay muted loop playsInline preload="auto"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+      {/* Screen overlay — z-index 2, above PNG, unchanged dimensions */}
+      <div
+        style={{
+          position: 'absolute',
+          top:    'var(--screen-top)',
+          left:   'var(--screen-left)',
+          width:  'var(--screen-width)',
+          height: 'var(--screen-height)',
+          overflow: 'hidden',
+          borderRadius: '6px',
+          background: '#111',
+          zIndex: 2,
+          /* Prevent user interaction with the decorative autoplay iframe */
+          pointerEvents: 'none',
+        }}
+      >
+        <iframe
+          src={HERO_LAPTOP_VIDEO_URL}
+          title="Studdy AI tutor demonstration"
+          loading="eager"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowFullScreen
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 0,
+            display: 'block',
+          }}
         />
-        <VideoSoundToggle isMuted={muted} onToggle={handleToggle} top="18px" right="18px" />
       </div>
+
+      {/* Laptop PNG — z-index 1, unchanged */}
       <img
         src="/images/Laptop.png"
         alt="Studdy running on a laptop"
@@ -80,41 +99,15 @@ function LaptopStage() {
 }
 
 /* ─── Watch Full Demo modal ─────────────────────────────────────────────────
+ * A2: The local <video> element is replaced by a Bunny iframe.
+ * Modal structure, dimensions, backdrop, ESC, body-scroll lock and
+ * conditional-mount pattern are all unchanged.
  *
- * REVERTED to conditional mount (if !open return null).
- *
- * The "always mounted" approach introduced a poster regression because the
- * browser decoded the first video frame in the background while the modal
- * was hidden, replacing the poster image before the user ever opened it.
- *
- * The previous crash was NOT caused by DemoModal's mounting strategy.
- * It was caused by ScrollStory's GSAP ScrollTrigger accessing a detached
- * DOM node during orientation change (fixed separately in ScrollStory.tsx).
- *
- * All ref operations are guarded: `const v = videoRef.current; if (!v) return;`
- * Body overflow is reset in the useEffect cleanup, which runs on close.
- * ─────────────────────────────────────────────────────────────────────────── */
+ * Because the iframe is conditionally mounted (created on open, removed on
+ * close), Bunny playback is automatically stopped and reset by the browser
+ * when the iframe is unmounted — no pause()/currentTime calls needed.
+ * ──────────────────────────────────────────────────────────────────────── */
 function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  /* Reset / pause video */
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (open) {
-      v.currentTime = 0;
-    } else {
-      v.pause();
-      v.currentTime = 0;
-    }
-  }, [open]);
-
   /* ESC key */
   useEffect(() => {
     if (!open) return;
@@ -123,7 +116,7 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     return () => window.removeEventListener('keydown', h);
   }, [open, onClose]);
 
-  /* Body scroll lock — cleanup always resets regardless of how modal closes */
+  /* Body scroll lock */
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
@@ -132,7 +125,7 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     document.body.style.overflow = '';
   }, [open]);
 
-  /* Conditional mount — restores poster-on-first-open behaviour */
+  /* Conditional mount — poster-on-first-open preserved; no stale video refs */
   if (!open) return null;
 
   return (
@@ -205,20 +198,15 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </button>
         </div>
 
-        {/* Video */}
-        <div style={{ flex: 1, overflow: 'hidden', background: '#000', position: 'relative' }}>
-          <video
-            ref={videoRef}
-            src="/videos/watch-full-demo.mp4"
-            controls
-            playsInline
-            disablePictureInPicture
-            controlsList="nodownload"
-            style={{
-              width: '100%', height: '100%',
-              maxHeight: 'calc(90vh - 73px)',
-              display: 'block', objectFit: 'contain', background: '#000',
-            }}
+        {/* Bunny iframe — created on open, unmounted on close (stops playback) */}
+        <div style={{ flex: 1, position: 'relative', background: '#000', aspectRatio: '16/9', minHeight: 0 }}>
+          <iframe
+            src={HERO_FULL_DEMO_URL}
+            title="Watch the full Studdy demo"
+            loading="lazy"
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+            style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
           />
         </div>
       </div>
@@ -237,7 +225,7 @@ export default function Hero() {
   const glowRef    = useRef<HTMLDivElement>(null);
   const [demoOpen, setDemoOpen] = useState(false);
 
-  /* Entrance animation */
+  /* Entrance animation — unchanged */
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = gsap.context(() => {
@@ -253,7 +241,7 @@ export default function Hero() {
     return () => ctx.revert();
   }, []);
 
-  /* Scroll scale */
+  /* Scroll scale — unchanged */
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!sectionRef.current) return;
@@ -271,7 +259,7 @@ export default function Hero() {
     return () => ctx.revert();
   }, []);
 
-  /* Mouse parallax — desktop only */
+  /* Mouse parallax — desktop only, unchanged */
   useEffect(() => {
     const el = glowRef.current;
     if (!el) return;
@@ -299,7 +287,7 @@ export default function Hero() {
         className="relative w-full overflow-hidden"
         style={{ background: '#f9f8fc', minHeight: '100svh' }}
       >
-        {/* Background grid */}
+        {/* Background grid — unchanged */}
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
           style={{
             backgroundImage:
@@ -308,7 +296,7 @@ export default function Hero() {
             backgroundSize: '60px 60px',
           }}
         />
-        {/* Grain */}
+        {/* Grain — unchanged */}
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
           style={{
             opacity: 0.025,
@@ -316,7 +304,7 @@ export default function Hero() {
             backgroundSize: '200px 200px',
           }}
         />
-        {/* Colour wash */}
+        {/* Colour wash — unchanged */}
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
           style={{
             background:
@@ -326,6 +314,7 @@ export default function Hero() {
           }}
         />
 
+        {/* Spacing — unchanged */}
         <style>{`
           #hero-col { padding-top: 20px; }
           @media (min-width: 768px)  { #hero-col { padding-top: 22px; } }
@@ -335,6 +324,7 @@ export default function Hero() {
         <div id="hero-col" className="relative z-10 flex flex-col items-center text-center"
           style={{ paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}>
 
+          {/* Copy — unchanged */}
           <div ref={copyRef} style={{ maxWidth: '760px', marginBottom: '26px' }}>
             <div className="eyebrow mb-5" style={{ display: 'inline-flex' }}>
               Learning that finally clicks.
@@ -349,6 +339,7 @@ export default function Hero() {
             </p>
           </div>
 
+          {/* CTAs — unchanged */}
           <div ref={ctaRef} className="flex flex-col sm:flex-row gap-3 items-center justify-center" style={{ marginBottom: '36px' }}>
             <button className="gbtn text-[15px] px-8 py-4" onClick={handleTrial} aria-label="Start free trial">
               Start Free Trial
@@ -360,6 +351,7 @@ export default function Hero() {
             </button>
           </div>
 
+          {/* Laptop + cards — unchanged structure */}
           <div style={{ width: '100%', maxWidth: '1060px', margin: '0 auto', position: 'relative' }}>
             <div ref={glowRef} className="absolute pointer-events-none" aria-hidden="true"
               style={{
@@ -375,6 +367,7 @@ export default function Hero() {
               <LaptopStage />
             </div>
 
+            {/* Feature cards — unchanged */}
             <div ref={cardsRef} style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
               {CARDS.map(({ Icon, title, sub }) => (
                 <div key={title} style={{
@@ -397,6 +390,7 @@ export default function Hero() {
           </div>
         </div>
 
+        {/* Trust row — unchanged */}
         <div className="relative z-10 border-t px-6 py-3 flex flex-wrap justify-center gap-6"
           style={{ borderColor: 'var(--border)', color: 'var(--soft)', fontSize: '12.5px', fontWeight: 600 }}>
           {['$0 due today', 'Reminder before renewal', 'Cancel anytime'].map(t => (
@@ -407,7 +401,7 @@ export default function Hero() {
         </div>
       </section>
 
-      {/* DemoModal: conditionally mounted — restores poster-on-first-open */}
+      {/* DemoModal: conditionally mounted — Bunny iframe unmounts on close */}
       <DemoModal open={demoOpen} onClose={closeDemo} />
     </>
   );
