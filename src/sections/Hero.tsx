@@ -22,9 +22,6 @@ gsap.registerPlugin(ScrollTrigger);
  * Use https://player.mediadelivery.net/embed/... exactly as supplied.
  * Do not change to /play/... Do not download. Do not bundle.
  * ──────────────────────────────────────────────────────────────────────── */
-const HERO_LAPTOP_VIDEO_URL =
-  'https://player.mediadelivery.net/embed/712849/8e42019d-a6fa-43d2-ad9f-74d9a54286a6?autoplay=true&muted=true&loop=true&preload=true&playsinline=true&rememberPosition=false&compactControls=true';
-
 const HERO_FULL_DEMO_URL =
   'https://player.mediadelivery.net/embed/712849/9ddc752f-6ff6-49b2-9e84-cb7c5aa5a87c?autoplay=false&muted=false&loop=false&preload=false&playsinline=true&rememberPosition=false';
 
@@ -34,16 +31,52 @@ const CARDS = [
   { Icon: MessageSquare, title: 'Ask anything', sub: 'Interrupt with any question'    },
 ];
 
+/* ── Bunny direct MP4 URL for the Hero laptop loop ─────────────────────────
+ * CDN hostname: vz-b523719a-f10.b-cdn.net  (Library ID: 712849)
+ * Video ID:     8e42019d-a6fa-43d2-ad9f-74d9a54286a6
+ * 720p is the primary source; 1080p is listed as a fallback <source>.
+ * Using a native <video> element instead of the iframe so objectFit:cover
+ * fills the laptop screen without Bunny player chrome or letterboxing.
+ * ──────────────────────────────────────────────────────────────────────── */
+const LAPTOP_MP4_720P  = 'https://vz-b523719a-f10.b-cdn.net/8e42019d-a6fa-43d2-ad9f-74d9a54286a6/play_720p.mp4';
+const LAPTOP_MP4_1080P = 'https://vz-b523719a-f10.b-cdn.net/8e42019d-a6fa-43d2-ad9f-74d9a54286a6/play_1080p.mp4';
+
 /* ─── Laptop stage ─────────────────────────────────────────────────────────
- * A1: The local <video> is replaced by a Bunny Stream iframe.
- * The screen container, laptop PNG, calibration variables, overflow:hidden,
- * border-radius and z-indices are all unchanged.
- *
- * pointer-events: none  — decorative iframe; user cannot click into it.
- * The VideoSoundToggle is removed because mute is controlled by Bunny's
- * own player via the URL param muted=true. The laptop is decorative.
+ * Native <video> with objectFit:cover fills the screen container exactly.
+ * No iframe, no player.js, no letterboxing.
+ * Mute/unmute is controlled directly via videoRef.current.muted.
  * ──────────────────────────────────────────────────────────────────────── */
 function LaptopStage() {
+  const videoRef   = useRef<HTMLVideoElement>(null);
+  const mountedRef = useRef(true);
+  const [muted, setMuted] = useState(true);   // starts muted (autoplay policy)
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  /* Keep the DOM element in sync whenever React state changes */
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) v.muted = muted;
+  }, [muted]);
+
+  const handleMuteToggle = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    const next = !muted;
+    v.muted = next;
+
+    /* If the browser paused after unmute, resume playback safely */
+    if (!next && v.paused) {
+      v.play().catch(() => { /* autoplay policy — silently ignored */ });
+    }
+
+    if (mountedRef.current) setMuted(next);
+  }, [muted]);
+
   return (
     <div
       style={{
@@ -56,7 +89,7 @@ function LaptopStage() {
         userSelect: 'none',
       } as React.CSSProperties}
     >
-      {/* Screen overlay — z-index 2, above PNG, unchanged dimensions */}
+      {/* Screen overlay — calibration unchanged, clipping preserved */}
       <div
         style={{
           position: 'absolute',
@@ -68,24 +101,85 @@ function LaptopStage() {
           borderRadius: '6px',
           background: '#111',
           zIndex: 2,
-          /* Prevent user interaction with the decorative autoplay iframe */
           pointerEvents: 'none',
         }}
       >
-        <iframe
-          src={HERO_LAPTOP_VIDEO_URL}
-          title="Studdy AI tutor demonstration"
-          loading="eager"
-          allow="autoplay; encrypted-media; picture-in-picture"
-          allowFullScreen
+        {/* Native video — objectFit:cover fills container with no letterboxing */}
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-label="Studdy AI tutor demonstration"
           style={{
+            position: 'absolute',
+            inset: 0,
             width: '100%',
             height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center',
             border: 0,
             display: 'block',
+            pointerEvents: 'none',
           }}
-        />
+        >
+          {/* 720p primary — 1080p fallback if 720p unavailable */}
+          <source src={LAPTOP_MP4_720P}  type="video/mp4" />
+          <source src={LAPTOP_MP4_1080P} type="video/mp4" />
+        </video>
       </div>
+
+      {/* Mute/unmute button — zIndex 3, above screen overlay */}
+      <button
+        onClick={handleMuteToggle}
+        aria-label={muted ? 'Unmute demo video' : 'Mute demo video'}
+        style={{
+          position: 'absolute',
+          top:   'calc(var(--screen-top) + 14px)',
+          right: 'calc(100% - var(--screen-left) - var(--screen-width) + 14px)',
+          zIndex: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'rgba(0,0,0,.62)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,.18)',
+          borderRadius: '999px',
+          color: '#fff',
+          fontSize: '12px',
+          fontWeight: 700,
+          fontFamily: 'inherit',
+          padding: '7px 12px 7px 10px',
+          cursor: 'pointer',
+          pointerEvents: 'auto',
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {muted ? (
+          /* VolumeX — muted */
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden="true">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <line x1="23" y1="9" x2="17" y2="15"/>
+            <line x1="17" y1="9" x2="23" y2="15"/>
+          </svg>
+        ) : (
+          /* Volume2 — unmuted */
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden="true">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+        )}
+        {muted ? 'Click to unmute' : 'Click to mute'}
+      </button>
 
       {/* Laptop PNG — z-index 1, unchanged */}
       <img
@@ -199,14 +293,23 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         </div>
 
         {/* Bunny iframe — created on open, unmounted on close (stops playback) */}
-        <div style={{ flex: 1, position: 'relative', background: '#000', aspectRatio: '16/9', minHeight: 0 }}>
+        <div style={{ flex: 1, position: 'relative', background: '#000', aspectRatio: '16/9', minHeight: 0, overflow: 'hidden' }}>
           <iframe
             src={HERO_FULL_DEMO_URL}
             title="Watch the full Studdy demo"
             loading="lazy"
             allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
             allowFullScreen
-            style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '100%',
+              height: '100%',
+              border: 0,
+              display: 'block',
+            }}
           />
         </div>
       </div>
