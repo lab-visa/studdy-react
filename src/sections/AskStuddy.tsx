@@ -287,73 +287,132 @@ function usePreloadVideos(urls: string[]) {
   }, [urls.join('|')]);
 }
 
-/* ── FIX 5: Mobile category cards ───────────────────────────────── */
-function MobileCategoryCards({ catIdx, onChange }: {
+/* ── Category cards — all screen sizes (FIX 2) ─────────────────── *
+ * Desktop: 3 cards in one row (grid-cols-3)
+ * Tablet:  3 in a row if it fits, else 2+1
+ * Mobile:  2+1 (first two side by side, third full width)
+ * ─────────────────────────────────────────────────────────────── */
+const CAT_DESCRIPTORS: Record<string, string> = {
+  school:  'Subjects and homework',
+  college: 'Complex ideas made simple',
+  work:    'Practical learning',
+};
+
+function CategoryCards({ catIdx, onChange }: {
   catIdx: number; onChange: (i: number) => void;
 }) {
-  const descriptors = [
-    'Subjects & Homework',
-    'Advanced Visual Learning',
-    'Career & Practical Skills',
-  ];
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(2, 1fr)',
-      gap: '8px',
-      marginBottom: '20px',
-    }} role="tablist" aria-label="Lesson categories">
-      {LESSON_CATEGORIES.map((c, idx) => {
-        const selected = catIdx === idx;
-        const grad = CAT_GRADIENTS[c.id] ?? 'var(--grad)';
-        /* Last card full width on 2+1 layout */
-        const isLast = idx === LESSON_CATEGORIES.length - 1;
-        return (
-          <button
-            key={c.id}
-            role="tab"
-            aria-selected={selected}
-            onClick={() => onChange(idx)}
-            style={{
-              gridColumn: isLast ? '1 / -1' : undefined,
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '12px 14px',
-              background: selected ? 'rgba(239,85,182,.04)' : '#fff',
-              border: `1.5px solid ${selected ? 'transparent' : 'var(--border)'}`,
-              borderRadius: '14px', cursor: 'pointer', textAlign: 'left',
-              fontFamily: 'inherit', width: '100%',
-              /* Gradient border when selected */
-              backgroundImage: selected
-                ? `linear-gradient(#fff,#fff), ${grad}`
-                : 'none',
-              backgroundOrigin: selected ? 'border-box' : undefined,
-              backgroundClip:   selected ? 'padding-box, border-box' : undefined,
-              boxShadow: selected ? '0 2px 12px rgba(140,121,224,.1)' : 'none',
-              transition: 'box-shadow 150ms, background 150ms',
-            }}
-          >
-            {/* Icon */}
-            <div style={{
-              width: '32px', height: '32px', borderRadius: '9px', flexShrink: 0,
-              background: selected ? grad : 'var(--dim)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 150ms',
-            }} aria-hidden>
-              <c.Icon size={15} color={selected ? '#fff' : 'var(--soft)'} strokeWidth={1.8} />
-            </div>
-            <div style={{ minWidth: 0 }}>
+    <>
+      <div
+        className="cat-card-grid"
+        role="tablist"
+        aria-label="Lesson categories"
+        style={{ marginBottom: '28px' }}
+      >
+        {LESSON_CATEGORIES.map((c, idx) => {
+          const selected = catIdx === idx;
+          const grad = CAT_GRADIENTS[c.id] ?? 'var(--grad)';
+          return (
+            <button
+              key={c.id}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => onChange(idx)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 16px',
+                borderRadius: '14px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+                width: '100%',
+                transition: 'box-shadow 150ms, background 150ms',
+                /* Gradient border when selected, plain border when not */
+                background: selected ? '#fff' : '#fff',
+                border: selected ? '1.5px solid transparent' : '1.5px solid var(--border)',
+                outline: 'none',
+                position: 'relative',
+                boxShadow: selected ? '0 2px 14px rgba(140,121,224,.12)' : 'none',
+                /* Gradient border via box-shadow outline trick */
+                ...(selected ? {
+                  backgroundImage: `linear-gradient(#fff,#fff), ${grad}`,
+                  backgroundOrigin: 'border-box' as const,
+                  backgroundClip: 'padding-box, border-box' as const,
+                } : {}),
+              }}
+              onMouseEnter={e => {
+                if (!selected) {
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--g3)';
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 8px rgba(140,121,224,.08)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (!selected) {
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+                }
+              }}
+              onFocus={e => { e.currentTarget.style.outline = '2px solid var(--g4)'; e.currentTarget.style.outlineOffset = '2px'; }}
+              onBlur={e  => { e.currentTarget.style.outline = 'none'; }}
+            >
+              {/* Icon */}
               <div style={{
-                fontWeight: 700, fontSize: '13px', color: 'var(--ink)',
-                lineHeight: 1.2, marginBottom: '1px',
-              }}>{c.label}</div>
-              <div style={{ fontSize: '11px', color: 'var(--soft)', lineHeight: 1.3 }}>
-                {descriptors[idx]}
+                width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
+                background: selected ? grad : 'var(--dim)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 150ms',
+              }} aria-hidden>
+                <c.Icon size={16} color={selected ? '#fff' : 'var(--soft)'} strokeWidth={1.8} />
               </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
+              {/* Text */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{
+                  fontWeight: 700,
+                  fontSize: 'clamp(12px, 1.2vw, 13.5px)',
+                  color: 'var(--ink)',
+                  lineHeight: 1.2,
+                  marginBottom: '1px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>{c.label}</div>
+                <div style={{
+                  fontSize: 'clamp(10.5px, 1vw, 12px)',
+                  color: 'var(--soft)',
+                  lineHeight: 1.3,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {CAT_DESCRIPTORS[c.id] ?? ''}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Responsive grid: 3-col desktop, 2+1 mobile */}
+      <style>{`
+        .cat-card-grid {
+          display: grid;
+          gap: 10px;
+          /* Desktop & tablet: 3 equal columns */
+          grid-template-columns: repeat(3, 1fr);
+        }
+        @media (max-width: 639px) {
+          /* Mobile: 2+1 — last card spans both columns */
+          .cat-card-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          .cat-card-grid > button:last-child {
+            grid-column: 1 / -1;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 
@@ -739,31 +798,8 @@ export default function AskStuddy() {
           center
         />
 
-        {/* FIX 5: Mobile → category cards; Desktop/Tablet → segmented pill */}
-        {isMobile ? (
-          <MobileCategoryCards catIdx={catIdx} onChange={handleCatChange} />
-        ) : (
-          <div role="tablist" aria-label="Lesson categories" style={{
-            display: 'flex', gap: '4px', padding: '4px',
-            background: '#fff', border: '1.5px solid var(--border)',
-            borderRadius: '999px', width: 'fit-content',
-            margin: '0 auto 32px', flexWrap: 'wrap', justifyContent: 'center',
-          }}>
-            {LESSON_CATEGORIES.map((c, idx) => (
-              <button key={c.id} role="tab" aria-selected={catIdx === idx}
-                onClick={() => handleCatChange(idx)} style={{
-                  padding: '8px 16px', borderRadius: '999px',
-                  fontSize: 'clamp(12px, 1.5vw, 13.5px)', fontWeight: 700,
-                  background: catIdx === idx ? 'var(--ink)' : 'transparent',
-                  color:      catIdx === idx ? '#fff' : 'var(--soft)',
-                  border: 0, cursor: 'pointer', fontFamily: 'inherit',
-                  whiteSpace: 'nowrap', transition: 'background 150ms, color 150ms',
-                }}>
-                {c.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* FIX 2: CategoryCards on all screen sizes — responsive via CSS grid */}
+        <CategoryCards catIdx={catIdx} onChange={handleCatChange} />
 
         {/*
           FIX 2: Desktop = two-column (left: cards+panel, right: stage)

@@ -210,28 +210,61 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </button>
         </div>
 
-        {/* Native video — perfectly centred, no cropping */}
-        <div style={{
-          flex: 1, position: 'relative', background: '#fbfaf5',
-          aspectRatio: '16/9', minHeight: 0, overflow: 'hidden',
-        }}>
+        {/* Native video — clipping wrapper centres visible lesson content by breakpoint */}
+        <div className="fd-player-wrap">
           <video
             ref={videoRef}
             controls
             playsInline
             preload="metadata"
             aria-label="Full Studdy product demonstration"
-            style={{
-              position: 'absolute', inset: 0,
-              width: '100%', height: '100%',
-              objectFit: 'contain', objectPosition: 'center',
-              display: 'block', background: '#fbfaf5',
-            }}
+            className="fd-video"
           >
             <source src={FULL_DEMO_MP4_720P}  type="video/mp4" />
             <source src={FULL_DEMO_MP4_1080P} type="video/mp4" />
           </video>
         </div>
+        <style>{`
+          /* Clipping wrapper — 16:9 container, warm bg */
+          .fd-player-wrap {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #fbfaf5;
+            overflow: hidden;
+            flex-shrink: 0;
+          }
+          /* Base video styles — controls always accessible */
+          .fd-video {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            display: block;
+            background: #fbfaf5;
+          }
+          /* Mobile portrait — content already centred, minimal correction */
+          .fd-video {
+            width: 100%;
+            height: 100%;
+            transform: translate(-50%, -50%);
+          }
+          /* Laptop / tablet (≥ 768px) — slight enlargement + right shift */
+          @media (min-width: 768px) {
+            .fd-video {
+              width: 104%;
+              height: 104%;
+              transform: translate(-49%, -50%);
+            }
+          }
+          /* Wide desktop (≥ 1280px) — same calibration is sufficient */
+          @media (min-width: 1280px) {
+            .fd-video {
+              width: 104%;
+              height: 104%;
+              transform: translate(-49%, -50%);
+            }
+          }
+        `}</style>
       </div>
     </div>
   );
