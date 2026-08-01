@@ -33,13 +33,10 @@ const CARDS = [
 
 /* ── Bunny direct MP4 URL for the Hero laptop loop ─────────────────────────
  * CDN hostname: vz-b523719a-f10.b-cdn.net  (Library ID: 712849)
- * Video ID:     8e42019d-a6fa-43d2-ad9f-74d9a54286a6
- * 720p is the primary source; 1080p is listed as a fallback <source>.
- * Using a native <video> element instead of the iframe so objectFit:cover
- * fills the laptop screen without Bunny player chrome or letterboxing.
+ * Video ID:     f4df16a6-0fbe-4f97-9f24-91aa14337e24
  * ──────────────────────────────────────────────────────────────────────── */
-const LAPTOP_MP4_720P  = 'https://vz-b523719a-f10.b-cdn.net/8e42019d-a6fa-43d2-ad9f-74d9a54286a6/play_720p.mp4';
-const LAPTOP_MP4_1080P = 'https://vz-b523719a-f10.b-cdn.net/8e42019d-a6fa-43d2-ad9f-74d9a54286a6/play_1080p.mp4';
+const LAPTOP_MP4_720P  = 'https://vz-b523719a-f10.b-cdn.net/f4df16a6-0fbe-4f97-9f24-91aa14337e24/play_720p.mp4';
+const LAPTOP_MP4_1080P = 'https://vz-b523719a-f10.b-cdn.net/f4df16a6-0fbe-4f97-9f24-91aa14337e24/play_1080p.mp4';
 
 /* ─── Laptop stage ─────────────────────────────────────────────────────────
  * Native <video> with objectFit:cover fills the screen container exactly.

@@ -4,7 +4,6 @@ import EmotionalHook from '../sections/EmotionalHook';
 import ProductProof from '../sections/ProductProof';
 import AskStuddy from '../sections/AskStuddy';
 import ScrollStory from '../sections/ScrollStory';
-import SubjectSelector from '../sections/SubjectSelector';
 import HowItWorks from '../sections/HowItWorks';
 import Comparison from '../sections/Comparison';
 import Testimonials from '../sections/Testimonials';
@@ -23,7 +22,6 @@ export default function Home() {
         <ProductProof />
         <AskStuddy />
         <ScrollStory />
-        <SubjectSelector />
         <HowItWorks />
         <Comparison />
         <Testimonials />
