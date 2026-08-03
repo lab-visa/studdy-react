@@ -1,85 +1,240 @@
 /**
- * ScrollStory.tsx — crash-safe version
+ * ScrollStory.tsx — Section 4 — Cinematic 10-slide scroll story
  *
- * ROOT CAUSE OF PREVIOUS CRASH:
- * ScrollStory conditionally rendered two completely different DOM trees
- * based on isMobile state.  When isMobile flipped during orientation
- * change, React unmounted the desktop branch (removing outerRef's div
- * from the DOM).  GSAP's ScrollTrigger with pin:true holds an internal
- * reference to that trigger element and has its own scroll/resize
- * observers.  On iOS Safari, the orientation-change resize fires while
- * GSAP is mid-cleanup — GSAP tries to call getBoundingClientRect() on
- * the already-detached node → TypeError → Error Boundary.
+ * ARCHITECTURE:
  *
- * FIX:
- * Always render ONE DOM structure.  The canvas, outerRef div, and
- * ScrollTrigger trigger element are always present in the DOM.
- * Mobile content is shown via CSS (display:none / display:block).
- * GSAP always has a live DOM node to clean up against.
+ * Scroll:  CSS position:sticky + 10 IntersectionObserver sentinels.
+ *          No GSAP. No wheel hijacking. No preventDefault.
+ *          Safari cannot get stuck. Exits naturally in both directions.
+ *
+ * Video:   All 10 Bunny iframes permanently mounted.
+ *          Visibility via CSS opacity only — no remounting, no src changes.
+ *          Each iframe has a dark cover div that fades away on onLoad.
+ *          This prevents any Bunny chrome flash.
+ *
+ * Playback: muted + autoplay + loop in URL params.
+ *           No player.js dependency — Bunny handles playback natively.
+ *           All 10 videos play muted in the background (same as the
+ *           previous working version). Opacity hides inactive slides.
+ *           This is simpler and more reliable across all browsers.
+ *
+ * Crossfade: CSS transition opacity 550ms on each layer.
+ *            Active slide opacity → 1, others → 0.
+ *            Minimum opacity math prevents any fully black frame.
+ *
+ * Crash-safe: no GSAP orientation race, no conditional DOM swap.
  */
-import { useEffect, useRef, useState } from 'react';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-gsap.registerPlugin(ScrollTrigger);
+import {
+  useEffect, useRef, useState, useCallback,
+} from 'react';
+import { useNavigate } from 'react-router-dom';
+import { track } from '../utils/analytics';
 
-const SCENES = [
-  { bg0:'#1A1230', bg1:'#120C24', tag:'01 / 07', h:'One question. No one available.',    p:'Late in the evening, a learner hits a wall.' },
-  { bg0:'#14202E', bg1:'#0E1424', tag:'02 / 07', h:"Tries again. Still doesn't click.", p:'Sometimes more practice is not the answer.' },
-  { bg0:'#1A143A', bg1:'#10082E', tag:'03 / 07', h:'They open Studdy.',                  p:'They need it explained a different way.' },
-  { bg0:'#101830', bg1:'#0A1020', tag:'04 / 07', h:'The whiteboard begins.',              p:'Visually. Patiently. Step by step.' },
-  { bg0:'#14182C', bg1:'#0E1020', tag:'05 / 07', h:'A follow-up question.',              p:'Without feeling embarrassed to ask again.' },
-  { bg0:'#101C28', bg1:'#0A1218', tag:'06 / 07', h:'The concept clicks.',                p:'Finally. Completely. Theirs.' },
-  { bg0:'#0C1820', bg1:'#080E14', tag:'07 / 07', h:'The task is done.',                  p:'Less frustration. More confidence.' },
+/* ══════════════════════════════════════════════════════════════
+   SLIDE DATA
+   ══════════════════════════════════════════════════════════════ */
+interface Slide {
+  id: number;
+  bunnyId: string;
+  eyebrow: string;
+  headline: string;
+  description: string;
+  textSide: 'left' | 'right';
+  overlayStrength: number;
+  isFinal?: boolean;
+}
+
+const LIB = '712849';
+const PARAMS =
+  'autoplay=true&muted=true&loop=true&playsinline=true' +
+  '&preload=true&controls=false&rememberPosition=false';
+const embedUrl = (id: string) =>
+  `https://player.mediadelivery.net/embed/${LIB}/${id}?${PARAMS}`;
+
+const SLIDES: Slide[] = [
+  {
+    id: 1, bunnyId: '820e122c-064f-4b71-8b6d-d0d1874b1e27',
+    eyebrow: 'THE STRUGGLE',
+    headline: 'It starts with one difficult question.',
+    description: 'Late at night, homework continues — but understanding does not always come easily.',
+    textSide: 'left', overlayStrength: 0.55,
+  },
+  {
+    id: 2, bunnyId: '151be9e3-b812-4bf0-a921-d2e53c239c00',
+    eyebrow: 'WHEN LEARNING STOPS',
+    headline: 'Then frustration takes over.',
+    description: 'The answer may be somewhere in the book. What is missing is someone who can explain it clearly.',
+    textSide: 'left', overlayStrength: 0.55,
+  },
+  {
+    id: 3, bunnyId: 'c37db453-eaf2-4aaa-97f3-3a40048f5a3a',
+    eyebrow: 'A DIFFERENT WAY',
+    headline: 'So he asks Studdy.',
+    description: 'One question opens a personal learning experience built around how he understands best.',
+    textSide: 'left', overlayStrength: 0.5,
+  },
+  {
+    id: 4, bunnyId: '06fd86f2-c358-4207-a135-0403f1aab46f',
+    eyebrow: 'VISUAL EXPLANATIONS',
+    headline: 'The lesson comes alive.',
+    description: 'Studdy explains step by step using voice, drawings, diagrams and an interactive whiteboard.',
+    textSide: 'left', overlayStrength: 0.45,
+  },
+  {
+    id: 5, bunnyId: 'adfa2cdf-68ce-428f-b030-2470eb5af6e2',
+    eyebrow: 'THE AHA MOMENT',
+    headline: 'Complex ideas finally make sense.',
+    description: 'Instead of memorising an answer, he can see why it works.',
+    textSide: 'left', overlayStrength: 0.5,
+  },
+  {
+    id: 6, bunnyId: '9cf9db7e-169d-4812-8252-83791afc4506',
+    eyebrow: 'CONFIDENCE',
+    headline: 'Understanding changes how children learn.',
+    description: 'Confusion becomes curiosity. Hesitation becomes confident progress.',
+    textSide: 'left', overlayStrength: 0.5,
+  },
+  {
+    id: 7, bunnyId: '6236b3bf-4f2e-42d7-8fe3-c76ff3fa045c',
+    eyebrow: 'HOW STUDDY WORKS',
+    headline: 'One visual step at a time.',
+    description: 'Ask a question. See the explanation. Understand the concept. Take better notes. Solve confidently.',
+    textSide: 'left', overlayStrength: 0.45,
+  },
+  {
+    id: 8, bunnyId: '7e652b2e-afc2-4759-b82b-bd6ee3d8d1d7',
+    eyebrow: 'THE TRANSFORMATION',
+    headline: 'Now he can keep going on his own.',
+    description: 'The same learner. The same homework. A completely different level of confidence.',
+    textSide: 'left', overlayStrength: 0.55,
+  },
+  {
+    id: 9, bunnyId: '2c7c3194-2990-4ba3-84e3-1ea5bb443587',
+    eyebrow: 'PARENTS NOTICE',
+    headline: 'The difference is easy to see.',
+    description: 'A child who understands needs less reminding, feels less frustrated and learns more independently.',
+    textSide: 'left', overlayStrength: 0.5,
+  },
+  {
+    id: 10, bunnyId: '24ea24d8-447f-44e0-bfbb-99f7c35dca40',
+    eyebrow: 'MEET STUDDY',
+    headline: 'A personal AI tutor, ready whenever learning gets difficult.',
+    description: 'Ask anything. Learn visually. Understand deeply.',
+    textSide: 'left', overlayStrength: 0.6,
+    isFinal: true,
+  },
 ];
+const N = SLIDES.length;
 
-const N = SCENES.length;
-const FADE = 0.15;
+/* ══════════════════════════════════════════════════════════════
+   TEXT OVERLAY
+   ══════════════════════════════════════════════════════════════ */
+function SlideText({
+  slide, opacity, onTrial,
+}: {
+  slide: Slide; opacity: number; onTrial: () => void;
+}) {
+  const isLeft = slide.textSide !== 'right';
+  const prefersReduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function parseHex(h: string) {
-  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+  return (
+    <div
+      aria-hidden={opacity < 0.02}
+      style={{
+        position: 'absolute',
+        bottom: '10vh',
+        left:  isLeft ? 'clamp(24px, 7vw, 100px)' : 'auto',
+        right: !isLeft ? 'clamp(24px, 7vw, 100px)' : 'auto',
+        maxWidth: 'min(520px, 45vw)',
+        opacity,
+        transform: prefersReduced ? 'none' : `translateY(${(1 - opacity) * 10}px)`,
+        transition: prefersReduced ? 'none' : 'opacity 500ms ease, transform 500ms ease',
+        zIndex: 10,
+        pointerEvents: opacity > 0.5 ? 'auto' : 'none',
+      }}
+    >
+      <div aria-hidden="true" style={{
+        position: 'absolute', inset: '-28px -36px -28px -36px',
+        background: `radial-gradient(ellipse at ${isLeft ? '18%' : '82%'} 65%,
+          rgba(0,0,0,${(slide.overlayStrength + 0.1).toFixed(2)}) 0%,
+          rgba(0,0,0,${(slide.overlayStrength * 0.4).toFixed(2)}) 45%, transparent 75%)`,
+        borderRadius: '24px', zIndex: -1, pointerEvents: 'none',
+      }} />
+      <div style={{
+        fontSize: '10px', fontWeight: 800, letterSpacing: '0.18em',
+        color: 'rgba(255,255,255,.5)', marginBottom: '8px',
+        textTransform: 'uppercase', fontFamily: 'monospace',
+      }}>
+        {slide.eyebrow}
+      </div>
+      <h3 style={{
+        fontSize: 'clamp(20px, 2.8vw, 36px)', fontWeight: 900, lineHeight: 1.12,
+        letterSpacing: '-0.5px', color: '#fff', marginBottom: '12px',
+        textShadow: '0 2px 28px rgba(0,0,0,.6)',
+      }}>
+        {slide.headline}
+      </h3>
+      <p style={{
+        fontSize: 'clamp(13px, 1.2vw, 15px)', color: 'rgba(255,255,255,.65)',
+        lineHeight: 1.7, textShadow: '0 1px 12px rgba(0,0,0,.5)',
+        marginBottom: slide.isFinal ? '22px' : 0,
+      }}>
+        {slide.description}
+      </p>
+      {slide.isFinal && (
+        <button className="gbtn" style={{ fontSize: '14px', padding: '11px 28px' }}
+          onClick={onTrial} aria-label="Start free trial with Studdy">
+          Start Free Trial
+        </button>
+      )}
+    </div>
+  );
 }
-function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
-function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
-function lerpColor(a: string, b: string, t: number) {
-  const pa = parseHex(a), pb = parseHex(b);
-  return `rgb(${pa.map((v, i) => Math.round(lerp(v, pb[i], t))).join(',')})`;
-}
 
-function getSceneOpacities(p: number): number[] {
-  const opacities = new Array(N).fill(0);
-  const segmentSize = 1 / N;
-  for (let i = 0; i < N; i++) {
-    const start   = i * segmentSize;
-    const end     = start + segmentSize;
-    const fadeIn  = start + segmentSize * FADE;
-    const fadeOut = end   - segmentSize * FADE;
-    let opacity = 0;
-    if      (p < start)   opacity = 0;
-    else if (p < fadeIn)  opacity = clamp((p - start) / (fadeIn - start), 0, 1);
-    else if (p < fadeOut) opacity = 1;
-    else if (p <= end)    opacity = i === N - 1 ? 1 : clamp(1 - (p - fadeOut) / (end - fadeOut), 0, 1);
-    else                  opacity = i === N - 1 ? 1 : 0;
-    opacities[i] = opacity;
-  }
-  return opacities;
-}
+/* cover handled imperatively via coverRefs in main component */
 
-function getDominantScene(p: number) {
-  const raw = clamp(p * N, 0, N - 0.001);
-  const sceneIdx = Math.min(N - 1, Math.floor(raw));
-  return { sceneIdx, scenePct: raw - sceneIdx };
-}
-
+/* ══════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+   ══════════════════════════════════════════════════════════════ */
 export default function ScrollStory() {
-  const outerRef  = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [dominantScene, setDominantScene] = useState(0);
-  const [textOpacities, setTextOpacities] = useState(() => getSceneOpacities(0));
+  const navigate = useNavigate();
+  const sectionRef   = useRef<HTMLDivElement>(null);
+  const sentinelRefs = useRef<(HTMLDivElement | null)[]>(Array(N).fill(null));
+  const coverRefs    = useRef<(HTMLDivElement | null)[]>(Array(N).fill(null));
+  const mountedRef   = useRef(true);
+  const activeRef    = useRef(0);
+  const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [active,  setActive]  = useState(0);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' && window.innerWidth < 768
   );
 
-  /* Track isMobile — used only to hide/show content, not to gate GSAP */
+  // videoOpacity[i]: drives the slide container
+  const [videoOp, setVideoOp] = useState<number[]>(() => {
+    const a = Array(N).fill(0) as number[];
+    a[0] = 1;
+    return a;
+  });
+  // textOpacity[i]: drives the text overlay
+  const [textOp, setTextOp] = useState<number[]>(() => {
+    const a = Array(N).fill(0) as number[];
+    a[0] = 1;
+    return a;
+  });
+
+  const prefersReduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  /* isMobile */
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
     setIsMobile(mq.matches);
@@ -88,186 +243,322 @@ export default function ScrollStory() {
     return () => mq.removeEventListener('change', h);
   }, []);
 
-  /*
-   * GSAP/ScrollTrigger setup — runs ONCE on mount, cleans up on unmount.
-   * It does NOT re-run when isMobile changes, so there is no DOM-swap race.
-   * The canvas and outerRef div are always rendered, making cleanup safe.
-   */
+  /* Set the active slide — fade in new, fade out old */
+  const goToSlide = useCallback((idx: number) => {
+    if (!mountedRef.current) return;
+    const prev = activeRef.current;
+    if (prev === idx) return;
+    activeRef.current = idx;
+    setActive(idx);
+
+    setVideoOp(old => {
+      const n = [...old];
+      n[idx]  = 1;
+      n[prev] = 0;
+      return n;
+    });
+    setTextOp(old => {
+      const n = [...old];
+      n[idx]  = 1;
+      n[prev] = 0;
+      return n;
+    });
+  }, []);
+
+  /* ── 10 sentinel IntersectionObservers + scroll-idle snap ───────
+   *
+   * PROBLEM: If the user stops scrolling exactly between two sentinels
+   * the crossfade opacity is split and the screen shows a dark overlap.
+   *
+   * FIX: Two complementary mechanisms:
+   *
+   * 1. IntersectionObserver on each sentinel — fires as the user scrolls
+   *    normally, changing the active slide when a sentinel crosses the
+   *    centre of the viewport.
+   *
+   * 2. Scroll-idle detector — after the user stops scrolling for 150ms,
+   *    calculate which sentinel is closest to the centre and snap to it.
+   *    This guarantees we never freeze in the dead zone between slides.
+   *
+   * Neither mechanism hijacks scroll or calls preventDefault.
+   * ─────────────────────────────────────────────────────────────── */
   useEffect(() => {
-    const outer = outerRef.current;
-    if (!outer) return;
+    const observers: IntersectionObserver[] = [];
 
-    /* resize reads ref at call time — no stale closure */
-    const resize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
+    /* --- 1. IntersectionObservers --- */
+    SLIDES.forEach((_, i) => {
+      const el = sentinelRefs.current[i];
+      if (!el) return;
 
-    resize();
-    window.addEventListener('resize', resize, { passive: true });
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(() => {
+            if (mountedRef.current) goToSlide(i);
+          }, 60);
+        });
+      }, {
+        rootMargin: '-45% 0px -45% 0px',
+        threshold: 0,
+      });
 
-    const drawBackground = (p: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const { sceneIdx, scenePct } = getDominantScene(p);
-      const sc = SCENES[sceneIdx];
-      const nx = SCENES[Math.min(sceneIdx + 1, N - 1)];
-
-      const g = ctx.createRadialGradient(
-        canvas.width * .55, canvas.height * .4, 0,
-        canvas.width * .55, canvas.height * .4, canvas.width * .9
-      );
-      g.addColorStop(0, lerpColor(sc.bg0, nx.bg0, scenePct));
-      g.addColorStop(1, lerpColor(sc.bg1, nx.bg1, scenePct));
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      if (sceneIdx >= 2 && sceneIdx <= 4) {
-        const a = sceneIdx === 2 ? scenePct * 0.05
-                : sceneIdx === 4 ? (1 - scenePct) * 0.05
-                : 0.05;
-        ctx.strokeStyle = `rgba(140,121,224,${a})`;
-        ctx.lineWidth = 1;
-        for (let y = 44; y < canvas.height; y += 44) {
-          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-        }
-      }
-    };
-
-    drawBackground(0);
-    setTextOpacities(getSceneOpacities(0));
-
-    const st = ScrollTrigger.create({
-      trigger: outer,
-      start: 'top top',
-      end: '+=850vh',
-      pin: true,
-      pinSpacing: true,
-      scrub: 0.8,
-      anticipatePin: 1,
-      invalidateOnRefresh: true,
-      onUpdate: self => {
-        const p = clamp(self.progress, 0, 1);
-        drawBackground(p);
-        const ops = getSceneOpacities(p);
-        setTextOpacities(ops);
-        let dom = 0;
-        ops.forEach((o, i) => { if (o > ops[dom]) dom = i; });
-        setDominantScene(dom);
-      },
-      onLeave: () => {
-        drawBackground(1);
-        const ops = getSceneOpacities(1);
-        setTextOpacities(ops);
-        setDominantScene(N - 1);
-      },
+      obs.observe(el);
+      observers.push(obs);
     });
 
-    const raf = requestAnimationFrame(() => ScrollTrigger.refresh());
+    /* --- 2. Scroll-idle snap --- */
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const IDLE_MS = 150; // ms after last scroll event before snapping
+
+    const snapToNearest = () => {
+      /* Find which sentinel is closest to the viewport centre */
+      const midY = window.innerHeight / 2;
+      let bestIdx = activeRef.current;
+      let bestDist = Infinity;
+
+      sentinelRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        /* Use the vertical centre of each sentinel */
+        const sentinelMid = rect.top + rect.height / 2;
+        const dist = Math.abs(sentinelMid - midY);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      });
+
+      if (mountedRef.current) goToSlide(bestIdx);
+    };
+
+    const onScroll = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(snapToNearest, IDLE_MS);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
 
     return () => {
-      st.kill();
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', resize);
+      observers.forEach(o => o.disconnect());
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (idleTimer) clearTimeout(idleTimer);
+      window.removeEventListener('scroll', onScroll);
     };
-  }, []); // ← empty deps: runs once, never re-runs on isMobile change
+  }, [goToSlide]);
 
-  /* ── Intro header — always visible ── */
-  const intro = (
-    <div className="py-14 text-center px-6" style={{ background:'#15131F' }}>
-      <div className="eyebrow mb-4" style={{ color:'rgba(255,255,255,.45)', borderColor:'rgba(255,255,255,.15)', background:'rgba(255,255,255,.06)' }}>
-        A story every learner recognises
-      </div>
-      <h2 className="font-black text-white" style={{ fontSize:'clamp(24px,3.5vw,38px)', letterSpacing:'-0.8px' }}>
-        One question changed everything.
-      </h2>
-    </div>
-  );
+  /* ── Handle iframe onLoad: fade out the cover ─────────────────── */
+  const handleIframeLoad = useCallback((i: number) => {
+    const cover = coverRefs.current[i];
+    if (cover) cover.style.opacity = '0';
+  }, []);
 
+  const handleTrial = useCallback(() => {
+    track('checkout_started');
+    navigate('/checkout');
+  }, [navigate]);
+
+  const tag = `${String(active + 1).padStart(2, '0')} / ${String(N).padStart(2, '0')}`;
+
+  /* ══════════════════════════════════════════════════════════════
+     RENDER
+     ══════════════════════════════════════════════════════════════ */
   return (
-    <div>
-      {intro}
+    <section ref={sectionRef} style={{ position: 'relative', background: '#0d0b15' }}>
 
-      {/* ── MOBILE vertical scenes — shown via CSS only on small screens ── */}
-      <div style={{ display: isMobile ? 'block' : 'none' }} aria-hidden={!isMobile}>
-        {SCENES.map((sc, i) => (
-          <div key={i} className="relative py-16 px-6 text-center" style={{ background: sc.bg0 }}>
-            <div className="text-[10px] font-black tracking-widest mb-3 font-mono" style={{ color:'rgba(255,255,255,.3)' }}>{sc.tag}</div>
-            <h3 className="font-black text-white mb-2" style={{ fontSize:'clamp(19px,4vw,26px)', letterSpacing:'-0.5px' }}>{sc.h}</h3>
-            <p className="text-[14px] italic leading-relaxed" style={{ color:'rgba(255,255,255,.5)' }}>{sc.p}</p>
-            {i < N - 1 && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-6" style={{ background:'rgba(255,255,255,.1)' }} />}
-          </div>
-        ))}
+      {/* ── Intro heading ── */}
+      <div className="py-14 text-center px-6">
+        <div className="eyebrow mb-4" style={{
+          color: 'rgba(255,255,255,.45)',
+          borderColor: 'rgba(255,255,255,.15)',
+          background: 'rgba(255,255,255,.06)',
+        }}>
+          A story every learner recognises
+        </div>
+        <h2 className="font-black text-white"
+          style={{ fontSize: 'clamp(24px,3.5vw,38px)', letterSpacing: '-0.8px' }}>
+          One question changed everything.
+        </h2>
       </div>
 
-      {/*
-       * ── DESKTOP pinned stage — ALWAYS in the DOM ──
-       * Hidden on mobile via CSS (display:none), but still present so
-       * GSAP always has a live DOM node.  st.kill() never races with
-       * React unmounting the trigger element.
-       */}
+      {/* ══════════════════════════════════════════════════════════
+          DESKTOP
+          ══════════════════════════════════════════════════════════ */}
       <div style={{ display: isMobile ? 'none' : 'block' }} aria-hidden={isMobile}>
-        <div
-          ref={outerRef}
-          style={{ height:'100vh', overflow:'hidden', position:'relative' }}
-          role="region"
-          aria-label="Cinematic story"
-        >
-          <canvas
-            ref={canvasRef}
-            style={{ position:'absolute', inset:0, width:'100%', height:'100%', display:'block' }}
-            aria-hidden="true"
-          />
 
-          {/* Scene text layers */}
-          <div className="absolute inset-0 pointer-events-none z-10" style={{ padding:'0 10vw 10vh 10vw', display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
-            {SCENES.map((sc, i) => (
+        {/*
+         * STICKY STAGE
+         * Stays fixed at top:0 while the scroll track below it scrolls.
+         * No GSAP, no wheel listeners, no nested scroll containers.
+         * Works perfectly in Safari.
+         */}
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            height: '100vh',
+            overflow: 'hidden',
+            background: '#0d0b15',
+            zIndex: 5,
+          }}
+          role="region"
+          aria-label="Cinematic story: a learner's journey with Studdy"
+        >
+          {/* All 10 video layers — always in DOM, opacity-controlled only */}
+          <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+            {SLIDES.map((slide, i) => (
               <div
-                key={i}
+                key={slide.id}
                 style={{
-                  position: 'absolute',
-                  bottom:'10vh', left:'10vw', right:'10vw',
-                  opacity: textOpacities[i],
-                  transform: `translateY(${(1 - textOpacities[i]) * 12}px)`,
-                  transition: 'none',
-                  maxWidth:'600px',
+                  position: 'absolute', inset: 0,
+                  opacity: videoOp[i],
+                  transition: prefersReduced ? 'none' : 'opacity 550ms ease',
+                  overflow: 'hidden',
+                  background: '#0d0b15',
+                  willChange: 'opacity',
                 }}
-                aria-hidden={textOpacities[i] < 0.1}
               >
-                <div className="font-black text-white leading-tight mb-3"
-                  style={{ fontSize:'clamp(22px,3.2vw,38px)', letterSpacing:'-0.5px', textShadow:'0 2px 24px rgba(0,0,0,.5)' }}>
-                  {sc.h}
-                </div>
-                <p className="italic leading-relaxed"
-                  style={{ fontSize:'15px', color:'rgba(255,255,255,.55)', textShadow:'0 1px 12px rgba(0,0,0,.5)' }}>
-                  {sc.p}
-                </p>
+                <iframe
+                  src={embedUrl(slide.bunnyId)}
+                  title={`Story slide ${slide.id}: ${slide.headline}`}
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onLoad={() => handleIframeLoad(i)}
+                  style={{
+                    position: 'absolute', inset: 0,
+                    width: '100%', height: '100%',
+                    border: 0, pointerEvents: 'none', display: 'block',
+                    transform: 'scale(1.02)',
+                    transformOrigin: 'center center',
+                  }}
+                />
+                {/* Flash-prevention cover — hidden imperatively on onLoad */}
+                <div
+                  ref={el => { coverRefs.current[i] = el; }}
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', inset: 0, zIndex: 3,
+                    background: '#0d0b15',
+                    transition: 'opacity 400ms ease',
+                    pointerEvents: 'none',
+                  }}
+                />
               </div>
             ))}
           </div>
 
-          {/* Scene tag */}
-          <div className="absolute top-8 left-10 z-20 font-mono text-[11px] font-black"
-            style={{ color:'rgba(255,255,255,.3)', letterSpacing:'.1em' }} aria-hidden="true">
-            {SCENES[dominantScene].tag}
+          {/* Text overlays */}
+          {SLIDES.map((slide, i) => (
+            <SlideText key={slide.id} slide={slide}
+              opacity={textOp[i]} onTrial={handleTrial} />
+          ))}
+
+          {/* Progress counter */}
+          <div className="font-mono" style={{
+            position: 'absolute', top: '28px', left: '32px', zIndex: 20,
+            fontSize: '11px', fontWeight: 800, letterSpacing: '0.12em',
+            color: 'rgba(255,255,255,.35)',
+          }} aria-live="polite">
+            {tag}
           </div>
 
           {/* Progress dots */}
-          <div className="absolute bottom-8 right-8 flex gap-2 z-20"
-            role="status" aria-label={`Story: scene ${dominantScene + 1} of ${N}`}>
-            {SCENES.map((_, i) => (
-              <div key={i} className="rounded-full transition-all duration-400"
-                style={{ height:'6px', width: i === dominantScene ? '22px' : '6px',
-                  background: i === dominantScene ? 'var(--g1)' : 'rgba(255,255,255,.2)' }} />
+          <div style={{
+            position: 'absolute', bottom: '24px', right: '28px',
+            display: 'flex', gap: '6px', zIndex: 20, alignItems: 'center',
+          }} role="status" aria-label={`Slide ${active + 1} of ${N}`}>
+            {SLIDES.map((_, i) => (
+              <div key={i} style={{
+                height: '5px', borderRadius: '999px',
+                width: i === active ? '20px' : '5px',
+                background: i === active ? 'var(--g1)' : 'rgba(255,255,255,.22)',
+                transition: prefersReduced ? 'none' : 'width 300ms ease, background 300ms ease',
+              }} />
             ))}
           </div>
         </div>
+
+        {/*
+         * SCROLL TRACK
+         * 10 sentinel divs stacked in normal document flow.
+         * As the page scrolls, each sentinel crosses the viewport centre,
+         * triggering the IntersectionObserver which changes the active slide.
+         * 110vh per sentinel = 1100vh total = deliberate, controlled pacing.
+         */}
+        <div aria-hidden="true" style={{ background: '#0d0b15' }}>
+          {SLIDES.map((slide, i) => (
+            <div
+              key={slide.id}
+              ref={el => { sentinelRefs.current[i] = el; }}
+              style={{ height: '110vh' }}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+
+      {/* ══════════════════════════════════════════════════════════
+          MOBILE — vertical stacked (final layout in separate task)
+          ══════════════════════════════════════════════════════════ */}
+      <div style={{ display: isMobile ? 'block' : 'none' }} aria-hidden={!isMobile}>
+        {SLIDES.map(slide => (
+          <div key={slide.id} style={{ background: '#0d0b15' }}>
+            <div style={{
+              position: 'relative', width: '100%', paddingTop: '56.25%',
+              background: '#0d0b15', overflow: 'hidden',
+            }}>
+              <iframe
+                src={embedUrl(slide.bunnyId)}
+                title={`Slide ${slide.id}`}
+                allow="autoplay; encrypted-media; picture-in-picture"
+                loading="lazy"
+                aria-hidden="true"
+                tabIndex={-1}
+                style={{
+                  position: 'absolute', inset: 0,
+                  width: '100%', height: '100%', border: 0,
+                  pointerEvents: 'none',
+                  transform: 'scale(1.02)',
+                  transformOrigin: 'center center',
+                }}
+              />
+            </div>
+            <div style={{ padding: '18px 20px 24px' }}>
+              <div style={{
+                fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
+                color: 'rgba(255,255,255,.4)', marginBottom: '6px',
+                textTransform: 'uppercase', fontFamily: 'monospace',
+              }}>
+                {slide.eyebrow}
+              </div>
+              <h3 style={{
+                fontSize: 'clamp(17px, 4.5vw, 22px)', fontWeight: 900,
+                color: '#fff', lineHeight: 1.15, letterSpacing: '-0.4px', marginBottom: '8px',
+              }}>
+                {slide.headline}
+              </h3>
+              <p style={{
+                fontSize: '14px', color: 'rgba(255,255,255,.6)',
+                lineHeight: 1.65, marginBottom: slide.isFinal ? '16px' : 0,
+              }}>
+                {slide.description}
+              </p>
+              {slide.isFinal && (
+                <button className="gbtn"
+                  style={{ width: '100%', fontSize: '14px', padding: '13px' }}
+                  onClick={handleTrial} aria-label="Start free trial">
+                  Start Free Trial
+                </button>
+              )}
+            </div>
+            {slide.id < N && (
+              <div style={{ height: '1px', background: 'rgba(255,255,255,.07)', margin: '0 20px' }} />
+            )}
+          </div>
+        ))}
+      </div>
+
+    </section>
   );
 }

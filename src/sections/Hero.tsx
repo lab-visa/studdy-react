@@ -210,7 +210,7 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </button>
         </div>
 
-        {/* Native video — clipping wrapper centres visible lesson content by breakpoint */}
+        {/* Native video — cover fills wrapper, no white strip */}
         <div className="fd-player-wrap">
           <video
             ref={videoRef}
@@ -225,43 +225,35 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </video>
         </div>
         <style>{`
-          /* Clipping wrapper — 16:9 container, warm bg */
           .fd-player-wrap {
             position: relative;
             width: 100%;
             aspect-ratio: 16 / 9;
-            background: #fbfaf5;
+            background: #0d0d12;
             overflow: hidden;
             flex-shrink: 0;
           }
-          /* Base video styles — controls always accessible */
+          /* Mobile base — centred, contain so controls are never clipped */
           .fd-video {
             position: absolute;
             top: 50%;
             left: 50%;
-            display: block;
-            background: #fbfaf5;
-          }
-          /* Mobile portrait — content already centred, minimal correction */
-          .fd-video {
             width: 100%;
             height: 100%;
             transform: translate(-50%, -50%);
+            object-fit: contain;
+            object-position: center;
+            display: block;
+            background: #0d0d12;
           }
-          /* Laptop / tablet (≥ 768px) — slight enlargement + right shift */
+          /* Tablet + desktop — cover eliminates white strips;
+             slight right-shift centres the visible lesson content */
           @media (min-width: 768px) {
             .fd-video {
-              width: 104%;
-              height: 104%;
-              transform: translate(-49%, -50%);
-            }
-          }
-          /* Wide desktop (≥ 1280px) — same calibration is sufficient */
-          @media (min-width: 1280px) {
-            .fd-video {
-              width: 104%;
-              height: 104%;
-              transform: translate(-49%, -50%);
+              width: 105%;
+              height: 105%;
+              object-fit: cover;
+              object-position: 52% 50%;
             }
           }
         `}</style>
