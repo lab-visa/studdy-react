@@ -299,7 +299,7 @@ export default function ScrollStory() {
           }, 60);
         });
       }, {
-        rootMargin: '-45% 0px -45% 0px',
+        rootMargin: '-35% 0px -35% 0px',
         threshold: 0,
       });
 
@@ -427,11 +427,11 @@ export default function ScrollStory() {
                   tabIndex={-1}
                   onLoad={() => handleIframeLoad(i)}
                   style={{
-                    position: 'absolute', inset: 0,
-                    width: '100%', height: '100%',
+                    position: 'absolute',
+                    top: '-2px', left: '-2px',
+                    width: 'calc(100% + 4px)',
+                    height: 'calc(100% + 4px)',
                     border: 0, pointerEvents: 'none', display: 'block',
-                    transform: 'scale(1.02)',
-                    transformOrigin: 'center center',
                   }}
                 />
                 {/* Flash-prevention cover — hidden imperatively on onLoad */}
@@ -516,11 +516,12 @@ export default function ScrollStory() {
                 aria-hidden="true"
                 tabIndex={-1}
                 style={{
-                  position: 'absolute', inset: 0,
-                  width: '100%', height: '100%', border: 0,
+                  position: 'absolute',
+                  top: '-2px', left: '-2px',
+                  width: 'calc(100% + 4px)',
+                  height: 'calc(100% + 4px)',
+                  border: 0,
                   pointerEvents: 'none',
-                  transform: 'scale(1.02)',
-                  transformOrigin: 'center center',
                 }}
               />
             </div>

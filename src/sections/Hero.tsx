@@ -233,28 +233,15 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             overflow: hidden;
             flex-shrink: 0;
           }
-          /* Mobile base — centred, contain so controls are never clipped */
           .fd-video {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            inset: 0;
             width: 100%;
             height: 100%;
-            transform: translate(-50%, -50%);
             object-fit: contain;
             object-position: center;
             display: block;
             background: #0d0d12;
-          }
-          /* Tablet + desktop — cover eliminates white strips;
-             slight right-shift centres the visible lesson content */
-          @media (min-width: 768px) {
-            .fd-video {
-              width: 105%;
-              height: 105%;
-              object-fit: cover;
-              object-position: 52% 50%;
-            }
           }
         `}</style>
       </div>
