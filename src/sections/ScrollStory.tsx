@@ -499,31 +499,31 @@ export default function ScrollStory() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════
-          MOBILE — full-screen cinematic, text overlaid on video
-          Same 16:9 videos, CSS scroll-snap between slides.
+          MOBILE — full-screen cinematic slides in normal page flow.
+          No nested scroll container — page scrolls naturally.
+          Each slide is 100svh. Video fills screen via object-fit:cover.
           ══════════════════════════════════════════════════════════ */}
       <div style={{ display: isMobile ? 'block' : 'none' }} aria-hidden={!isMobile}>
-        {/* Snap-scroll container */}
-        <div style={{
-          overflowY: 'scroll',
-          scrollSnapType: 'y mandatory',
-          height: '100svh',
-          WebkitOverflowScrolling: 'touch',
-        }}>
-          {SLIDES.map(slide => (
-            <div
-              key={slide.id}
-              style={{
-                position: 'relative',
-                width: '100%',
-                height: '100svh',
-                scrollSnapAlign: 'start',
-                overflow: 'hidden',
-                background: '#0d0b15',
-                flexShrink: 0,
-              }}
-            >
-              {/* Full-screen video iframe */}
+        {SLIDES.map(slide => (
+          <div
+            key={slide.id}
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: '100svh',
+              overflow: 'hidden',
+              background: '#0d0b15',
+            }}
+          >
+            {/* Video fills full screen — iframe expands beyond 16:9 box */}
+            <div style={{
+              position: 'absolute',
+              /* Extend beyond the 16:9 area so video covers full portrait screen */
+              top: '-20%', left: '-2px',
+              width: 'calc(100% + 4px)',
+              height: '140%',
+              pointerEvents: 'none',
+            }}>
               <iframe
                 src={embedUrl(slide.bunnyId)}
                 title={`Slide ${slide.id}`}
@@ -532,94 +532,67 @@ export default function ScrollStory() {
                 aria-hidden="true"
                 tabIndex={-1}
                 style={{
-                  position: 'absolute',
-                  top: '-2px', left: '-2px',
-                  width: 'calc(100% + 4px)',
-                  height: 'calc(100% + 4px)',
-                  border: 0,
-                  pointerEvents: 'none',
-                  objectFit: 'cover',
+                  position: 'absolute', inset: 0,
+                  width: '100%', height: '100%',
+                  border: 0, pointerEvents: 'none',
                 }}
               />
+            </div>
 
-              {/* Dark gradient at bottom — behind text only */}
-              <div aria-hidden="true" style={{
-                position: 'absolute', inset: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 45%, transparent 70%)',
-                zIndex: 1,
-                pointerEvents: 'none',
-              }} />
+            {/* Dark gradient — covers bottom 60% behind text */}
+            <div aria-hidden="true" style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.15) 100%)',
+              pointerEvents: 'none',
+            }} />
 
-              {/* Slide counter — top left */}
+            {/* Slide counter top-left */}
+            <div style={{
+              position: 'absolute', top: '20px', left: '20px', zIndex: 3,
+              fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
+              color: 'rgba(255,255,255,.5)', fontFamily: 'monospace',
+            }}>
+              {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
+            </div>
+
+            {/* Text at bottom */}
+            <div style={{
+              position: 'absolute',
+              bottom: 'max(36px, env(safe-area-inset-bottom, 24px))',
+              left: '24px', right: '24px',
+              zIndex: 2,
+            }}>
               <div style={{
-                position: 'absolute', top: '20px', left: '20px', zIndex: 3,
-                fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
-                color: 'rgba(255,255,255,.45)', fontFamily: 'monospace',
-                textTransform: 'uppercase',
-              }} aria-hidden="true">
-                {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
-              </div>
-
-              {/* Text overlay — bottom of screen */}
-              <div style={{
-                position: 'absolute',
-                bottom: 'max(32px, env(safe-area-inset-bottom, 20px))',
-                left: '24px', right: '24px',
-                zIndex: 2,
+                fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
+                color: 'rgba(255,255,255,.55)', marginBottom: '6px',
+                textTransform: 'uppercase', fontFamily: 'monospace',
               }}>
-                <div style={{
-                  fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
-                  color: 'rgba(255,255,255,.5)', marginBottom: '6px',
-                  textTransform: 'uppercase', fontFamily: 'monospace',
-                }}>
-                  {slide.eyebrow}
-                </div>
-                <h3 style={{
-                  fontSize: 'clamp(20px, 5.5vw, 28px)', fontWeight: 900,
-                  color: '#fff', lineHeight: 1.15, letterSpacing: '-0.5px',
-                  marginBottom: '8px',
-                  textShadow: '0 2px 20px rgba(0,0,0,.6)',
-                }}>
-                  {slide.headline}
-                </h3>
-                <p style={{
-                  fontSize: '14px', color: 'rgba(255,255,255,.7)',
-                  lineHeight: 1.6,
-                  textShadow: '0 1px 10px rgba(0,0,0,.5)',
-                  marginBottom: slide.isFinal ? '18px' : 0,
-                }}>
-                  {slide.description}
-                </p>
-                {slide.isFinal && (
-                  <button className="gbtn"
-                    style={{ width: '100%', fontSize: '15px', padding: '14px' }}
-                    onClick={handleTrial} aria-label="Start free trial">
-                    Start Free Trial
-                  </button>
-                )}
+                {slide.eyebrow}
               </div>
-
-              {/* Scroll hint arrow on slides 1–9 */}
-              {slide.id < N && (
-                <div aria-hidden="true" style={{
-                  position: 'absolute',
-                  bottom: 'max(12px, env(safe-area-inset-bottom, 8px))',
-                  left: '50%', transform: 'translateX(-50%)',
-                  zIndex: 3,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
-                }}>
-                  {/* Three small dots to hint at swiping */}
-                  {[0,1,2].map(i => (
-                    <div key={i} style={{
-                      width: '4px', height: '4px', borderRadius: '50%',
-                      background: `rgba(255,255,255,${0.6 - i * 0.15})`,
-                    }} />
-                  ))}
-                </div>
+              <h3 style={{
+                fontSize: 'clamp(22px, 6vw, 30px)', fontWeight: 900,
+                color: '#fff', lineHeight: 1.12, letterSpacing: '-0.5px',
+                marginBottom: '8px', textShadow: '0 2px 20px rgba(0,0,0,.7)',
+              }}>
+                {slide.headline}
+              </h3>
+              <p style={{
+                fontSize: '14px', color: 'rgba(255,255,255,.75)',
+                lineHeight: 1.6, textShadow: '0 1px 10px rgba(0,0,0,.6)',
+                marginBottom: slide.isFinal ? '20px' : 0,
+              }}>
+                {slide.description}
+              </p>
+              {slide.isFinal && (
+                <button className="gbtn"
+                  style={{ width: '100%', fontSize: '15px', padding: '14px' }}
+                  onClick={handleTrial} aria-label="Start free trial">
+                  Start Free Trial
+                </button>
               )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
 
     </section>

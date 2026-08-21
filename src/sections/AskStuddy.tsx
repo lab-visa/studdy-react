@@ -370,21 +370,23 @@ function CategoryCards({ catIdx, onChange }: {
               <div style={{ minWidth: 0 }}>
                 <div style={{
                   fontWeight: 700,
-                  fontSize: 'clamp(12px, 1.2vw, 13.5px)',
+                  fontSize: 'clamp(11px, 1.2vw, 13.5px)',
                   color: 'var(--ink)',
                   lineHeight: 1.2,
                   marginBottom: '1px',
-                  whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  /* Allow wrap on mobile so text doesn't push card width */
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
                 }}>{c.label}</div>
                 <div style={{
-                  fontSize: 'clamp(10.5px, 1vw, 12px)',
+                  fontSize: 'clamp(10px, 1vw, 12px)',
                   color: 'var(--soft)',
                   lineHeight: 1.3,
-                  whiteSpace: 'nowrap',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
                 }}>
                   {CAT_DESCRIPTORS[c.id] ?? ''}
                 </div>
@@ -788,7 +790,7 @@ export default function AskStuddy() {
   const ctaFn = useCallback(() => { track('checkout_started'); navigate('/checkout'); }, [navigate]);
 
   return (
-    <section id="demo" className="py-20 px-5" style={{ background: 'var(--dim)' }}>
+    <section id="demo" className="py-20 px-5" style={{ background: 'var(--dim)', overflowX: 'hidden' }}>
       <div style={{ maxWidth: '1160px', margin: '0 auto' }}>
 
         <SectionHeading
