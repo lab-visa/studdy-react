@@ -187,111 +187,244 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   MOBILE SECTION — simple full-height slides, natural scroll
-   No sticky. No IntersectionObserver. No shared scroll events.
-   Each slide is 100svh. Video fills screen. Text at bottom.
-   User scrolls naturally through all 10 slides.
+   MOBILE SECTION
+   Uses position:fixed (not sticky) to avoid Safari/Chrome mobile
+   crash caused by overflow:hidden ancestors breaking sticky.
+
+   How it works:
+   - A transparent scroll track of N×90svh sits in normal flow
+   - An IntersectionObserver watches the top and bottom of the track
+   - When track is in view: stage fixes to screen (cinematic)
+   - When track top exits upward: stage unfixes (user scrolled back up)
+   - When track bottom exits downward: stage unfixes (user passed section)
+   - Active slide determined by scroll position within the track
+   - User can always scroll up past Slide 1 or down past Slide 10
    ══════════════════════════════════════════════════════════════ */
 function MobileStory({ onTrial }: { onTrial: () => void }) {
+  const reduced = typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  const trackRef   = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const rafRef     = useRef<number | null>(null);
+
+  const [active,   setActive]   = useState(0);
+  const [fixed,    setFixed]    = useState(false);
+  const [videoOp,  setVideoOp]  = useState<number[]>(() => {
+    const a = Array(N).fill(0); a[0] = 1; return a;
+  });
+  const [textOp,   setTextOp]   = useState<number[]>(() => {
+    const a = Array(N).fill(0); a[0] = 1; return a;
+  });
+
+  const coverRefs = useRef<(HTMLDivElement|null)[]>(Array(N).fill(null));
+  const activeRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  const goTo = useCallback((idx: number) => {
+    if (!mountedRef.current) return;
+    const prev = activeRef.current;
+    if (prev === idx) return;
+    activeRef.current = idx;
+    setActive(idx);
+    setVideoOp(o => { const n=[...o]; n[idx]=1; n[prev]=0; return n; });
+    setTextOp(o  => { const n=[...o]; n[idx]=1; n[prev]=0; return n; });
+  }, []);
+
+  /* Calculate active slide from scroll position within track */
+  const updateSlide = useCallback(() => {
+    const track = trackRef.current;
+    if (!track || !mountedRef.current) return;
+    const rect = track.getBoundingClientRect();
+    const trackH = track.offsetHeight;
+    /* How far has the track scrolled past the top of viewport */
+    const scrolled = -rect.top;
+    const progress = Math.max(0, Math.min(1, scrolled / (trackH - window.innerHeight)));
+    const idx = Math.min(N - 1, Math.floor(progress * N));
+    goTo(idx);
+  }, [goTo]);
+
+  /* Scroll listener — only updates slide index, never moves the page */
+  useEffect(() => {
+    const onScroll = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(updateSlide);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [updateSlide]);
+
+  /* Fixed/unfixed based on track visibility */
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (!mountedRef.current) return;
+        setFixed(e.isIntersecting);
+        if (e.isIntersecting) updateSlide();
+      });
+    }, { threshold: 0 });
+
+    obs.observe(track);
+    return () => obs.disconnect();
+  }, [updateSlide]);
+
+  const tag = `${String(active+1).padStart(2,'0')} / ${String(N).padStart(2,'0')}`;
+
   return (
-    <div>
-      {SLIDES.map(slide => (
-        <div key={slide.id} style={{
-          position: 'relative',
-          width: '100%',
-          height: '100svh',
+    <div style={{ position: 'relative' }}>
+      {/* Fixed cinematic stage — only visible when track is in viewport */}
+      {fixed && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0,
+          width: '100%', height: '100svh',
           overflow: 'hidden',
           background: '#0d0b15',
+          zIndex: 40,
         }}>
-          {/* 9:16 vertical video — fills screen */}
-          <iframe
-            src={eUrl(slide.mobileBunnyId)}
-            title={`Slide ${slide.id}: ${slide.headline}`}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            loading="lazy"
-            aria-hidden="true"
-            tabIndex={-1}
-            style={{
-              position: 'absolute',
-              top: '-2px', left: '-2px',
-              width: 'calc(100% + 4px)',
-              height: 'calc(100% + 4px)',
-              border: 0,
-              pointerEvents: 'none',
-              display: 'block',
-            }}
-          />
+          {/* Video layers */}
+          <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+            {SLIDES.map((slide, i) => (
+              <div key={slide.id} style={{
+                position: 'absolute', inset: 0,
+                opacity: videoOp[i],
+                transition: reduced ? 'none' : 'opacity 500ms ease',
+                overflow: 'hidden',
+                background: '#0d0b15',
+              }}>
+                <iframe
+                  src={eUrl(slide.mobileBunnyId)}
+                  title={`Slide ${slide.id}: ${slide.headline}`}
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onLoad={() => {
+                    const c = coverRefs.current[i];
+                    if (c) c.style.opacity = '0';
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '-2px', left: '-2px',
+                    width: 'calc(100% + 4px)',
+                    height: 'calc(100% + 4px)',
+                    border: 0, pointerEvents: 'none', display: 'block',
+                  }}
+                />
+                {/* Flash cover */}
+                <div
+                  ref={el => { coverRefs.current[i] = el; }}
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', inset: 0, zIndex: 3,
+                    background: '#0d0b15',
+                    transition: 'opacity 400ms ease',
+                    pointerEvents: 'none',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
 
-          {/* Gradient behind text */}
+          {/* Bottom gradient */}
           <div aria-hidden="true" style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.35) 50%, transparent 75%)',
-            zIndex: 1, pointerEvents: 'none',
+            position: 'absolute', inset: 0, zIndex: 1,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.3) 50%, transparent 75%)',
+            pointerEvents: 'none',
           }} />
 
-          {/* Slide counter */}
-          <div style={{
-            position: 'absolute', top: '20px', left: '20px', zIndex: 3,
+          {/* Text overlays */}
+          {SLIDES.map((slide, i) => (
+            <div key={slide.id} aria-hidden={textOp[i] < 0.02} style={{
+              position: 'absolute',
+              bottom: 'max(40px, env(safe-area-inset-bottom, 28px))',
+              left: '24px', right: '24px',
+              zIndex: 2,
+              opacity: textOp[i],
+              transform: reduced ? 'none' : `translateY(${(1 - textOp[i]) * 10}px)`,
+              transition: reduced ? 'none' : 'opacity 500ms ease, transform 500ms ease',
+              pointerEvents: textOp[i] > 0.5 ? 'auto' : 'none',
+            }}>
+              <div style={{
+                fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
+                color: 'rgba(255,255,255,.55)', marginBottom: '7px',
+                textTransform: 'uppercase', fontFamily: 'monospace',
+              }}>
+                {slide.eyebrow}
+              </div>
+              <h3 style={{
+                fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: 900,
+                color: '#fff', lineHeight: 1.12, letterSpacing: '-0.5px',
+                marginBottom: '10px', textShadow: '0 2px 20px rgba(0,0,0,.8)',
+              }}>
+                {slide.headline}
+              </h3>
+              <p style={{
+                fontSize: '14px', color: 'rgba(255,255,255,.75)',
+                lineHeight: 1.6, textShadow: '0 1px 10px rgba(0,0,0,.7)',
+                marginBottom: slide.isFinal ? '20px' : 0,
+              }}>
+                {slide.description}
+              </p>
+              {slide.isFinal && (
+                <button className="gbtn"
+                  style={{ width: '100%', fontSize: '15px', padding: '14px' }}
+                  onClick={onTrial} aria-label="Start free trial">
+                  Start Free Trial
+                </button>
+              )}
+            </div>
+          ))}
+
+          {/* Counter */}
+          <div className="font-mono" style={{
+            position: 'absolute', top: '20px', left: '20px', zIndex: 10,
             fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
-            color: 'rgba(255,255,255,.5)', fontFamily: 'monospace',
+            color: 'rgba(255,255,255,.45)',
           }}>
-            {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
+            {tag}
           </div>
 
-          {/* Text overlay */}
+          {/* Progress dots */}
           <div style={{
             position: 'absolute',
-            bottom: 'max(40px, env(safe-area-inset-bottom, 28px))',
-            left: '24px', right: '24px',
-            zIndex: 2,
+            bottom: 'max(10px, env(safe-area-inset-bottom, 6px))',
+            left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', gap: '5px', zIndex: 10, alignItems: 'center',
           }}>
-            <div style={{
-              fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
-              color: 'rgba(255,255,255,.55)', marginBottom: '8px',
-              textTransform: 'uppercase', fontFamily: 'monospace',
-            }}>
-              {slide.eyebrow}
-            </div>
-            <h3 style={{
-              fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: 900,
-              color: '#fff', lineHeight: 1.12, letterSpacing: '-0.5px',
-              marginBottom: '10px', textShadow: '0 2px 20px rgba(0,0,0,.8)',
-            }}>
-              {slide.headline}
-            </h3>
-            <p style={{
-              fontSize: '14px', color: 'rgba(255,255,255,.75)',
-              lineHeight: 1.6, textShadow: '0 1px 10px rgba(0,0,0,.7)',
-              marginBottom: slide.isFinal ? '20px' : 0,
-            }}>
-              {slide.description}
-            </p>
-            {slide.isFinal && (
-              <button className="gbtn"
-                style={{ width: '100%', fontSize: '15px', padding: '14px' }}
-                onClick={onTrial} aria-label="Start free trial">
-                Start Free Trial
-              </button>
-            )}
+            {SLIDES.map((_, i) => (
+              <div key={i} style={{
+                height: '4px', borderRadius: '999px',
+                width: i === active ? '16px' : '4px',
+                background: i === active ? 'var(--g1)' : 'rgba(255,255,255,.3)',
+                transition: reduced ? 'none' : 'width 300ms ease',
+              }} />
+            ))}
           </div>
-
-          {/* Scroll hint — small down arrow on slides 1–9 */}
-          {slide.id < N && (
-            <div aria-hidden="true" style={{
-              position: 'absolute', bottom: '12px', left: '50%',
-              transform: 'translateX(-50%)', zIndex: 3,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
-            }}>
-              {[0,1,2].map(i => (
-                <div key={i} style={{
-                  width: '4px', height: '4px', borderRadius: '50%',
-                  background: `rgba(255,255,255,${0.6 - i * 0.18})`,
-                }} />
-              ))}
-            </div>
-          )}
         </div>
-      ))}
+      )}
+
+      {/*
+       * Scroll track — transparent, sits in normal page flow.
+       * N slides × 90svh each = total scrollable distance.
+       * When this div is visible, the fixed stage shows above it.
+       * When user scrolls past it, fixed stage disappears.
+       * Height of 100svh placeholder + track keeps page layout intact.
+       */}
+      <div ref={trackRef} style={{ height: `${N * 90}svh`, background: '#0d0b15' }} aria-hidden="true">
+        {/* Spacer so content below section doesn't jump when stage fixes */}
+        {fixed && <div style={{ height: '100svh' }} />}
+      </div>
     </div>
   );
 }
