@@ -187,110 +187,112 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   MOBILE SECTION — completely independent, no shared state
+   MOBILE SECTION — simple full-height slides, natural scroll
+   No sticky. No IntersectionObserver. No shared scroll events.
+   Each slide is 100svh. Video fills screen. Text at bottom.
+   User scrolls naturally through all 10 slides.
    ══════════════════════════════════════════════════════════════ */
 function MobileStory({ onTrial }: { onTrial: () => void }) {
-  const reduced = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  const sentinelRefs = useRef<(HTMLDivElement|null)[]>(Array(N).fill(null));
-  const coverRefs    = useRef<(HTMLDivElement|null)[]>(Array(N).fill(null));
-  const mountedRef   = useRef(true);
-  const activeRef    = useRef(0);
-  const debounceRef  = useRef<ReturnType<typeof setTimeout>|null>(null);
-
-  const [active,  setActive]  = useState(0);
-  const [videoOp, setVideoOp] = useState<number[]>(() => { const a=Array(N).fill(0); a[0]=1; return a; });
-  const [textOp,  setTextOp]  = useState<number[]>(() => { const a=Array(N).fill(0); a[0]=1; return a; });
-
-  useEffect(() => { mountedRef.current=true; return () => { mountedRef.current=false; }; }, []);
-
-  const goTo = useCallback((idx: number) => {
-    if (!mountedRef.current) return;
-    const prev = activeRef.current;
-    if (prev === idx) return;
-    activeRef.current = idx;
-    setActive(idx);
-    setVideoOp(o => { const n=[...o]; n[idx]=1; n[prev]=0; return n; });
-    setTextOp(o  => { const n=[...o]; n[idx]=1; n[prev]=0; return n; });
-  }, []);
-
-  useEffect(() => {
-    const obs: IntersectionObserver[] = [];
-    SLIDES.forEach((_,i) => {
-      const el = sentinelRefs.current[i];
-      if (!el) return;
-      const o = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-          if (!e.isIntersecting) return;
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => { if (mountedRef.current) goTo(i); }, 60);
-        });
-      }, { rootMargin:'-35% 0px -35% 0px', threshold:0 });
-      o.observe(el); obs.push(o);
-    });
-
-    let t: ReturnType<typeof setTimeout>|null = null;
-    const snap = () => {
-      const mid = window.innerHeight/2;
-      let best=activeRef.current, dist=Infinity;
-      sentinelRefs.current.forEach((el,i) => {
-        if (!el) return;
-        const d = Math.abs(el.getBoundingClientRect().top + el.getBoundingClientRect().height/2 - mid);
-        if (d<dist) { dist=d; best=i; }
-      });
-      if (mountedRef.current) goTo(best);
-    };
-    const onScroll = () => { if(t) clearTimeout(t); t=setTimeout(snap,150); };
-    window.addEventListener('scroll', onScroll, { passive:true });
-
-    return () => {
-      obs.forEach(o=>o.disconnect());
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (t) clearTimeout(t);
-      window.removeEventListener('scroll', onScroll);
-    };
-  }, [goTo]);
-
   return (
-    <>
-      {/* Sticky stage */}
-      <div style={{ position:'sticky', top:0, height:'100svh', overflow:'hidden', background:'#0d0b15', zIndex:5 }}>
-        {/* Video layers */}
-        <div aria-hidden="true" style={{ position:'absolute', inset:0 }}>
-          {SLIDES.map((slide,i) => (
-            <div key={slide.id} style={{ position:'absolute', inset:0, opacity:videoOp[i], transition:reduced?'none':'opacity 500ms ease', overflow:'hidden', background:'#0d0b15' }}>
-              <iframe src={eUrl(slide.mobileBunnyId)} title={`Slide ${slide.id}`}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                loading={i===0?'eager':'lazy'} aria-hidden="true" tabIndex={-1}
-                onLoad={() => { const c=coverRefs.current[i]; if(c) c.style.opacity='0'; }}
-                style={{ position:'absolute', top:'-2px', left:'-2px', width:'calc(100% + 4px)', height:'calc(100% + 4px)', border:0, pointerEvents:'none', display:'block' }}
-              />
-              <div ref={el=>{coverRefs.current[i]=el;}} aria-hidden="true"
-                style={{ position:'absolute', inset:0, zIndex:3, background:'#0d0b15', transition:'opacity 400ms ease', pointerEvents:'none' }} />
+    <div>
+      {SLIDES.map(slide => (
+        <div key={slide.id} style={{
+          position: 'relative',
+          width: '100%',
+          height: '100svh',
+          overflow: 'hidden',
+          background: '#0d0b15',
+        }}>
+          {/* 9:16 vertical video — fills screen */}
+          <iframe
+            src={eUrl(slide.mobileBunnyId)}
+            title={`Slide ${slide.id}: ${slide.headline}`}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            loading="lazy"
+            aria-hidden="true"
+            tabIndex={-1}
+            style={{
+              position: 'absolute',
+              top: '-2px', left: '-2px',
+              width: 'calc(100% + 4px)',
+              height: 'calc(100% + 4px)',
+              border: 0,
+              pointerEvents: 'none',
+              display: 'block',
+            }}
+          />
+
+          {/* Gradient behind text */}
+          <div aria-hidden="true" style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.35) 50%, transparent 75%)',
+            zIndex: 1, pointerEvents: 'none',
+          }} />
+
+          {/* Slide counter */}
+          <div style={{
+            position: 'absolute', top: '20px', left: '20px', zIndex: 3,
+            fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
+            color: 'rgba(255,255,255,.5)', fontFamily: 'monospace',
+          }}>
+            {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
+          </div>
+
+          {/* Text overlay */}
+          <div style={{
+            position: 'absolute',
+            bottom: 'max(40px, env(safe-area-inset-bottom, 28px))',
+            left: '24px', right: '24px',
+            zIndex: 2,
+          }}>
+            <div style={{
+              fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
+              color: 'rgba(255,255,255,.55)', marginBottom: '8px',
+              textTransform: 'uppercase', fontFamily: 'monospace',
+            }}>
+              {slide.eyebrow}
             </div>
-          ))}
+            <h3 style={{
+              fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: 900,
+              color: '#fff', lineHeight: 1.12, letterSpacing: '-0.5px',
+              marginBottom: '10px', textShadow: '0 2px 20px rgba(0,0,0,.8)',
+            }}>
+              {slide.headline}
+            </h3>
+            <p style={{
+              fontSize: '14px', color: 'rgba(255,255,255,.75)',
+              lineHeight: 1.6, textShadow: '0 1px 10px rgba(0,0,0,.7)',
+              marginBottom: slide.isFinal ? '20px' : 0,
+            }}>
+              {slide.description}
+            </p>
+            {slide.isFinal && (
+              <button className="gbtn"
+                style={{ width: '100%', fontSize: '15px', padding: '14px' }}
+                onClick={onTrial} aria-label="Start free trial">
+                Start Free Trial
+              </button>
+            )}
+          </div>
+
+          {/* Scroll hint — small down arrow on slides 1–9 */}
+          {slide.id < N && (
+            <div aria-hidden="true" style={{
+              position: 'absolute', bottom: '12px', left: '50%',
+              transform: 'translateX(-50%)', zIndex: 3,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+            }}>
+              {[0,1,2].map(i => (
+                <div key={i} style={{
+                  width: '4px', height: '4px', borderRadius: '50%',
+                  background: `rgba(255,255,255,${0.6 - i * 0.18})`,
+                }} />
+              ))}
+            </div>
+          )}
         </div>
-        {/* Bottom gradient behind text */}
-        <div aria-hidden="true" style={{ position:'absolute', inset:0, zIndex:1, background:'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 50%, transparent 75%)', pointerEvents:'none' }} />
-        {/* Text overlays */}
-        {SLIDES.map((slide,i) => <Overlay key={slide.id} slide={slide} opacity={textOp[i]} onTrial={onTrial} mobile />)}
-        {/* Counter */}
-        <div className="font-mono" style={{ position:'absolute', top:'20px', left:'20px', zIndex:20, fontSize:'10px', fontWeight:800, letterSpacing:'0.15em', color:'rgba(255,255,255,.45)' }}>
-          {String(active+1).padStart(2,'0')} / {String(N).padStart(2,'0')}
-        </div>
-        {/* Dots */}
-        <div style={{ position:'absolute', bottom:'max(16px,env(safe-area-inset-bottom,10px))', left:'50%', transform:'translateX(-50%)', display:'flex', gap:'5px', zIndex:20 }}>
-          {SLIDES.map((_,i) => (
-            <div key={i} style={{ height:'4px', borderRadius:'999px', width:i===active?'16px':'4px', background:i===active?'var(--g1)':'rgba(255,255,255,.3)', transition:reduced?'none':'width 300ms ease' }} />
-          ))}
-        </div>
-      </div>
-      {/* Scroll track */}
-      <div aria-hidden="true" style={{ background:'#0d0b15' }}>
-        {SLIDES.map((slide,i) => (
-          <div key={slide.id} ref={el=>{sentinelRefs.current[i]=el;}} style={{ height:'90svh' }} />
-        ))}
-      </div>
-    </>
+      ))}
+    </div>
   );
 }
 
