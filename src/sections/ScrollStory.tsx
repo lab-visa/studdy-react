@@ -126,6 +126,20 @@ const SLIDES: Slide[] = [
 ];
 const N = SLIDES.length;
 
+/* Mobile-specific 9:16 vertical videos — one per slide, same order */
+const MOBILE_IDS: string[] = [
+  '242d7ca2-1f1f-49a5-9af6-2c2a0e33bbf0',  // Scene 1
+  'ce8e510d-a51f-4bfa-afa2-cc0a7de29873',  // Scene 2
+  '22dfa7fc-f235-4c1c-bbc8-01634b089eba',  // Scene 3
+  'b302c616-81f8-4ff7-8d9e-f68869799af6',  // Scene 4
+  'ab8735ae-7a31-43aa-b311-8bbcf5a2f772',  // Scene 5
+  '39508299-0efa-4665-b479-0b78c8dbc02e',  // Scene 6
+  '772ec9eb-4370-4417-96af-2f8dd6ed9d93',  // Scene 7
+  '2417db4b-7b0c-46c8-89ff-e93870e59ba4',  // Scene 8
+  '4b31466d-071e-4178-b8be-e2477df6c2ee',  // Scene 9
+  'd58eb819-dc5d-4484-a6b2-c4de527f5112',  // Scene 10
+];
+
 /* ══════════════════════════════════════════════════════════════
    TEXT OVERLAY
    ══════════════════════════════════════════════════════════════ */
@@ -491,7 +505,7 @@ export default function ScrollStory() {
           {SLIDES.map((slide, i) => (
             <div
               key={slide.id}
-              ref={el => { sentinelRefs.current[i] = el; }}
+              ref={el => { if (!isMobile) sentinelRefs.current[i] = el; }}
               style={{ height: '110vh' }}
             />
           ))}
@@ -499,69 +513,101 @@ export default function ScrollStory() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════
-          MOBILE — full-screen cinematic slides in normal page flow.
-          No nested scroll container — page scrolls naturally.
-          Each slide is 100svh. Video fills screen via object-fit:cover.
+          MOBILE — full-screen cinematic, 9:16 vertical videos
+          Same sticky+sentinel architecture as desktop.
+          Each slide starts from 0:00 when activated.
+          Videos are 9:16 portrait — fill screen perfectly.
           ══════════════════════════════════════════════════════════ */}
       <div style={{ display: isMobile ? 'block' : 'none' }} aria-hidden={!isMobile}>
-        {SLIDES.map(slide => (
-          <div
-            key={slide.id}
-            style={{
-              position: 'relative',
-              width: '100%',
-              height: '100svh',
-              overflow: 'hidden',
-              background: '#0d0b15',
-            }}
-          >
-            {/* Video fills full screen — iframe expands beyond 16:9 box */}
-            <div style={{
-              position: 'absolute',
-              /* Extend beyond the 16:9 area so video covers full portrait screen */
-              top: '-20%', left: '-2px',
-              width: 'calc(100% + 4px)',
-              height: '140%',
-              pointerEvents: 'none',
-            }}>
-              <iframe
-                src={embedUrl(slide.bunnyId)}
-                title={`Slide ${slide.id}`}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                loading="lazy"
-                aria-hidden="true"
-                tabIndex={-1}
+
+        {/* Sticky stage — stays fixed while scroll track passes beneath */}
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          height: '100svh',
+          overflow: 'hidden',
+          background: '#0d0b15',
+          zIndex: 5,
+        }}>
+          {/* All 10 mobile video layers — opacity controlled */}
+          <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+            {SLIDES.map((slide, i) => (
+              <div
+                key={`mob-${slide.id}`}
                 style={{
                   position: 'absolute', inset: 0,
-                  width: '100%', height: '100%',
-                  border: 0, pointerEvents: 'none',
+                  opacity: videoOp[i],
+                  transition: prefersReduced ? 'none' : 'opacity 500ms ease',
+                  overflow: 'hidden',
+                  background: '#0d0b15',
                 }}
-              />
-            </div>
+              >
+                <iframe
+                  src={embedUrl(MOBILE_IDS[i])}
+                  title={`Story slide ${slide.id}: ${slide.headline}`}
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onLoad={() => {
+                    const cover = document.getElementById(`mob-cover-${i}`);
+                    if (cover) cover.style.opacity = '0';
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '-2px', left: '-2px',
+                    width: 'calc(100% + 4px)',
+                    height: 'calc(100% + 4px)',
+                    border: 0, pointerEvents: 'none', display: 'block',
+                  }}
+                />
+                {/* Flash cover — hides Bunny chrome until loaded */}
+                <div
+                  id={`mob-cover-${i}`}
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute', inset: 0, zIndex: 3,
+                    background: '#0d0b15',
+                    transition: 'opacity 400ms ease',
+                    pointerEvents: 'none',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
 
-            {/* Dark gradient — covers bottom 60% behind text */}
-            <div aria-hidden="true" style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.15) 100%)',
-              pointerEvents: 'none',
-            }} />
+          {/* Dark gradient — behind text at bottom */}
+          <div aria-hidden="true" style={{
+            position: 'absolute', inset: 0, zIndex: 1,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 45%, transparent 70%)',
+            pointerEvents: 'none',
+          }} />
 
-            {/* Slide counter top-left */}
-            <div style={{
-              position: 'absolute', top: '20px', left: '20px', zIndex: 3,
-              fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
-              color: 'rgba(255,255,255,.5)', fontFamily: 'monospace',
-            }}>
-              {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
-            </div>
+          {/* Slide counter */}
+          <div className="font-mono" style={{
+            position: 'absolute', top: '20px', left: '20px', zIndex: 10,
+            fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
+            color: 'rgba(255,255,255,.45)',
+          }}>
+            {String(active + 1).padStart(2,'0')} / {String(N).padStart(2,'0')}
+          </div>
 
-            {/* Text at bottom */}
-            <div style={{
-              position: 'absolute',
-              bottom: 'max(36px, env(safe-area-inset-bottom, 24px))',
-              left: '24px', right: '24px',
-              zIndex: 2,
-            }}>
+          {/* Text overlays — all slides, opacity driven */}
+          {SLIDES.map((slide, i) => (
+            <div
+              key={`mob-txt-${slide.id}`}
+              aria-hidden={textOp[i] < 0.02}
+              style={{
+                position: 'absolute',
+                bottom: 'max(36px, env(safe-area-inset-bottom, 24px))',
+                left: '24px', right: '24px',
+                zIndex: 8,
+                opacity: textOp[i],
+                transform: prefersReduced ? 'none' : `translateY(${(1 - textOp[i]) * 10}px)`,
+                transition: prefersReduced ? 'none' : 'opacity 500ms ease, transform 500ms ease',
+                pointerEvents: textOp[i] > 0.5 ? 'auto' : 'none',
+              }}
+            >
               <div style={{
                 fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
                 color: 'rgba(255,255,255,.55)', marginBottom: '6px',
@@ -591,8 +637,39 @@ export default function ScrollStory() {
                 </button>
               )}
             </div>
+          ))}
+
+          {/* Progress dots */}
+          <div style={{
+            position: 'absolute', bottom: '16px', left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex', gap: '5px', zIndex: 10, alignItems: 'center',
+          }}>
+            {SLIDES.map((_, i) => (
+              <div key={i} style={{
+                height: '4px', borderRadius: '999px',
+                width: i === active ? '16px' : '4px',
+                background: i === active ? 'var(--g1)' : 'rgba(255,255,255,.3)',
+                transition: prefersReduced ? 'none' : 'width 300ms ease, background 300ms ease',
+              }} />
+            ))}
           </div>
-        ))}
+        </div>
+
+        {/* Mobile scroll track — 10 sentinels, 90svh each */}
+        <div aria-hidden="true" style={{ background: '#0d0b15' }}>
+          {SLIDES.map((slide, i) => (
+            <div
+              key={`mob-sentinel-${slide.id}`}
+              ref={el => {
+                // Reuse sentinel refs array for mobile too —
+                // only one layout (mobile or desktop) is visible at a time
+                if (isMobile) sentinelRefs.current[i] = el;
+              }}
+              style={{ height: '90svh' }}
+            />
+          ))}
+        </div>
       </div>
 
     </section>
