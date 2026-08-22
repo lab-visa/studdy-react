@@ -422,18 +422,28 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
   /* IntersectionObserver per slide */
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     SLIDES.forEach((_, i) => {
       const el = slideRefs.current[i];
       if (!el) return;
       const obs = new IntersectionObserver(entries => {
         entries.forEach(e => {
-          if (e.isIntersecting && mountedRef.current) goTo(i);
+          if (!e.isIntersecting || !mountedRef.current) return;
+          /* Debounce prevents rapid bouncing during fast scroll */
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            if (mountedRef.current) goTo(i);
+          }, 80);
         });
       }, { threshold: 0.6 });
       obs.observe(el);
       observers.push(obs);
     });
-    return () => observers.forEach(o => o.disconnect());
+    return () => {
+      observers.forEach(o => o.disconnect());
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, [goTo]);
 
   /* Section visibility guard */

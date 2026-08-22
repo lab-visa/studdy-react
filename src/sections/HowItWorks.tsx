@@ -71,8 +71,6 @@ export default function HowItWorks() {
       const stepEls = sectionRef.current!.querySelectorAll<HTMLElement>('.hiw-step-card');
 
       if (tokenRef.current && stepEls.length === N) {
-        // Positions to snap to: 0%, 33.3%, 66.6%, 100% of section width
-
         ScrollTrigger.create({
           trigger: sectionRef.current,
           start: 'top 55%',
@@ -80,12 +78,13 @@ export default function HowItWorks() {
           scrub: 0.8,
           onUpdate: self => {
             const p = self.progress;
-            // Token moves across 0% to 100% of container width
             const containerW = sectionRef.current!.querySelector<HTMLElement>('.hiw-track')?.offsetWidth ?? 1;
-            const x = p * (containerW - 24); // 24 = token width
-            gsap.set(tokenRef.current, { x });
+            /* Token centre tracks the line fill end exactly.
+               Line goes from 0 to containerW.
+               Token is 24px wide so offset by 12px to centre it on the fill end. */
+            const x = p * containerW - 12;
+            gsap.set(tokenRef.current, { x: Math.max(0, x) });
 
-            // Activate step based on progress
             const stepIdx = Math.min(N - 1, Math.floor(p * N));
             setActiveStep(stepIdx);
 
@@ -223,12 +222,18 @@ export default function HowItWorks() {
 
         {/* ── Mobile: vertical stacked ── */}
         <div className="md:hidden flex flex-col gap-6">
-          {/* Vertical line */}
+          {/* Vertical line — grows as user scrolls */}
           <div className="relative">
-            <div className="absolute left-[19px] top-0 bottom-0 w-px" style={{ background:'rgba(255,255,255,.08)' }} aria-hidden="true" />
-
+            <div className="absolute left-[19px] top-0 bottom-0 w-px"
+              style={{ background:'rgba(255,255,255,.08)' }} aria-hidden="true" />
+            <div
+              className="absolute left-[19px] top-0 w-px origin-top"
+              style={{ background:'var(--grad)', height:'100%', transform:'scaleY(0)' }}
+              id="hiw-mobile-line"
+              aria-hidden="true"
+            />
             {STEPS.map((s, idx) => (
-              <MobileStep key={s.id} s={s} idx={idx} />
+              <MobileStep key={s.id} s={s} idx={idx} lineId="hiw-mobile-line" />
             ))}
           </div>
         </div>
@@ -238,22 +243,39 @@ export default function HowItWorks() {
 }
 
 function MobileStep({
-  s, idx,
+  s, idx, lineId,
 }: {
   s: typeof STEPS[0];
   idx: number;
+  lineId: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
     const ctx = gsap.context(() => {
+      /* Slide card in */
       gsap.from(ref.current, {
         opacity: 0, x: 16, duration: 0.6, ease: 'power2.out',
-        scrollTrigger: { trigger: ref.current, start: 'top 80%', once: true },
+        scrollTrigger: { trigger: ref.current, start: 'top 82%', once: true },
       });
+      /* Grow the gradient line proportionally as each step enters */
+      const lineEl = document.getElementById(lineId);
+      if (lineEl) {
+        const fraction = (idx + 1) / STEPS.length;
+        gsap.to(lineEl, {
+          scaleY: fraction,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: ref.current,
+            start: 'top 75%',
+            end: 'bottom 60%',
+            scrub: 0.6,
+          },
+        });
+      }
     });
     return () => ctx.revert();
-  }, []);
+  }, [idx, lineId]);
 
   return (
     <div ref={ref} className="flex gap-4 pb-8 relative" style={{ paddingLeft: '0' }}>
