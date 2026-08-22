@@ -5,7 +5,7 @@
  * Mobile:  Completely separate component — simple sticky + sentinels (90svh)
  *          Uses 9:16 vertical videos. No shared state with desktop.
  */
-import { useEffect, useRef, useState, useCallback, forwardRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { track } from '../utils/analytics';
 
@@ -187,127 +187,28 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   MOBILE SECTION
-   Uses position:fixed (not sticky) to avoid Safari/Chrome mobile
-   crash caused by overflow:hidden ancestors breaking sticky.
-
-   How it works:
-   - A transparent scroll track of N×90svh sits in normal flow
-   - An IntersectionObserver watches the top and bottom of the track
-   - When track is in view: stage fixes to screen (cinematic)
-   - When track top exits upward: stage unfixes (user scrolled back up)
-   - When track bottom exits downward: stage unfixes (user passed section)
-   - Active slide determined by scroll position within the track
-   - User can always scroll up past Slide 1 or down past Slide 10
+   MOBILE SECTION — simple full-height slides, natural scroll
+   No sticky. No IntersectionObserver. No shared scroll events.
+   Each slide is 100svh. Video fills screen. Text at bottom.
+   User scrolls naturally through all 10 slides.
    ══════════════════════════════════════════════════════════════ */
-/* ══════════════════════════════════════════════════════════════
-   MOBILE STORY
-   Architecture (approved):
-   - 10 real <article> slides, each min-height:100svh, normal flow
-   - 9:16 Bunny iframe as full-screen background per slide
-   - Only ACTIVE + NEXT iframe mounted; others = dark placeholder
-   - Previous iframe unmounted 400ms after it becomes inactive
-   - IntersectionObserver (threshold 0.6) drives active index only
-   - Snap: scrollend event where supported; 250–350ms debounce fallback
-   - Snap only fires when Section 4 is in view AND nearest slide
-     is reasonably close — never fights momentum or traps user
-   - Cover: stays opaque until Bunny postMessage 'ready'/'playing'
-     fires, with a 2s timeout fallback — Bunny orange UI never flashes
-   - No position:fixed, no position:sticky, no fake scroll track
-   - No preventDefault, no body lock, no wheel/touch hijacking
-   - No setState on every raw scroll tick
-   ══════════════════════════════════════════════════════════════ */
-
-/* Bunny postMessage cover manager.
-   Listens for the Bunny player iframe's postMessage events.
-   When 'ready' or a timeupdate with t>0 arrives, fades out the cover.
-   Falls back after 2s so a network-slow player never stays black. */
-function useBunnyCover(
-  iframeRef: React.RefObject<HTMLIFrameElement | null>,
-  coverRef: React.RefObject<HTMLDivElement | null>,
-  active: boolean,
-) {
-  useEffect(() => {
-    if (!active) return;
-    const cover = coverRef.current;
-    if (!cover) return;
-
-    let cleared = false;
-    const clear = () => {
-      if (cleared) return;
-      cleared = true;
-      if (cover) cover.style.opacity = '0';
-    };
-
-    /* 2s safety fallback */
-    const fallback = setTimeout(clear, 2000);
-
-    /* Listen for Bunny postMessage events */
-    const onMsg = (e: MessageEvent) => {
-      try {
-        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        /* Bunny emits {event:'ready'} and {event:'timeupdate',seconds:N} */
-        if (d?.event === 'ready') clear();
-        if (d?.event === 'timeupdate' && d?.seconds > 0) clear();
-        /* player.js protocol */
-        if (d?.value === 'ready') clear();
-      } catch {}
-    };
-    window.addEventListener('message', onMsg);
-
-    return () => {
-      clearTimeout(fallback);
-      window.removeEventListener('message', onMsg);
-    };
-  }, [active, coverRef, iframeRef]);
-}
-
-/* Individual slide — mounts iframe only when shouldMount=true */
-const MobileSlide = forwardRef<HTMLElement, {
-  slide: Slide;
-  idx: number;
-  isActive: boolean;
-  shouldMount: boolean;
-  onTrial: () => void;
-}>(function MobileSlide({ slide, idx, isActive, shouldMount, onTrial }, ref) {
-  const reduced = typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const coverRef  = useRef<HTMLDivElement>(null);
-
-  useBunnyCover(iframeRef, coverRef, shouldMount && isActive);
-
-  /* Reset cover opacity when iframe remounts */
-  useEffect(() => {
-    if (shouldMount && coverRef.current) {
-      coverRef.current.style.opacity = '1';
-    }
-  }, [shouldMount]);
-
+function MobileStory({ onTrial }: { onTrial: () => void }) {
   return (
-    <article
-      ref={ref}
-      data-slide-idx={idx}
-      style={{
-        position: 'relative',
-        width: '100%',
-        minHeight: '100svh',
-        overflow: 'hidden',
-        background: '#0d0b15',
-        /* contain prevents this block from affecting sticky/fixed
-           ancestors; isolates paint for performance */
-        contain: 'layout paint',
-      }}
-    >
-      {/* Iframe — only mounted for active + next */}
-      {shouldMount ? (
-        <>
+    <div>
+      {SLIDES.map(slide => (
+        <div key={slide.id} style={{
+          position: 'relative',
+          width: '100%',
+          height: '100svh',
+          overflow: 'hidden',
+          background: '#0d0b15',
+        }}>
+          {/* 9:16 vertical video — fills screen */}
           <iframe
-            ref={iframeRef}
             src={eUrl(slide.mobileBunnyId)}
-            title={`Story slide ${slide.id}: ${slide.headline}`}
+            title={`Slide ${slide.id}: ${slide.headline}`}
             allow="autoplay; encrypted-media; picture-in-picture"
-            loading={isActive ? 'eager' : 'lazy'}
+            loading="lazy"
             aria-hidden="true"
             tabIndex={-1}
             style={{
@@ -320,255 +221,77 @@ const MobileSlide = forwardRef<HTMLElement, {
               display: 'block',
             }}
           />
-          {/* Cover — hides Bunny chrome until postMessage ready */}
-          <div
-            ref={coverRef}
-            aria-hidden="true"
-            style={{
-              position: 'absolute', inset: 0, zIndex: 3,
-              background: '#0d0b15',
-              transition: 'opacity 350ms ease',
-              pointerEvents: 'none',
-            }}
-          />
-        </>
-      ) : (
-        /* Dark placeholder — zero network, zero GPU */
-        <div aria-hidden="true" style={{
-          position: 'absolute', inset: 0,
-          background: '#0d0b15',
-        }} />
-      )}
 
-      {/* Gradient — behind text, always present */}
-      <div aria-hidden="true" style={{
-        position: 'absolute', inset: 0, zIndex: 2,
-        background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 55%, transparent 75%)',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Text overlay */}
-      <div style={{
-        position: 'absolute',
-        bottom: 'max(40px, env(safe-area-inset-bottom, 28px))',
-        left: '24px', right: '24px',
-        zIndex: 4,
-        opacity: isActive ? 1 : 0.3,
-        transform: reduced ? 'none' : `translateY(${isActive ? 0 : 8}px)`,
-        transition: reduced ? 'none' : 'opacity 500ms ease, transform 500ms ease',
-      }}>
-        <div style={{
-          fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
-          color: 'rgba(255,255,255,.55)', marginBottom: '7px',
-          textTransform: 'uppercase', fontFamily: 'monospace',
-        }}>
-          {slide.eyebrow}
-        </div>
-        <h3 style={{
-          fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: 900,
-          color: '#fff', lineHeight: 1.12, letterSpacing: '-0.5px',
-          marginBottom: '10px', textShadow: '0 2px 20px rgba(0,0,0,.8)',
-        }}>
-          {slide.headline}
-        </h3>
-        <p style={{
-          fontSize: '14px', color: 'rgba(255,255,255,.75)',
-          lineHeight: 1.6, textShadow: '0 1px 10px rgba(0,0,0,.7)',
-          marginBottom: slide.isFinal ? '20px' : 0,
-        }}>
-          {slide.description}
-        </p>
-        {slide.isFinal && (
-          <button className="gbtn"
-            style={{ width: '100%', fontSize: '15px', padding: '14px' }}
-            onClick={onTrial} aria-label="Start free trial">
-            Start Free Trial
-          </button>
-        )}
-      </div>
-
-      {/* Counter top-left */}
-      <div className="font-mono" style={{
-        position: 'absolute', top: '20px', left: '20px', zIndex: 5,
-        fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
-        color: isActive ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.2)',
-        transition: 'color 400ms ease',
-      }}>
-        {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
-      </div>
-    </article>
-  );
-});
-
-function MobileStory({ onTrial }: { onTrial: () => void }) {
-  const sectionRef   = useRef<HTMLDivElement>(null);
-  const slideRefs    = useRef<(HTMLElement | null)[]>(Array(N).fill(null));
-  const mountedRef   = useRef(true);
-  const activeRef    = useRef(0);
-  const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inViewRef    = useRef(false); // is Section 4 in viewport?
-
-  const [active,  setActive]  = useState(0);
-  /* mountedSet: indices that have iframes — active + next only */
-  const [mountedSet, setMountedSet] = useState<Set<number>>(() => new Set([0, 1]));
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-    };
-  }, []);
-
-  /* Activate a slide: update active index, update mounted set */
-  const goTo = useCallback((idx: number) => {
-    if (!mountedRef.current) return;
-    const prev = activeRef.current;
-    if (prev === idx) return;
-    activeRef.current = idx;
-    setActive(idx);
-
-    /* Mount active + next immediately */
-    const next = Math.min(N - 1, idx + 1);
-    const newSet = new Set([idx, next]);
-
-    /* Keep previous mounted briefly so crossfade has content */
-    if (prev >= 0) newSet.add(prev);
-    setMountedSet(new Set(newSet));
-
-    /* Unmount previous after cover/transition settles */
-    setTimeout(() => {
-      if (!mountedRef.current) return;
-      setMountedSet(cur => {
-        const s = new Set(cur);
-        /* Only remove prev if it's not also active or next */
-        if (s.has(prev) && prev !== activeRef.current &&
-            prev !== Math.min(N - 1, activeRef.current + 1)) {
-          s.delete(prev);
-        }
-        return s;
-      });
-    }, 500);
-  }, []);
-
-  /* IntersectionObserver — one per slide, threshold 0.6
-     Fires only when slide is majority-visible. No page geometry changes. */
-  useEffect(() => {
-    const observers: IntersectionObserver[] = [];
-
-    SLIDES.forEach((_, i) => {
-      const el = slideRefs.current[i];
-      if (!el) return;
-      const obs = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting && mountedRef.current) goTo(i);
-        });
-      }, { threshold: 0.6 });
-      obs.observe(el);
-      observers.push(obs);
-    });
-
-    return () => observers.forEach(o => o.disconnect());
-  }, [goTo]);
-
-  /* Section visibility — for snap guard */
-  useEffect(() => {
-    const section = sectionRef.current;
-    if (!section) return;
-    const obs = new IntersectionObserver(entries => {
-      entries.forEach(e => { inViewRef.current = e.isIntersecting; });
-    }, { threshold: 0 });
-    obs.observe(section);
-    return () => obs.disconnect();
-  }, []);
-
-  /* Snap helper:
-     - prefer scrollend (Chrome 114+, Safari 17.4+)
-     - fallback: 300ms debounce on scroll
-     - only fires when Section 4 is in view
-     - only snaps if nearest slide is within 40% of viewport height
-     - never snaps when user is above Scene 1 or below Scene 10 */
-  useEffect(() => {
-    const doSnap = () => {
-      if (!mountedRef.current || !inViewRef.current) return;
-      const vh = window.innerHeight;
-      let bestEl: HTMLElement | null = null;
-      let bestDist = Infinity;
-      let bestIdx = -1;
-
-      slideRefs.current.forEach((el, i) => {
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        const dist = Math.abs(rect.top);
-        if (dist < bestDist) { bestDist = dist; bestEl = el; bestIdx = i; }
-      });
-
-      /* Don't snap if user is clearly above/below the section */
-      if (bestIdx < 0 || bestIdx >= N) return;
-      /* Don't snap if nearest slide is more than 40% away — user is between sections */
-      if (bestDist > vh * 0.4) return;
-      /* Don't snap if already perfectly aligned */
-      if (bestDist < 8) return;
-
-      bestEl!.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-
-    /* scrollend — fires after momentum fully settles on iOS 17.4+ */
-    const supportsScrollEnd = 'onscrollend' in window;
-
-    if (supportsScrollEnd) {
-      window.addEventListener('scrollend', doSnap, { passive: true });
-      return () => window.removeEventListener('scrollend', doSnap);
-    } else {
-      /* Fallback: 300ms debounce — long enough for iOS momentum to settle */
-      const onScroll = () => {
-        if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-        snapTimerRef.current = setTimeout(doSnap, 300);
-      };
-      window.addEventListener('scroll', onScroll, { passive: true });
-      return () => {
-        window.removeEventListener('scroll', onScroll);
-        if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-      };
-    }
-  }, []);
-
-  /* Progress dots */
-  const reduced = typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-
-  return (
-    <div ref={sectionRef}>
-      {SLIDES.map((slide, i) => (
-        <MobileSlide
-          key={slide.id}
-          slide={slide}
-          idx={i}
-          isActive={active === i}
-          shouldMount={mountedSet.has(i)}
-          onTrial={onTrial}
-          ref={(el: HTMLElement | null) => { slideRefs.current[i] = el; }}
-        />
-      ))}
-
-      {/* Progress dots — position:fixed small cosmetic indicator only */}
-      <div style={{
-        position: 'fixed',
-        bottom: 'max(12px, env(safe-area-inset-bottom, 8px))',
-        left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', gap: '5px', zIndex: 50,
-        alignItems: 'center',
-        pointerEvents: 'none',
-      }}>
-        {SLIDES.map((_, i) => (
-          <div key={i} style={{
-            height: '4px', borderRadius: '999px',
-            width: i === active ? '16px' : '4px',
-            background: i === active ? 'var(--g1)' : 'rgba(255,255,255,.35)',
-            transition: reduced ? 'none' : 'width 300ms ease',
+          {/* Gradient behind text */}
+          <div aria-hidden="true" style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.35) 50%, transparent 75%)',
+            zIndex: 1, pointerEvents: 'none',
           }} />
-        ))}
-      </div>
+
+          {/* Slide counter */}
+          <div style={{
+            position: 'absolute', top: '20px', left: '20px', zIndex: 3,
+            fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
+            color: 'rgba(255,255,255,.5)', fontFamily: 'monospace',
+          }}>
+            {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
+          </div>
+
+          {/* Text overlay */}
+          <div style={{
+            position: 'absolute',
+            bottom: 'max(40px, env(safe-area-inset-bottom, 28px))',
+            left: '24px', right: '24px',
+            zIndex: 2,
+          }}>
+            <div style={{
+              fontSize: '9px', fontWeight: 800, letterSpacing: '0.15em',
+              color: 'rgba(255,255,255,.55)', marginBottom: '8px',
+              textTransform: 'uppercase', fontFamily: 'monospace',
+            }}>
+              {slide.eyebrow}
+            </div>
+            <h3 style={{
+              fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: 900,
+              color: '#fff', lineHeight: 1.12, letterSpacing: '-0.5px',
+              marginBottom: '10px', textShadow: '0 2px 20px rgba(0,0,0,.8)',
+            }}>
+              {slide.headline}
+            </h3>
+            <p style={{
+              fontSize: '14px', color: 'rgba(255,255,255,.75)',
+              lineHeight: 1.6, textShadow: '0 1px 10px rgba(0,0,0,.7)',
+              marginBottom: slide.isFinal ? '20px' : 0,
+            }}>
+              {slide.description}
+            </p>
+            {slide.isFinal && (
+              <button className="gbtn"
+                style={{ width: '100%', fontSize: '15px', padding: '14px' }}
+                onClick={onTrial} aria-label="Start free trial">
+                Start Free Trial
+              </button>
+            )}
+          </div>
+
+          {/* Scroll hint — small down arrow on slides 1–9 */}
+          {slide.id < N && (
+            <div aria-hidden="true" style={{
+              position: 'absolute', bottom: '12px', left: '50%',
+              transform: 'translateX(-50%)', zIndex: 3,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+            }}>
+              {[0,1,2].map(i => (
+                <div key={i} style={{
+                  width: '4px', height: '4px', borderRadius: '50%',
+                  background: `rgba(255,255,255,${0.6 - i * 0.18})`,
+                }} />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
