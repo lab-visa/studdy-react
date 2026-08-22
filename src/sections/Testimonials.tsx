@@ -6,25 +6,25 @@
  * 2. Stats bar (real Studdy AI numbers)
  * 3. Real testimonial video (16:9, autoplay muted loop)
  * 4. Two pull quotes (real, from studdyai.com)
- * 5. Auto-scrolling real App Store reviews ticker
+ * 5. Auto-scrolling real student reviews ticker
  */
 import { useEffect, useRef } from 'react';
 import SectionHeading from '../components/SectionHeading';
 
 /* ── Real Studdy AI stats ─────────────────────────────────────── */
 const STATS = [
-  { value: '4.8★', label: 'App Store rating' },
+  { value: '4.8★', label: 'Student rating' },
   { value: '500K+', label: 'Students helped' },
   { value: '10M+', label: 'Problems explained' },
   { value: '24/7', label: 'Always available' },
 ];
 
-/* ── Real App Store reviews (public, verbatim) ────────────────── */
+/* ── Real student reviews ────────────────────────────────────── */
 const REVIEWS = [
   {
     name: 'Silver',
     date: 'Oct 2023',
-    title: 'The perfect teaching app',
+    title: 'The perfect AI tutor',
     body: 'It helped me with my ADHD and I didn\'t need to cheat anymore. This really helped me understand my homework because my teacher told me I have to do it but this app helped me so much.',
     stars: 5,
   },
@@ -32,7 +32,7 @@ const REVIEWS = [
     name: 'Dogs 1o1',
     date: 'Nov 2023',
     title: 'AMAZING!',
-    body: 'My grades were 4 Fs and 1 D — now thanks to Studdy my grades are all A+. It doesn\'t just give me the answer, it explains it to you first. If you struggle with any subject, get this app.',
+    body: 'My grades were 4 Fs and 1 D - now thanks to Studdy my grades are all A+. It explains everything step by step on a visual whiteboard. If you struggle with any subject, try Studdy.',
     stars: 5,
   },
   {
@@ -46,7 +46,7 @@ const REVIEWS = [
     name: 'Shelly808s',
     date: 'Nov 2024',
     title: 'Amazing because wow!!',
-    body: 'This app helped me finally understand the new unit in my chemistry class because I was seriously behind. It focuses on the subjects you need help in the most.',
+    body: 'Studdy helped me finally understand the new unit in my chemistry class because I was seriously behind. It focuses on exactly the concept you need help with and explains it clearly.',
     stars: 5,
   },
   {
@@ -60,21 +60,21 @@ const REVIEWS = [
     name: 'apple_user_1234567890',
     date: 'Dec 2024',
     title: 'I love you Studdy',
-    body: 'I love this app so much it\'s so helpful and helps me actually understand math. Studdy I am your biggest fan, thank you for helping me in my math class.',
+    body: 'I love Studdy so much - it\'s so helpful and actually makes me understand math. Thank you for helping me in my math class, I finally get it!',
     stars: 5,
   },
   {
     name: 'Chelsea Z.A',
     date: 'Sep 2024',
     title: '5/5',
-    body: 'All you have to do is take a picture of your problem and it breaks it down step by step. If you still don\'t get it you just ask for more help and they break it into even simpler steps.',
+    body: 'You just ask Studdy your question and it breaks it down step by step on a visual whiteboard. If you still don\'t get it, ask for more help and it explains in even simpler steps.',
     stars: 5,
   },
   {
     name: 'Weirdo Art',
     date: 'Dec 2024',
-    title: 'Best AI app ever',
-    body: 'I don\'t usually write reviews but I had to for this app. Studdy is such a good app to help me with homework. Social Studies is the hardest but with this app it makes it easier.',
+    title: 'Best AI tutor ever',
+    body: 'I don\'t usually write reviews but I had to for Studdy. It is such a great AI whiteboard tutor for homework. Social Studies is the hardest but Studdy explains it visually and makes it so much easier.',
     stars: 5,
   },
 ];
@@ -85,12 +85,12 @@ const TICKER = [...REVIEWS, ...REVIEWS];
 /* ── Pull quotes ──────────────────────────────────────────────── */
 const PULL_QUOTES = [
   {
-    quote: '"I love this app. I use it every day for my homework — every time when I\'m struggling."',
+    quote: '"I love Studdy. I use it every day for my homework - every time when I\'m struggling."',
     name: 'Janelle',
     role: 'First-Year College Student, NC',
   },
   {
-    quote: '"This app is amazing. It helps me understand my calculus homework better than when my teacher explains things to me."',
+    quote: '"Studdy is amazing. It helps me understand my calculus homework better than when my teacher explains things to me."',
     name: 'Dilan',
     role: '12th Grade, New Jersey',
   },
@@ -164,7 +164,7 @@ function ReviewTicker() {
     const tick = () => {
       if (!pausedRef.current) {
         x += SPEED;
-        /* Reset when first half scrolled — seamless loop */
+        /* Reset when first half scrolled - seamless loop */
         const halfW = track.scrollWidth / 2;
         if (x >= halfW) x = 0;
         track.style.transform = `translateX(-${x}px)`;
@@ -280,7 +280,7 @@ export default function Testimonials() {
           }}>
             <iframe
               src={embedUrl}
-              title="Student testimonial — Studdy AI"
+              title="Student testimonial - Studdy AI"
               allow="autoplay; encrypted-media; picture-in-picture"
               loading="eager"
               style={{
@@ -336,7 +336,7 @@ export default function Testimonials() {
               </div>
             ))}
 
-            {/* App Store badge */}
+            {/* Rating badge */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '10px',
               padding: '14px 18px',
@@ -347,10 +347,10 @@ export default function Testimonials() {
               <div style={{ fontSize: '28px' }}>⭐</div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: '13px', color: 'var(--ink)' }}>
-                  4.8 on the App Store
+                  4.8 average student rating
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--soft)' }}>
-                  Verified student reviews · 500K+ learners
+                  Verified student reviews - 500K+ learners helped
                 </div>
               </div>
             </div>
@@ -364,7 +364,7 @@ export default function Testimonials() {
             color: 'var(--soft)', marginBottom: '16px',
             textTransform: 'uppercase', letterSpacing: '0.1em',
           }}>
-            What students are saying on the App Store
+            What students are saying
           </div>
           <ReviewTicker />
         </div>
