@@ -201,105 +201,73 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
    - User can always scroll up past Slide 1 or down past Slide 10
    ══════════════════════════════════════════════════════════════ */
 /* ══════════════════════════════════════════════════════════════
-   MOBILE STORY — fixed implementation
-   Fixes:
-   1. Readiness tracked for ALL mounted iframes via global postMessage
-   2. Both active+next load eagerly
-   3. Previous unmounted only after next confirmed ready
-   4. snap uses behavior:'auto' — no visible second animation
-   5. CSS scroll-snap scoped to section wrapper only
+   MOBILE STORY — native <video> implementation
+   
+   Uses direct Bunny MP4 URLs instead of iframes.
+   This gives us:
+   - object-fit: cover  → perfect full-screen fill, no letterbox
+   - instant first frame → zero black screen
+   - full play/pause/currentTime control → no cross-origin issues
+   - no Bunny player chrome → no orange button, no controls
+   - works perfectly on iOS Safari, Chrome Android
+   
+   Architecture:
+   - 10 real <article> slides, min-height:100svh, normal flow
+   - Native <video> autoplay muted loop playsInline
+   - Only active + next video mounted (max 2 at steady state)
+   - IntersectionObserver (threshold 0.6) drives active index
+   - scrollend / 300ms debounce snap — behavior:'auto'
+   - scroll-snap-type:'y proximity' scoped to section wrapper
    ══════════════════════════════════════════════════════════════ */
 
-/* Per-slide readiness tracked in a ref-based map.
-   Key: slide index. Value: true if Bunny posted ready/timeupdate.
-   Tracked globally so next-slide readiness captured before activation. */
-const readyMapRef: Map<number, boolean> = new Map();
-const readyCbMap: Map<number, (() => void)[]> = new Map();
+const CDN = 'https://vz-b523719a-f10.b-cdn.net';
+const mp4Mobile = (id: string) => `${CDN}/${id}/play_720p.mp4`;
 
-function notifyReady(idx: number) {
-  readyMapRef.set(idx, true);
-  const cbs = readyCbMap.get(idx) ?? [];
-  cbs.forEach(cb => cb());
-  readyCbMap.delete(idx);
-}
+/* Mobile video IDs — 9:16 vertical videos */
+const MOBILE_MP4S: string[] = [
+  mp4Mobile('242d7ca2-1f1f-49a5-9af6-2c2a0e33bbf0'),  // Scene 1
+  mp4Mobile('ce8e510d-a51f-4bfa-afa2-cc0a7de29873'),  // Scene 2
+  mp4Mobile('22dfa7fc-f235-4c1c-bbc8-01634b089eba'),  // Scene 3
+  mp4Mobile('b302c616-81f8-4ff7-8d9e-f68869799af6'),  // Scene 4
+  mp4Mobile('ab8735ae-7a31-43aa-b311-8bbcf5a2f772'),  // Scene 5
+  mp4Mobile('39508299-0efa-4665-b479-0b78c8dbc02e'),  // Scene 6
+  mp4Mobile('772ec9eb-4370-4417-96af-2f8dd6ed9d93'),  // Scene 7
+  mp4Mobile('2417db4b-7b0c-46c8-89ff-e93870e59ba4'),  // Scene 8
+  mp4Mobile('4b31466d-071e-4178-b8be-e2477df6c2ee'),  // Scene 9
+  mp4Mobile('d58eb819-dc5d-4484-a6b2-c4de527f5112'),  // Scene 10
+];
 
-function onSlideReady(idx: number, cb: () => void) {
-  if (readyMapRef.get(idx)) { cb(); return; }
-  const cbs = readyCbMap.get(idx) ?? [];
-  cbs.push(cb);
-  readyCbMap.set(idx, cbs);
-}
-
-/* Single global Bunny postMessage listener */
-let globalListenerAdded = false;
-const iframeIndexMap = new Map<Window, number>();
-
-function addGlobalBunnyListener() {
-  if (globalListenerAdded) return;
-  globalListenerAdded = true;
-  window.addEventListener('message', (e: MessageEvent) => {
-    try {
-      const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-      const isReady =
-        d?.event === 'ready' ||
-        (d?.event === 'timeupdate' && (d?.seconds ?? 0) > 0) ||
-        d?.value === 'ready';
-      if (!isReady) return;
-      const idx = e.source ? iframeIndexMap.get(e.source as Window) : undefined;
-      if (idx !== undefined) notifyReady(idx);
-    } catch {}
-  }, { passive: true });
-}
-
-/* Individual slide */
+/* Single slide with native video */
 const MobileSlide = forwardRef<HTMLElement, {
   slide: Slide;
   idx: number;
   isActive: boolean;
   shouldMount: boolean;
-  coverClearedSet: Set<number>;
-  onCoverCleared: (idx: number) => void;
   onTrial: () => void;
-}>(function MobileSlide(
-  { slide, idx, isActive, shouldMount, coverClearedSet, onCoverCleared, onTrial }, ref
-) {
+}>(function MobileSlide({ slide, idx, isActive, shouldMount, onTrial }, ref) {
   const reduced = typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const coverRef  = useRef<HTMLDivElement>(null);
-  const coverCleared = coverClearedSet.has(idx);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
+  /* Play when active, pause when not */
   useEffect(() => {
-    if (!shouldMount) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
+    const v = videoRef.current;
+    if (!v) return;
+    if (isActive) {
+      v.currentTime = 0;
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  }, [isActive]);
 
-    /* Register iframe window for global listener */
-    addGlobalBunnyListener();
-    const tryRegister = () => {
-      if (iframe.contentWindow) iframeIndexMap.set(iframe.contentWindow, idx);
-    };
-    tryRegister();
-    iframe.addEventListener('load', tryRegister);
-
-    /* Reset readiness for this slot on remount */
-    readyMapRef.delete(idx);
-
-    const clearCover = () => {
-      if (coverRef.current) coverRef.current.style.opacity = '0';
-      onCoverCleared(idx);
-    };
-
-    /* Safety fallback — only if Bunny never posts */
-    const fallback = setTimeout(clearCover, 2500);
-    onSlideReady(idx, () => { clearTimeout(fallback); clearCover(); });
-
+  /* Pause when unmounted */
+  useEffect(() => {
     return () => {
-      clearTimeout(fallback);
-      iframe.removeEventListener('load', tryRegister);
-      if (iframe.contentWindow) iframeIndexMap.delete(iframe.contentWindow);
+      const v = videoRef.current;
+      if (v) v.pause();
     };
-  }, [shouldMount, idx, onCoverCleared]);
+  }, []);
 
   return (
     <article
@@ -316,54 +284,50 @@ const MobileSlide = forwardRef<HTMLElement, {
         scrollSnapStop: 'always',
       }}
     >
+      {/* Native video — object-fit:cover fills screen perfectly */}
       {shouldMount ? (
-        <>
-          <iframe
-            ref={iframeRef}
-            src={eUrl(slide.mobileBunnyId)}
-            title={`Slide ${slide.id}: ${slide.headline}`}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            loading="eager"
-            aria-hidden="true"
-            tabIndex={-1}
-            style={{
-              position: 'absolute',
-              top: '-2px', left: '-2px',
-              width: 'calc(100% + 4px)',
-              height: 'calc(100% + 4px)',
-              border: 0, pointerEvents: 'none', display: 'block',
-            }}
-          />
-          <div
-            ref={coverRef}
-            aria-hidden="true"
-            style={{
-              position: 'absolute', inset: 0, zIndex: 3,
-              background: '#0d0b15',
-              opacity: coverCleared ? 0 : 1,
-              transition: 'opacity 350ms ease',
-              pointerEvents: 'none',
-            }}
-          />
-        </>
+        <video
+          ref={videoRef}
+          src={MOBILE_MP4S[idx]}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center',
+            display: 'block',
+            background: '#0d0b15',
+          }}
+        />
       ) : (
+        /* Placeholder for unmounted slides */
         <div aria-hidden="true" style={{
           position: 'absolute', inset: 0, background: '#0d0b15',
         }} />
       )}
 
+      {/* Gradient behind text */}
       <div aria-hidden="true" style={{
         position: 'absolute', inset: 0, zIndex: 2,
-        background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 55%, transparent 75%)',
+        background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.2) 55%, transparent 75%)',
         pointerEvents: 'none',
       }} />
 
+      {/* Text overlay */}
       <div style={{
         position: 'absolute',
         bottom: 'max(40px, env(safe-area-inset-bottom, 28px))',
-        left: '24px', right: '24px', zIndex: 4,
-        opacity: isActive ? 1 : 0.25,
-        transform: reduced ? 'none' : `translateY(${isActive ? 0 : 8}px)`,
+        left: '24px', right: '24px',
+        zIndex: 3,
+        opacity: isActive ? 1 : 0.2,
+        transform: reduced ? 'none' : `translateY(${isActive ? 0 : 10}px)`,
         transition: reduced ? 'none' : 'opacity 450ms ease, transform 450ms ease',
       }}>
         <div style={{
@@ -384,16 +348,17 @@ const MobileSlide = forwardRef<HTMLElement, {
         {slide.isFinal && (
           <button className="gbtn"
             style={{ width: '100%', fontSize: '15px', padding: '14px' }}
-            onClick={onTrial}>
+            onClick={onTrial} aria-label="Start free trial">
             Start Free Trial
           </button>
         )}
       </div>
 
+      {/* Slide counter */}
       <div className="font-mono" style={{
-        position: 'absolute', top: '20px', left: '20px', zIndex: 5,
+        position: 'absolute', top: '20px', left: '20px', zIndex: 4,
         fontSize: '10px', fontWeight: 800, letterSpacing: '0.15em',
-        color: isActive ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.2)',
+        color: isActive ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.18)',
         transition: 'color 400ms ease',
       }}>
         {String(slide.id).padStart(2,'0')} / {String(N).padStart(2,'0')}
@@ -405,6 +370,7 @@ const MobileSlide = forwardRef<HTMLElement, {
 function MobileStory({ onTrial }: { onTrial: () => void }) {
   const reduced = typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
   const sectionRef   = useRef<HTMLDivElement>(null);
   const slideRefs    = useRef<(HTMLElement|null)[]>(Array(N).fill(null));
   const mountedRef   = useRef(true);
@@ -412,11 +378,11 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
   const inViewRef    = useRef(false);
   const snapTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
 
-  const [active,         setActive]         = useState(0);
-  const [mountedSet,     setMountedSet]     = useState<Set<number>>(() => new Set([0, 1]));
-  const [coverClearedSet, setCoverCleared]  = useState<Set<number>>(() => new Set());
-
-  const mountedSetRef = useRef(new Set([0, 1]));
+  const [active,     setActive]     = useState(0);
+  /* Only active + next mounted — max 2 videos decoding at once */
+  const [mountedSet, setMountedSet] = useState<Set<number>>(
+    () => new Set([0, 1])
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -426,85 +392,83 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
     };
   }, []);
 
-  const handleCoverCleared = useCallback((idx: number) => {
-    if (!mountedRef.current) return;
-    setCoverCleared(prev => {
-      if (prev.has(idx)) return prev;
-      return new Set([...prev, idx]);
-    });
-
-    /* Previous removal: only after incoming is confirmed ready */
-    const cur = activeRef.current;
-    const prevIdx = cur - 1;
-    if (idx === cur && prevIdx >= 0) {
-      setTimeout(() => {
-        if (!mountedRef.current) return;
-        setMountedSet(s => {
-          if (!s.has(prevIdx)) return s;
-          if (prevIdx === activeRef.current) return s;
-          if (prevIdx === Math.min(N-1, activeRef.current+1)) return s;
-          const n = new Set(s); n.delete(prevIdx);
-          mountedSetRef.current = n;
-          return n;
-        });
-      }, 350);
-    }
-  }, []);
-
   const goTo = useCallback((idx: number) => {
     if (!mountedRef.current) return;
     const prev = activeRef.current;
     if (prev === idx) return;
     activeRef.current = idx;
     setActive(idx);
-    const next = Math.min(N-1, idx+1);
-    const s = new Set([idx, next, prev].filter(i => i >= 0 && i < N));
-    mountedSetRef.current = s;
-    setMountedSet(new Set(s));
+
+    const next = Math.min(N - 1, idx + 1);
+    /* Keep previous briefly so there's no gap during transition */
+    const newSet = new Set([idx, next]);
+    if (prev >= 0 && prev < N) newSet.add(prev);
+    setMountedSet(new Set(newSet));
+
+    /* Remove previous after transition completes */
+    setTimeout(() => {
+      if (!mountedRef.current) return;
+      setMountedSet(s => {
+        const n = new Set(s);
+        if (prev !== activeRef.current &&
+            prev !== Math.min(N-1, activeRef.current+1)) {
+          n.delete(prev);
+        }
+        return n;
+      });
+    }, 600);
   }, []);
 
+  /* IntersectionObserver per slide */
   useEffect(() => {
-    const obs: IntersectionObserver[] = [];
+    const observers: IntersectionObserver[] = [];
     SLIDES.forEach((_, i) => {
       const el = slideRefs.current[i];
       if (!el) return;
-      const o = new IntersectionObserver(entries => {
-        entries.forEach(e => { if (e.isIntersecting && mountedRef.current) goTo(i); });
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting && mountedRef.current) goTo(i);
+        });
       }, { threshold: 0.6 });
-      o.observe(el); obs.push(o);
+      obs.observe(el);
+      observers.push(obs);
     });
-    return () => obs.forEach(o => o.disconnect());
+    return () => observers.forEach(o => o.disconnect());
   }, [goTo]);
 
+  /* Section visibility guard */
   useEffect(() => {
     const s = sectionRef.current;
     if (!s) return;
-    const o = new IntersectionObserver(entries => {
+    const obs = new IntersectionObserver(entries => {
       entries.forEach(e => { inViewRef.current = e.isIntersecting; });
     }, { threshold: 0 });
-    o.observe(s);
-    return () => o.disconnect();
+    obs.observe(s);
+    return () => obs.disconnect();
   }, []);
 
+  /* Snap: scrollend preferred, 300ms debounce fallback
+     behavior:'auto' = instant correction, no second animation */
   useEffect(() => {
     const doSnap = () => {
       if (!mountedRef.current || !inViewRef.current) return;
       const vh = window.innerHeight;
-      let bestEl: HTMLElement|null = null, bestDist = Infinity;
+      let bestEl: HTMLElement|null = null;
+      let bestDist = Infinity;
       slideRefs.current.forEach(el => {
         if (!el) return;
-        const d = Math.abs(el.getBoundingClientRect().top);
+        const d = Math.abs((el as HTMLElement).getBoundingClientRect().top);
         if (d < bestDist) { bestDist = d; bestEl = el as HTMLElement; }
       });
       if (!bestEl || bestDist > vh * 0.45 || bestDist < 6) return;
       (bestEl as HTMLElement).scrollIntoView({ behavior: 'auto', block: 'start' });
     };
 
-    /* scrollend preferred; debounce fallback for older browsers */
     const w = window as unknown as Record<string, unknown>;
     if ('onscrollend' in w) {
-      window.addEventListener('scrollend' as 'scroll', doSnap, { passive: true });
-      return () => window.removeEventListener('scrollend' as 'scroll', doSnap);
+      const we = window as unknown as { addEventListener: (e: string, h: () => void, o?: object) => void; removeEventListener: (e: string, h: () => void) => void };
+      we.addEventListener('scrollend', doSnap, { passive: true });
+      return () => we.removeEventListener('scrollend', doSnap);
     }
     const onScroll = () => {
       if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
@@ -518,19 +482,23 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
   }, []);
 
   return (
-    <div ref={sectionRef} style={{ scrollSnapType: reduced ? 'none' : 'y proximity' }}>
+    <div
+      ref={sectionRef}
+      style={{ scrollSnapType: reduced ? 'none' : 'y proximity' }}
+    >
       {SLIDES.map((slide, i) => (
         <MobileSlide
           key={slide.id}
           ref={(el: HTMLElement|null) => { slideRefs.current[i] = el; }}
-          slide={slide} idx={i}
+          slide={slide}
+          idx={i}
           isActive={active === i}
           shouldMount={mountedSet.has(i)}
-          coverClearedSet={coverClearedSet}
-          onCoverCleared={handleCoverCleared}
           onTrial={onTrial}
         />
       ))}
+
+      {/* Progress dots */}
       <div style={{
         position: 'fixed',
         bottom: 'max(12px, env(safe-area-inset-bottom, 8px))',
@@ -550,6 +518,7 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
     </div>
   );
 }
+
 
 /* ══════════════════════════════════════════════════════════════
    MAIN EXPORT
