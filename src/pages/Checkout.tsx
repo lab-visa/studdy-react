@@ -11,19 +11,10 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loadStripe } from '@stripe/stripe-js';
-import {
-  EmbeddedCheckout,
-  EmbeddedCheckoutProvider,
-} from '@stripe/react-stripe-js';
 import {
   REGION_DATA, COUNTRY_TO_REGION, type Region,
 } from '../data/config';
 import { track } from '../utils/analytics';
-
-const stripePromise = loadStripe(
-  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
-);
 
 type Plan = 'monthly' | 'yearly';
 
@@ -52,10 +43,6 @@ export default function Checkout() {
   const [region,  setRegion]  = useState<Region>('us');
   const [plan,    setPlan]    = useState<Plan>('yearly');
   const [showAll, setShowAll] = useState(false);
-  const [step,    setStep]    = useState<'select' | 'pay'>('select');
-  const [clientSecret, setClientSecret] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
 
   /* Detect country on mount */
   useEffect(() => {
@@ -70,43 +57,30 @@ export default function Checkout() {
     ? `${rd.symbol}${(parseFloat(rd.yearly.amount) / 12).toFixed(2)}/mo`
     : null;
 
-  /* Create Stripe session */
-  const handleStart = useCallback(async () => {
+  /* Redirect to Stripe Payment Link — works immediately, no extra setup */
+  const handleStart = useCallback(() => {
     if (!hasStripe) return;
     track('checkout_started', { region, plan });
-    setLoading(true);
-    setError('');
 
-    const { utmSource, utmCampaign } = getUTM();
+    const paymentLinks: Partial<Record<Region, Record<Plan, string>>> = {
+      us: {
+        monthly: 'https://buy.stripe.com/14A5kFavJdycddxbZd5J61h',
+        yearly:  'https://buy.stripe.com/eVqdRbgU7gKogpJ5AP5J61i',
+      },
+      uk: {
+        monthly: 'https://buy.stripe.com/5kQ6oJ0V99hWddxfbp5J61j',
+        yearly:  'https://buy.stripe.com/4gMaEZbzN79OehB5AP5J61k',
+      },
+    };
 
-    try {
-      const res = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priceId: planData.stripeId,
-          region,
-          utmSource,
-          utmCampaign,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-        setLoading(false);
-        return;
-      }
-
-      setClientSecret(data.clientSecret);
-      setStep('pay');
-    } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
+    const link = paymentLinks[region]?.[plan];
+    if (link) {
+      /* Append UTM and redirect URL to payment link */
+      const { utmSource, utmCampaign } = getUTM();
+      const fullLink = `${link}&utm_source=${utmSource}&utm_campaign=${utmCampaign}`;
+      window.location.href = fullLink;
     }
-  }, [hasStripe, plan, planData.stripeId, region]);
+  }, [hasStripe, plan, region]);
 
   const topRegions: Region[] = ['us', 'uk', 'uae', 'au', 'in'];
 
@@ -116,10 +90,10 @@ export default function Checkout() {
       <div className="w-full max-w-[560px]">
 
         {/* Back */}
-        <button onClick={() => step === 'pay' ? setStep('select') : navigate(-1)}
+        <button onClick={() => navigate(-1)}
           className="text-[13px] font-semibold mb-6 flex items-center gap-1"
           style={{ color: 'var(--soft)' }}>
-          ← {step === 'pay' ? 'Change plan' : 'Back'}
+          ← Back
         </button>
 
         <div className="bg-white rounded-3xl overflow-hidden"
@@ -138,8 +112,7 @@ export default function Checkout() {
 
           <div className="px-8 py-6">
 
-            {step === 'select' && (
-              <>
+            <>
                 {/* Plan toggle */}
                 <div className="flex gap-2 p-1 rounded-2xl mb-6"
                   style={{ background: 'var(--dim)' }}>
@@ -245,25 +218,15 @@ export default function Checkout() {
                   </div>
                 )}
 
-                {/* Error */}
-                {error && (
-                  <div className="rounded-xl p-3 mb-4 text-[13px] text-center"
-                    style={{ background: 'rgba(239,68,68,.06)', color: '#dc2626', border: '1px solid rgba(239,68,68,.2)' }}>
-                    {error}
-                  </div>
-                )}
-
                 {/* CTA */}
                 <button
                   className="gbtn w-full text-[15px] py-4 mb-4"
                   onClick={handleStart}
-                  disabled={loading || !hasStripe}
+                  disabled={!hasStripe}
                   style={{ opacity: !hasStripe ? 0.5 : 1 }}>
-                  {loading
-                    ? 'Preparing checkout...'
-                    : hasStripe
-                      ? `Start Free Trial — ${rd.symbol}0 today`
-                      : 'Coming Soon for Your Region'}
+                  {hasStripe
+                    ? `Start Free Trial — ${rd.symbol}0 today`
+                    : 'Coming Soon for Your Region'}
                 </button>
 
                 {/* Trust signals */}
@@ -276,22 +239,6 @@ export default function Checkout() {
                   ))}
                 </div>
               </>
-            )}
-
-            {/* Embedded Stripe checkout */}
-            {step === 'pay' && clientSecret && (
-              <div>
-                <div className="text-[13px] font-semibold mb-4 text-center" style={{ color: 'var(--soft)' }}>
-                  {plan === 'yearly' ? rd.yearly.display : rd.monthly.display} · 7-day free trial
-                </div>
-                <EmbeddedCheckoutProvider
-                  stripe={stripePromise}
-                  options={{ clientSecret }}>
-                  <EmbeddedCheckout />
-                </EmbeddedCheckoutProvider>
-              </div>
-            )}
-
           </div>
         </div>
 
