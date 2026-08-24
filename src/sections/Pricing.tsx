@@ -53,7 +53,7 @@ export default function Pricing() {
           {/* Monthly */}
           {(() => {
             const plan = PLANS[0];
-            const pd = plan.monthly[region];
+            const pd = plan.monthly[region as any];
             return (
               <div className="rounded-2xl p-8 flex flex-col" style={{ border: '1.5px solid var(--border)', background: '#fff' }}>
                 <div className="text-[12px] font-black uppercase tracking-wide mb-3" style={{ color: 'var(--soft)' }}>{plan.name}</div>
@@ -78,7 +78,7 @@ export default function Pricing() {
           {/* Annual — Best Value */}
           {(() => {
             const plan = PLANS[1];
-            const pd = plan.monthly[region];
+            const pd = plan.monthly[region as any];
             return (
               <div
                 className="rounded-2xl p-8 flex flex-col relative"

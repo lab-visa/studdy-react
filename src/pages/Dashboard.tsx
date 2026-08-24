@@ -10,7 +10,7 @@ export default function Dashboard() {
   const region = (location.state?.region ?? 'us') as Region;
 
   const plan = PLANS.find(p => p.id === planId) ?? PLANS[1];
-  const pd = plan.monthly[region];
+  const pd = plan.monthly[region as any];
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--dim)' }}>
