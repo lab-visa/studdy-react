@@ -62,13 +62,6 @@ export default function Header() {
 
           <div className="hidden md:flex items-center gap-3">
             <button
-              onClick={() => navigate('/dashboard')}
-              className="text-[13.5px] font-bold px-4 py-2 rounded-full transition-colors hover:bg-gray-50"
-              style={{ color: 'var(--soft)' }}
-            >
-              Log In
-            </button>
-            <button
               className="gbtn text-[13.5px] px-5 py-2.5"
               onClick={() => navigate('/checkout')}
             >
@@ -103,7 +96,6 @@ export default function Header() {
               </a>
             ))}
             <div className="py-3 flex gap-3">
-              <button className="gost flex-1 text-[14px] py-3" onClick={() => navigate('/dashboard')}>Log In</button>
               <button className="gbtn flex-1 text-[14px] py-3" onClick={() => { navigate('/checkout'); setMenuOpen(false); }}>Start Free Trial</button>
             </div>
           </div>

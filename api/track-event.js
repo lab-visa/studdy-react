@@ -59,6 +59,12 @@ export default async function handler(req, res) {
   const device_type = detectDevice(req.headers['user-agent'] || '');
   const now = new Date().toISOString();
 
+  /* Vercel adds these headers automatically on every request — no lookup
+   * needed, no extra API call, works even if the visitor's own browser
+   * blocks third-party IP-lookup services. */
+  const detected_country = req.headers['x-vercel-ip-country'] || null;
+  const detected_region = req.headers['x-vercel-ip-country-region'] || null;
+
   try {
     /* Existing visitor — just move their stage forward */
     if (lead_id) {
@@ -97,6 +103,8 @@ export default async function handler(req, res) {
         course_id: course_id || null,
         ip_address: ip,
         device_type,
+        detected_country,
+        detected_region,
         opened_at: now,
         stage: 'opened',
         status: 'lead',

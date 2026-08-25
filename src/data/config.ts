@@ -2,7 +2,14 @@
 // All pricing, Stripe Price IDs and regional data live here.
 // To change a price: update amount + stripeMonthlyId / stripeYearlyId.
 
-export const SUPPORT_WHATSAPP = 'https://wa.me/message/PLACEHOLDER';
+/* One shared support number for everyone for now (per Vish, Aug 2026).
+ * Locked decision was USA number for USA / UK number for everyone else —
+ * once the USA number exists, split this by region the same way pricing
+ * already is. */
+const SUPPORT_WHATSAPP_NUMBER  = '447587357644';
+const SUPPORT_WHATSAPP_MESSAGE = "Hi! I'm a Studdy Lab customer and need some help.";
+export const SUPPORT_WHATSAPP =
+  `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(SUPPORT_WHATSAPP_MESSAGE)}`;
 export const SUPPORT_EMAIL    = 'hello@studdylab.com';
 export const TRIAL_DAYS       = 7;
 

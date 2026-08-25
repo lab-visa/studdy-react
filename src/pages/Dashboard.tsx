@@ -1,14 +1,18 @@
 /**
- * Dashboard.tsx — User Dashboard
+ * Dashboard.tsx — Customer Dashboard
  *
- * Flow:
- * 1. User arrives from Stripe with ?session_id=xxx
- * 2. We call /api/get-session to fetch their details
- * 3. Show their Studdy credentials + subscription info
- * 4. Returning users enter email → get magic link
+ * Flow (no login, ever — this is the whole point of the design):
+ * 1. Customer arrives from Stripe (or from their saved link) with
+ *    ?session_id=xxx in the URL.
+ * 2. We call /api/get-session to fetch their details.
+ * 3. Show their Studdy credentials + subscription info.
+ * There is no account, no password to remember, no "log out" — the link
+ * itself IS their access. If someone lands here with no session_id, we
+ * point them to WhatsApp to get their link resent, not a fake login form.
  */
 import { useState, useEffect } from 'react';
-import { Check, Copy, ExternalLink, LogOut, AlertCircle } from 'lucide-react';
+import { Check, Copy, ExternalLink, AlertCircle, Laptop, FileText } from 'lucide-react';
+import { SUPPORT_WHATSAPP } from '../data/config';
 
 interface UserData {
   name: string;
@@ -22,6 +26,9 @@ interface UserData {
   studdyEmail: string;
   studdyPassword: string;
   studdyUrl: string;
+  totalMonthsPaid: number;
+  latestInvoiceUrl: string | null;
+  cancelRequestedAt: string | null;
 }
 
 /* Copy to clipboard helper */
@@ -43,91 +50,60 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function Dashboard() {
-  const [step,    setStep]    = useState<'loading' | 'dashboard' | 'login' | 'cancel'>('loading');
-  const [user,    setUser]    = useState<UserData | null>(null);
-  const [email,   setEmail]   = useState('');
-  const [sending, setSending] = useState(false);
-  const [sent,    setSent]    = useState(false);
+  const [step, setStep] = useState<'loading' | 'dashboard' | 'no-link' | 'cancel'>('loading');
+  const [user, setUser] = useState<UserData | null>(null);
   const [showPwd, setShowPwd] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [cancelText,   setCancelText]   = useState('');
-  const [cancelSent,   setCancelSent]   = useState(false);
+  const [cancelText, setCancelText] = useState('');
+  const [cancelSent, setCancelSent] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [sessionId, setSessionId] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const params    = new URLSearchParams(window.location.search);
-    const sessionId = params.get('session_id');
-    const token     = params.get('token');
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get('session_id');
 
-    if (sessionId) {
-      /* Coming from Stripe — fetch session details */
-      fetchSession(sessionId);
-    } else if (token) {
-      /* Coming from magic link */
-      fetchByToken(token);
+    if (sid) {
+      setSessionId(sid);
+      fetchSession(sid);
     } else {
-      /* Returning user — show login */
-      setStep('login');
+      setStep('no-link');
     }
   }, []);
 
-  const fetchSession = async (sessionId: string) => {
+  const fetchSession = async (sid: string) => {
     try {
-      const res  = await fetch(`/api/get-session?session_id=${sessionId}`);
+      const res = await fetch(`/api/get-session?session_id=${sid}`);
       const data = await res.json();
-      if (data.error) { setError(data.error); setStep('login'); return; }
+      if (data.error) { setError(data.error); setStep('no-link'); return; }
       setUser(data);
       setStep('dashboard');
     } catch {
-      setError('Could not load your dashboard. Please log in.');
-      setStep('login');
-    }
-  };
-
-  const fetchByToken = async (token: string) => {
-    try {
-      const res  = await fetch(`/api/verify-token?token=${token}`);
-      const data = await res.json();
-      if (data.error) { setError(data.error); setStep('login'); return; }
-      setUser(data);
-      setStep('dashboard');
-    } catch {
-      setError('Link expired. Please log in again.');
-      setStep('login');
-    }
-  };
-
-  const handleMagicLink = async () => {
-    if (!email) return;
-    setSending(true);
-    try {
-      await fetch('/api/send-magic-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      setSent(true);
-    } catch {
-      setError('Could not send login link. Please try again.');
-    } finally {
-      setSending(false);
+      setError('Could not load your dashboard.');
+      setStep('no-link');
     }
   };
 
   const handleCancelRequest = async () => {
+    setCancelSubmitting(true);
     try {
-      await fetch('/api/cancel-request', {
+      const res = await fetch('/api/cancel-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: user?.email,
+          session_id: sessionId,
           reason: cancelReason,
           message: cancelText,
         }),
       });
+      const data = await res.json();
+      if (data.error) { setError(data.error); return; }
       setCancelSent(true);
     } catch {
       setError('Could not submit request. Please WhatsApp us directly.');
+    } finally {
+      setCancelSubmitting(false);
     }
   };
 
@@ -143,61 +119,30 @@ export default function Dashboard() {
     );
   }
 
-  /* ── Login ── */
-  if (step === 'login') {
+  /* ── No link found — no login form, just point to WhatsApp ── */
+  if (step === 'no-link') {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--dim)' }}>
         <div className="w-full max-w-[420px]">
-          <div className="bg-white rounded-3xl p-8" style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.08)' }}>
-            <div className="text-center mb-6">
-              <div className="font-black text-[22px] mb-1"><span className="grad-text">studdy</span></div>
-              <div className="text-[14px] font-semibold" style={{ color: 'var(--soft)' }}>
-                Access your dashboard
-              </div>
-            </div>
-
+          <div className="bg-white rounded-3xl p-8 text-center" style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.08)' }}>
+            <div className="font-black text-[22px] mb-4"><span className="grad-text">studdy</span></div>
             {error && (
-              <div className="rounded-xl p-3 mb-4 text-[13px]"
+              <div className="rounded-xl p-3 mb-4 text-[13px] text-left"
                 style={{ background: 'rgba(239,68,68,.06)', color: '#dc2626', border: '1px solid rgba(239,68,68,.2)' }}>
                 {error}
               </div>
             )}
-
-            {!sent ? (
-              <>
-                <label className="block text-[11.5px] font-black uppercase tracking-wide mb-1.5"
-                  style={{ color: 'var(--soft)' }}>
-                  Email address you used to sign up
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleMagicLink()}
-                  placeholder="parent@gmail.com"
-                  className="w-full px-4 py-3 rounded-xl text-[14px] mb-4"
-                  style={{ border: '1.5px solid var(--border)', outline: 'none' }}
-                />
-                <button className="gbtn w-full text-[14px] py-3"
-                  onClick={handleMagicLink} disabled={sending || !email}>
-                  {sending ? 'Sending...' : 'Send me a login link'}
-                </button>
-                <p className="text-center text-[12px] mt-3" style={{ color: 'var(--soft)' }}>
-                  We will email you a secure link. No password needed.
-                </p>
-              </>
-            ) : (
-              <div className="text-center py-4">
-                <div className="text-[32px] mb-3">📧</div>
-                <div className="font-black text-[16px] mb-2" style={{ color: 'var(--ink)' }}>
-                  Check your email
-                </div>
-                <div className="text-[13px]" style={{ color: 'var(--soft)' }}>
-                  We sent a login link to <strong>{email}</strong>.
-                  Click the link to access your dashboard.
-                </div>
-              </div>
-            )}
+            <div className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>
+              We couldn't find your dashboard link
+            </div>
+            <div className="text-[13px] mb-6" style={{ color: 'var(--soft)' }}>
+              Every Studdy Lab customer gets a personal link — the same one you got
+              right after signing up. Message us on WhatsApp and we'll resend it to you.
+            </div>
+            <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer"
+              className="gbtn w-full text-[14px] py-3 flex items-center justify-center gap-2">
+              💬 WhatsApp Support
+            </a>
           </div>
         </div>
       </div>
@@ -221,8 +166,8 @@ export default function Dashboard() {
                   Request cancellation
                 </div>
                 <div className="text-[13px] mb-6" style={{ color: 'var(--soft)' }}>
-                  We will contact you within 24 hours to help resolve any issues
-                  before cancelling your subscription.
+                  We'll stop future billing right away and reach out on WhatsApp within 24
+                  hours in case there's anything we can help with first.
                 </div>
 
                 <label className="block text-[11.5px] font-black uppercase tracking-wide mb-1.5"
@@ -254,11 +199,11 @@ export default function Dashboard() {
 
                 <button className="w-full py-3 rounded-xl text-[14px] font-bold mb-3"
                   style={{ background: 'var(--dim)', color: 'var(--ink)', border: '1.5px solid var(--border)' }}
-                  onClick={handleCancelRequest} disabled={!cancelReason}>
-                  Submit cancellation request
+                  onClick={handleCancelRequest} disabled={!cancelReason || cancelSubmitting}>
+                  {cancelSubmitting ? 'Submitting...' : 'Submit cancellation request'}
                 </button>
                 <p className="text-center text-[12px]" style={{ color: 'var(--soft)' }}>
-                  Your subscription remains active until we process this request.
+                  You will not be charged again after this is submitted.
                 </p>
               </>
             ) : (
@@ -266,8 +211,8 @@ export default function Dashboard() {
                 <div className="text-[40px] mb-4">✅</div>
                 <div className="font-black text-[18px] mb-2">Request received</div>
                 <div className="text-[13px]" style={{ color: 'var(--soft)' }}>
-                  We will contact you on WhatsApp within 24 hours.
-                  Your access continues until we process this.
+                  Future billing has been stopped. We'll message you on WhatsApp within
+                  24 hours in case there's anything we can help with.
                 </div>
               </div>
             )}
@@ -278,8 +223,9 @@ export default function Dashboard() {
   }
 
   /* ── Main Dashboard ── */
-  const isTrialing = user?.status === 'trialing';
-  const isActive   = user?.status === 'active';
+  const isTrialing = user?.status === 'Trialing';
+  const isActive   = user?.status === 'Active';
+  const alreadyRequestedCancel = Boolean(user?.cancelRequestedAt);
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--dim)' }}>
@@ -288,27 +234,37 @@ export default function Dashboard() {
       <header className="bg-white h-16 flex items-center justify-between px-6 sticky top-0 z-50"
         style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="font-black text-[20px]"><span className="grad-text">studdy</span></div>
-        <div className="flex items-center gap-3">
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--soft)' }}>
-            {user?.email}
-          </span>
-          <button onClick={() => setStep('login')} title="Log out"
-            className="p-2 rounded-xl" style={{ color: 'var(--soft)' }}>
-            <LogOut size={16} />
-          </button>
-        </div>
+        <span className="text-[13px] font-semibold" style={{ color: 'var(--soft)' }}>
+          {user?.email}
+        </span>
       </header>
 
       <div className="max-w-[680px] mx-auto px-4 py-10">
 
         {/* Welcome */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="font-black text-[24px]" style={{ color: 'var(--ink)' }}>
-            Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋
+            Welcome{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 🎉
           </h1>
           <p className="text-[14px] mt-1" style={{ color: 'var(--soft)' }}>
-            Your Studdy access is ready below.
+            You're all set — this page is your permanent link. Save it or keep it in
+            WhatsApp; you can come back to it any time.
           </p>
+        </div>
+
+        {/* Desktop-only notice */}
+        <div className="rounded-2xl p-4 mb-6 flex items-start gap-3"
+          style={{ background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.2)' }}>
+          <Laptop size={18} style={{ color: '#4f46e5', flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div className="font-black text-[13px]" style={{ color: '#3730a3' }}>
+              Open Studdy AI on a laptop, desktop, or tablet
+            </div>
+            <div className="text-[12px]" style={{ color: '#3730a3' }}>
+              It doesn't work properly on a phone browser yet. This dashboard page is
+              fine on mobile — just switch devices when you're ready to start using Studdy.
+            </div>
+          </div>
         </div>
 
         {/* Status banner */}
@@ -323,6 +279,18 @@ export default function Dashboard() {
               <div className="text-[12px]" style={{ color: '#92400e' }}>
                 Your card will be charged {user?.amount} on {user?.trialEnds}. Cancel anytime before then.
               </div>
+            </div>
+          </div>
+        )}
+
+        {alreadyRequestedCancel && (
+          <div className="rounded-2xl p-4 mb-6"
+            style={{ background: 'rgba(107,114,128,.08)', border: '1px solid rgba(107,114,128,.25)' }}>
+            <div className="font-black text-[13px]" style={{ color: 'var(--ink)' }}>
+              Cancellation requested
+            </div>
+            <div className="text-[12px]" style={{ color: 'var(--soft)' }}>
+              You won't be charged again. Your access stays on until then.
             </div>
           </div>
         )}
@@ -348,9 +316,10 @@ export default function Dashboard() {
               How to get started
             </div>
             {[
-              'Go to studdyai.com and click Sign In',
+              `Open the URL ${user?.studdyUrl ?? 'https://studdyai.com/sign-in'}`,
               'Click "Sign in with Google"',
-              'Use the email and password below',
+              'Click "Use another account"',
+              'Enter the email and password below',
               'Start asking questions — type or speak anything',
             ].map((step, i) => (
               <div key={i} className="flex items-start gap-3 mb-2">
@@ -432,7 +401,10 @@ export default function Dashboard() {
               { label: 'Plan', value: user?.plan ?? '—' },
               { label: 'Status', value: isTrialing ? '🟡 Trial' : isActive ? '🟢 Active' : user?.status ?? '—' },
               { label: 'Amount', value: user?.amount ?? '—' },
-              { label: 'Next billing', value: user?.nextBilling ?? '—' },
+              { label: isTrialing ? 'First payment' : 'Next billing', value: user?.nextBilling ?? '—' },
+              ...(user && user.totalMonthsPaid > 0
+                ? [{ label: 'Payments made', value: String(user.totalMonthsPaid) }]
+                : []),
             ].map(row => (
               <div key={row.label} className="flex justify-between items-center py-2"
                 style={{ borderBottom: '1px solid var(--border)' }}>
@@ -441,22 +413,32 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+
+          {user?.latestInvoiceUrl && (
+            <a href={user.latestInvoiceUrl} target="_blank" rel="noopener noreferrer"
+              className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[13px] font-bold"
+              style={{ background: 'var(--dim)', color: 'var(--ink)', border: '1px solid var(--border)' }}>
+              <FileText size={14} /> View latest invoice
+            </a>
+          )}
         </div>
 
         {/* Support + Cancel */}
         <div className="bg-white rounded-2xl p-6 mb-4"
           style={{ border: '1.5px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }}>
           <div className="font-black text-[15px] mb-4" style={{ color: 'var(--ink)' }}>Need help?</div>
-          <a href="https://wa.me/message/PLACEHOLDER" target="_blank" rel="noopener noreferrer"
+          <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer"
             className="gbtn w-full text-[14px] py-3 flex items-center justify-center gap-2 mb-3">
             💬 WhatsApp Support
           </a>
-          <button
-            onClick={() => setStep('cancel')}
-            className="w-full py-3 rounded-xl text-[13px] font-semibold transition-all"
-            style={{ color: 'var(--soft)', background: 'transparent', border: 'none' }}>
-            Request cancellation
-          </button>
+          {!alreadyRequestedCancel && (
+            <button
+              onClick={() => setStep('cancel')}
+              className="w-full py-3 rounded-xl text-[13px] font-semibold transition-all"
+              style={{ color: 'var(--soft)', background: 'transparent', border: 'none' }}>
+              Request cancellation
+            </button>
+          )}
         </div>
 
       </div>

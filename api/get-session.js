@@ -6,6 +6,11 @@
  * this payment completed) — that's where the REAL assigned Studdy account
  * lives, and it stays correct even if their status changes later.
  *
+ * Studdy login shown is looked up LIVE from studdy_accounts by group_name,
+ * not read off the frozen copy on the lead row — so if Vish changes a
+ * group's email/password/URL once in studdy_accounts, every customer in
+ * that group sees the new value immediately, with no per-customer editing.
+ *
  * Fallback: if Supabase doesn't have this session yet (e.g. the webhook
  * hasn't run yet, which can take a couple of seconds), we ask Stripe
  * directly so the page still shows something instead of an error, using
@@ -13,21 +18,13 @@
  */
 import Stripe from 'stripe';
 import { getSupabase } from './_lib/supabase.js';
+import { mapStatus, fmtDate, resolveNextBilling } from './_lib/status.js';
 
 const FALLBACK_CREDENTIALS = {
   email: 'class1001@studdyai.org',
   password: 'StuddyLab2024!',
   url: 'https://studdyai.com',
 };
-
-const fmtDate = (isoDate) =>
-  isoDate
-    ? new Date(isoDate).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
-    : '—';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -49,6 +46,25 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (lead) {
+      /* Live lookup — current credentials for whichever group they're in,
+       * not the snapshot taken the day they signed up. */
+      let studdyEmail = lead.studdy_email || '';
+      let studdyPassword = lead.studdy_password || '';
+      let studdyUrl = lead.studdy_url || 'https://studdyai.com';
+
+      if (lead.group_name) {
+        const { data: group } = await supabase
+          .from('studdy_accounts')
+          .select('studdy_email, studdy_password, studdy_url')
+          .eq('group_name', lead.group_name)
+          .maybeSingle();
+        if (group) {
+          studdyEmail = group.studdy_email || studdyEmail;
+          studdyPassword = group.studdy_password || studdyPassword;
+          studdyUrl = group.studdy_url || studdyUrl;
+        }
+      }
+
       return res.status(200).json({
         name: lead.parent_name || '',
         email: lead.email || '',
@@ -57,9 +73,12 @@ export default async function handler(req, res) {
         amount: lead.currency && lead.amount ? `${lead.currency} ${lead.amount}` : '',
         nextBilling: fmtDate(lead.next_billing_date),
         trialEnds: fmtDate(lead.trial_end_date),
-        studdyEmail: lead.studdy_email || '',
-        studdyPassword: lead.studdy_password || '',
-        studdyUrl: lead.studdy_url || 'https://studdyai.com',
+        studdyEmail,
+        studdyPassword,
+        studdyUrl,
+        totalMonthsPaid: lead.total_months_paid ?? 0,
+        latestInvoiceUrl: lead.latest_invoice_url || null,
+        cancelRequestedAt: lead.cancel_requested_at || null,
       });
     }
   } catch (err) {
@@ -82,37 +101,26 @@ export default async function handler(req, res) {
 
     const sub = session.subscription;
     const customer = session.customer;
-
-    const fmt = (ts) =>
-      ts
-        ? new Date(ts * 1000).toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          })
-        : '—';
-
-    const trialEnd = sub?.trial_end;
-    const currentEnd = sub?.current_period_end;
-    const isTrialing = sub?.status === 'trialing';
+    const nextBilling = resolveNextBilling(sub);
+    const trialEnd = sub?.trial_end ? new Date(sub.trial_end * 1000).toISOString().slice(0, 10) : null;
 
     return res.status(200).json({
       name: customer?.name ?? '',
       email: customer?.email ?? session.customer_details?.email ?? '',
-      plan:
-        sub?.items?.data?.[0]?.price?.recurring?.interval === 'year'
-          ? 'Yearly'
-          : 'Monthly',
-      status: sub?.status ?? 'unknown',
+      plan: sub?.items?.data?.[0]?.price?.recurring?.interval === 'year' ? 'Yearly' : 'Monthly',
+      status: mapStatus(sub?.status),
       amount:
         sub?.items?.data?.[0]?.price?.currency?.toUpperCase() +
         ' ' +
         ((sub?.items?.data?.[0]?.price?.unit_amount ?? 0) / 100).toFixed(2),
-      nextBilling: fmt(isTrialing ? trialEnd : currentEnd),
-      trialEnds: fmt(trialEnd),
+      nextBilling: fmtDate(nextBilling),
+      trialEnds: fmtDate(trialEnd),
       studdyEmail: FALLBACK_CREDENTIALS.email,
       studdyPassword: FALLBACK_CREDENTIALS.password,
       studdyUrl: FALLBACK_CREDENTIALS.url,
+      totalMonthsPaid: 0,
+      latestInvoiceUrl: null,
+      cancelRequestedAt: null,
     });
   } catch (err) {
     console.error('Stripe error:', err);
