@@ -90,7 +90,10 @@ export default function Checkout() {
        * match this payment back to the exact lead who started it. */
       const { utmSource, utmCampaign } = getUTM();
       const leadId = getLeadId();
-      let fullLink = `${link}&utm_source=${utmSource}&utm_campaign=${utmCampaign}`;
+      /* IMPORTANT: link has no existing "?" — the first param must start
+       * the query string with "?", not continue one that was never opened. */
+      const separator = link.includes('?') ? '&' : '?';
+      let fullLink = `${link}${separator}utm_source=${utmSource}&utm_campaign=${utmCampaign}`;
       if (leadId) {
         fullLink += `&client_reference_id=${encodeURIComponent(leadId)}`;
       }
