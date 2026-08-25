@@ -15,6 +15,7 @@ import {
   REGION_DATA, COUNTRY_TO_REGION, type Region,
 } from '../data/config';
 import { track } from '../utils/analytics';
+import { trackEvent, getLeadId } from '../utils/tracking';
 
 type Plan = 'monthly' | 'yearly';
 
@@ -49,6 +50,11 @@ export default function Checkout() {
     detectRegion().then(setRegion);
   }, []);
 
+  /* Log that this lead reached the checkout page */
+  useEffect(() => {
+    trackEvent('checkout_viewed');
+  }, []);
+
   const rd       = REGION_DATA[region];
   const planData = plan === 'monthly' ? rd.monthly : rd.yearly;
   const hasStripe = Boolean(planData.stripeId);
@@ -75,9 +81,19 @@ export default function Checkout() {
 
     const link = paymentLinks[region]?.[plan];
     if (link) {
-      /* Append UTM and redirect URL to payment link */
+      /* Log this click — don't block the redirect waiting for it */
+      trackEvent('trial_clicked');
+
+      /* Append UTM + our lead_id (as Stripe's client_reference_id) to the link.
+       * client_reference_id is a built-in Stripe field — it rides along through
+       * checkout and comes back on the completed session, so the webhook can
+       * match this payment back to the exact lead who started it. */
       const { utmSource, utmCampaign } = getUTM();
-      const fullLink = `${link}&utm_source=${utmSource}&utm_campaign=${utmCampaign}`;
+      const leadId = getLeadId();
+      let fullLink = `${link}&utm_source=${utmSource}&utm_campaign=${utmCampaign}`;
+      if (leadId) {
+        fullLink += `&client_reference_id=${encodeURIComponent(leadId)}`;
+      }
       window.location.href = fullLink;
     }
   }, [hasStripe, plan, region]);

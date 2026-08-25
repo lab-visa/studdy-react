@@ -1,6 +1,7 @@
 import { lazy, Suspense, Component, type ReactNode, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Home from './pages/Home';
+import { trackEvent } from './utils/tracking';
 
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
 const Checkout       = lazy(() => import('./pages/Checkout'));
@@ -119,6 +120,11 @@ function ScrollRestoration() {
 }
 
 function AppRoutes() {
+  /* Fire once per visit — creates/identifies this visitor's lead record */
+  useEffect(() => {
+    trackEvent('opened');
+  }, []);
+
   return (
     <>
       <ScrollRestoration />
