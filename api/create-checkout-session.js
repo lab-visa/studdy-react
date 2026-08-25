@@ -7,9 +7,9 @@
  *
  * Body: { priceId, region, utmSource, utmCampaign }
  */
-const Stripe = require('stripe');
+import Stripe from 'stripe';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   /* CORS headers */
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

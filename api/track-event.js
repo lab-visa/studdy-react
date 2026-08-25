@@ -13,7 +13,7 @@
  * Later calls (lead_id already known): just advances that lead's stage
  * and timestamp — never overwrites earlier data.
  */
-const { getSupabase } = require('./_lib/supabase');
+import { getSupabase } from './_lib/supabase.js';
 
 function detectDevice(ua = '') {
   if (/mobile/i.test(ua) && !/ipad|tablet/i.test(ua)) return 'mobile';
@@ -21,7 +21,7 @@ function detectDevice(ua = '') {
   return 'desktop';
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');

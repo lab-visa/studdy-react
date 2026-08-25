@@ -6,11 +6,11 @@
  * our own server (never in the browser). Never import this file
  * or use this key anywhere in src/ (the frontend).
  */
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
 
 let client;
 
-function getSupabase() {
+export function getSupabase() {
   if (!client) {
     const url = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,5 +27,3 @@ function getSupabase() {
   }
   return client;
 }
-
-module.exports = { getSupabase };

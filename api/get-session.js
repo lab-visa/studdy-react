@@ -3,7 +3,7 @@
  * Fetches Stripe session and returns user data for dashboard.
  * In production this also creates/fetches the user from Supabase.
  */
-const Stripe = require('stripe');
+import Stripe from 'stripe';
 
 /* 
  * Studdy credentials pool.
@@ -17,7 +17,7 @@ const STUDDY_CREDENTIALS = {
   url:      'https://studdyai.com',
 };
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const { session_id } = req.query;
