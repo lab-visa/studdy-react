@@ -166,8 +166,8 @@ export default function Dashboard() {
                   Request cancellation
                 </div>
                 <div className="text-[13px] mb-6" style={{ color: 'var(--soft)' }}>
-                  We'll stop future billing right away and reach out on WhatsApp within 24
-                  hours in case there's anything we can help with first.
+                  We will contact you on WhatsApp within 24 hours to help resolve any
+                  issues before cancelling your subscription.
                 </div>
 
                 <label className="block text-[11.5px] font-black uppercase tracking-wide mb-1.5"
@@ -203,7 +203,7 @@ export default function Dashboard() {
                   {cancelSubmitting ? 'Submitting...' : 'Submit cancellation request'}
                 </button>
                 <p className="text-center text-[12px]" style={{ color: 'var(--soft)' }}>
-                  You will not be charged again after this is submitted.
+                  Your subscription remains active until we process this request.
                 </p>
               </>
             ) : (
@@ -211,8 +211,8 @@ export default function Dashboard() {
                 <div className="text-[40px] mb-4">✅</div>
                 <div className="font-black text-[18px] mb-2">Request received</div>
                 <div className="text-[13px]" style={{ color: 'var(--soft)' }}>
-                  Future billing has been stopped. We'll message you on WhatsApp within
-                  24 hours in case there's anything we can help with.
+                  We will contact you on WhatsApp within 24 hours.
+                  Your access continues until we process this.
                 </div>
               </div>
             )}
@@ -290,7 +290,7 @@ export default function Dashboard() {
               Cancellation requested
             </div>
             <div className="text-[12px]" style={{ color: 'var(--soft)' }}>
-              You won't be charged again. Your access stays on until then.
+              We'll message you on WhatsApp within 24 hours. Your access stays on until then.
             </div>
           </div>
         )}

@@ -4,20 +4,15 @@
  *
  * Called from the dashboard's "Request cancellation" form.
  *
- * What it actually does (this used to be a stub that only logged to the
- * console — nothing was ever saved and nothing was ever cancelled):
- *   1. Looks up the customer's Stripe subscription from their session_id.
- *   2. Tells Stripe to cancel it at the END of the current billing
- *      period (cancel_at_period_end) — NOT immediately. That means: if
- *      they're still in the free trial, they keep access and are never
- *      charged; if they're a paying customer, they keep access through
- *      what they already paid for, then it stops. This is safer than an
- *      immediate cancel and matches the "access continues until we
- *      process this" copy already on the dashboard.
- *   3. Saves their reason + message + timestamp to Supabase so it shows
- *      up in reporting, and marks the lead's stage as 'cancel_requested'.
+ * IMPORTANT — this does NOT touch Stripe and does NOT stop billing.
+ * It only saves the customer's reason + message + timestamp to Supabase
+ * and marks the lead's stage as 'cancel_requested', so it shows up for
+ * Vish to review and follow up on WhatsApp within 24 hours, per the
+ * original plan. Actually cancelling the subscription in Stripe is a
+ * manual step Vish does himself after that conversation — this is
+ * intentional, not a bug: subscriptions must never be auto-cancelled
+ * from this endpoint.
  */
-import Stripe from 'stripe';
 import { getSupabase } from './_lib/supabase.js';
 
 export default async function handler(req, res) {
@@ -40,27 +35,12 @@ export default async function handler(req, res) {
   try {
     const { data: lead } = await supabase
       .from('leads')
-      .select('lead_id, stripe_subscription_id')
+      .select('lead_id')
       .eq('stripe_session_id', session_id)
       .maybeSingle();
 
     if (!lead) {
       return res.status(404).json({ error: 'We could not find your subscription. Please message us on WhatsApp instead.' });
-    }
-
-    if (lead.stripe_subscription_id) {
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-      try {
-        await stripe.subscriptions.update(lead.stripe_subscription_id, {
-          cancel_at_period_end: true,
-        });
-      } catch (err) {
-        /* If Stripe says it's already cancelled, that's fine — carry on
-         * and still record the request. Any other Stripe error, surface it. */
-        if (err?.code !== 'resource_missing') {
-          console.error('Stripe cancel error:', err.message);
-        }
-      }
     }
 
     await supabase
