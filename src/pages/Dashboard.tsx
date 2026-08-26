@@ -375,26 +375,26 @@ export default function Dashboard() {
           {/* Credentials */}
           <div className="space-y-3">
             {/* URL */}
-            <div className="flex items-center justify-between p-3 rounded-xl"
+            <div className="flex items-center justify-between gap-3 flex-wrap p-3 rounded-xl"
               style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: '#fff', border: '1px solid var(--border)' }}>
                   <Globe size={14} style={{ color: 'var(--g3)' }} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--soft)' }}>Website</div>
-                  <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>
+                  <div className="text-[14px] font-bold break-all" style={{ color: 'var(--ink)' }}>
                     {user?.studdyUrl ?? 'studdyai.com'}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <CopyButton text={user?.studdyUrl ?? 'studdyai.com'} />
                 <a href={user?.studdyUrl ?? 'https://studdyai.com'} target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg"
+                  className="flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap"
                   style={{ background: 'var(--grad)', color: '#fff' }}>
                   <ExternalLink size={11} /> Open
                 </a>
@@ -402,33 +402,33 @@ export default function Dashboard() {
             </div>
 
             {/* Email */}
-            <div className="flex items-center justify-between p-3 rounded-xl"
+            <div className="flex items-center justify-between gap-3 flex-wrap p-3 rounded-xl"
               style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: '#fff', border: '1px solid var(--border)' }}>
                   <Mail size={14} style={{ color: 'var(--g3)' }} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--soft)' }}>Google Account</div>
-                  <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>
+                  <div className="text-[14px] font-bold break-all" style={{ color: 'var(--ink)' }}>
                     {user?.studdyEmail ?? '—'}
                   </div>
                 </div>
               </div>
-              <CopyButton text={user?.studdyEmail ?? ''} />
+              <div className="flex-shrink-0"><CopyButton text={user?.studdyEmail ?? ''} /></div>
             </div>
 
             {/* Password */}
-            <div className="flex items-center justify-between p-3 rounded-xl"
+            <div className="flex items-center justify-between gap-3 flex-wrap p-3 rounded-xl"
               style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: '#fff', border: '1px solid var(--border)' }}>
                   <KeyRound size={14} style={{ color: 'var(--g3)' }} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--soft)' }}>Password</div>
                   <div className="text-[14px] font-bold font-mono" style={{ color: 'var(--ink)' }}>
@@ -436,9 +436,9 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => setShowPwd(v => !v)}
-                  className="text-[12px] font-bold px-3 py-1.5 rounded-lg"
+                  className="text-[12px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap"
                   style={{ background: '#fff', color: 'var(--soft)', border: '1px solid var(--border)' }}>
                   {showPwd ? 'Hide' : 'Show'}
                 </button>
