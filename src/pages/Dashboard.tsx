@@ -12,7 +12,7 @@
  */
 import { useState, useEffect } from 'react';
 import { Check, Copy, ExternalLink, Clock, Laptop, FileText, Globe, Mail, KeyRound, Sparkles } from 'lucide-react';
-import { SUPPORT_WHATSAPP } from '../data/config';
+import { SUPPORT_WHATSAPP, SUPPORT_EMAIL } from '../data/config';
 
 interface UserData {
   name: string;
@@ -166,8 +166,12 @@ export default function Dashboard() {
               right after signing up. Message us on WhatsApp and we'll resend it to you.
             </div>
             <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer"
-              className="gbtn w-full text-[14px] py-3 flex items-center justify-center gap-2">
+              className="gbtn w-full text-[14px] py-3 flex items-center justify-center gap-2 mb-3">
               💬 WhatsApp Support
+            </a>
+            <a href={`mailto:${SUPPORT_EMAIL}`}
+              className="gost w-full text-[14px] py-3 flex items-center justify-center gap-2">
+              <Mail size={15} /> {SUPPORT_EMAIL}
             </a>
           </div>
         </div>
@@ -484,6 +488,10 @@ export default function Dashboard() {
           <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer"
             className="gbtn w-full text-[14px] py-3 flex items-center justify-center gap-2 mb-3">
             💬 WhatsApp Support
+          </a>
+          <a href={`mailto:${SUPPORT_EMAIL}`}
+            className="gost w-full text-[14px] py-3 flex items-center justify-center gap-2 mb-3">
+            <Mail size={15} /> {SUPPORT_EMAIL}
           </a>
           {!alreadyRequestedCancel && (
             <button
