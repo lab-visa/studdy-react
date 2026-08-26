@@ -28,13 +28,22 @@
  *     -> customer or bank raised a dispute/chargeback -> flag it so we
  *        see it immediately, don't silently lose track of it
  *
+ *   customer.subscription.trial_will_end
+ *     -> 3 days left in someone's trial -> flags them so Vish can message
+ *        them on WhatsApp before they're charged (no auto-send yet)
+ *
+ *   charge.dispute.closed
+ *     -> a dispute we flagged earlier is now resolved (won/lost)
+ *
+ *   refund.created
+ *     -> a refund was issued (e.g. Vish refunding someone manually in
+ *        Stripe) -> logged so it's never lost track of
+ *
  * SECURITY: every request here is verified against Stripe's signature
  * (STRIPE_WEBHOOK_SECRET) so nobody but Stripe itself can trigger this.
  *
- * IMPORTANT — after deploying this file, go to Stripe Dashboard ->
- * Developers -> Webhooks -> (this endpoint) -> and make sure these 6
- * event types are all selected (checkout.session.completed was already
- * on; the other 5 are new and won't fire until you add them there).
+ * Vish has all Stripe event types enabled on this endpoint already, so
+ * no Stripe Dashboard changes are needed for the 3 newest ones above.
  */
 import Stripe from 'stripe';
 import { getSupabase } from './_lib/supabase.js';
@@ -98,6 +107,21 @@ async function findLeadBy(supabase, column, value) {
   if (!value) return null;
   const { data } = await supabase.from('leads').select('*').eq(column, value).maybeSingle();
   return data;
+}
+
+/* Disputes and refunds both come in attached to a charge ID, not a
+ * customer ID or subscription ID — look the charge up first to find
+ * which customer it belongs to, then match our lead by that. */
+async function findLeadByChargeId(stripe, supabase, chargeId) {
+  if (!chargeId) return null;
+  try {
+    const charge = await stripe.charges.retrieve(chargeId);
+    const customerId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
+    return await findLeadBy(supabase, 'stripe_customer_id', customerId);
+  } catch (err) {
+    console.error('Could not retrieve charge', chargeId, err.message);
+    return null;
+  }
 }
 
 export default async function handler(req, res) {
@@ -286,6 +310,70 @@ export default async function handler(req, res) {
     }
 
     /* ─────────────────────────────────────────────────────────────
+     * 3 days left in someone's trial. We don't have automatic WhatsApp
+     * sending wired up yet, so this doesn't message anyone by itself —
+     * it just flags the lead so Vish can filter for "trial ending soon"
+     * in Supabase and message them himself before they're charged.
+     * ───────────────────────────────────────────────────────────── */
+    if (event.type === 'customer.subscription.trial_will_end') {
+      const sub = event.data.object;
+      const lead = await findLeadBy(supabase, 'stripe_subscription_id', sub.id);
+      if (lead && lead.stage === 'trial_started') {
+        await supabase
+          .from('leads')
+          .update({
+            stage: 'trial_ending_soon',
+            trial_ending_notified_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('lead_id', lead.lead_id);
+      }
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+     * A dispute we already flagged has now been resolved — won, lost,
+     * or closed. Records the outcome so it's never left hanging.
+     * ───────────────────────────────────────────────────────────── */
+    if (event.type === 'charge.dispute.closed') {
+      const dispute = event.data.object;
+      const lead = await findLeadByChargeId(stripe, supabase, dispute.charge);
+      if (lead) {
+        await supabase
+          .from('leads')
+          .update({
+            dispute_outcome: dispute.status || null,
+            dispute_closed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('lead_id', lead.lead_id);
+      }
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+     * A refund was issued (from Stripe directly, e.g. by Vish manually)
+     * — log it so it doesn't just vanish from our records. A full
+     * refund also flips their status so it's obvious at a glance.
+     * ───────────────────────────────────────────────────────────── */
+    if (event.type === 'refund.created') {
+      const refund = event.data.object;
+      const lead = await findLeadByChargeId(stripe, supabase, refund.charge);
+      if (lead) {
+        const refundAmount = (refund.amount ?? 0) / 100;
+        const isFullRefund = lead.amount != null && refundAmount >= Number(lead.amount);
+        await supabase
+          .from('leads')
+          .update({
+            refund_amount: refundAmount,
+            refund_reason: refund.reason || null,
+            refunded_at: new Date().toISOString(),
+            status: isFullRefund ? 'Refunded' : lead.status,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('lead_id', lead.lead_id);
+      }
+    }
+
+    /* ─────────────────────────────────────────────────────────────
      * Subscription actually ended — cancelled by us, by the customer's
      * bank, or the card kept failing until Stripe gave up. Free the seat.
      * ───────────────────────────────────────────────────────────── */
@@ -312,16 +400,7 @@ export default async function handler(req, res) {
      * ───────────────────────────────────────────────────────────── */
     if (event.type === 'charge.dispute.created') {
       const dispute = event.data.object;
-      /* dispute.charge is a charge ID, not a customer ID — look the charge
-       * up to get the customer, then match our lead by that. */
-      let customerId = null;
-      try {
-        const charge = await stripe.charges.retrieve(dispute.charge);
-        customerId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
-      } catch (err) {
-        console.error('Could not retrieve charge for dispute:', err.message);
-      }
-      const matched = customerId ? await findLeadBy(supabase, 'stripe_customer_id', customerId) : null;
+      const matched = await findLeadByChargeId(stripe, supabase, dispute.charge);
       if (matched) {
         await supabase
           .from('leads')

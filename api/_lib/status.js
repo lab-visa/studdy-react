@@ -52,3 +52,10 @@ export function resolveNextBilling(sub) {
   const currentPeriodEnd = item?.current_period_end ?? sub?.current_period_end;
   return toDate(currentPeriodEnd) || toDate(sub?.trial_end);
 }
+
+/** Whole days between now and a stored YYYY-MM-DD date, floored at 0. */
+export function daysUntil(isoDate) {
+  if (!isoDate) return null;
+  const ms = new Date(`${isoDate}T00:00:00Z`).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 86400000));
+}

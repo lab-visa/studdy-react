@@ -11,7 +11,7 @@
  * point them to WhatsApp to get their link resent, not a fake login form.
  */
 import { useState, useEffect } from 'react';
-import { Check, Copy, ExternalLink, AlertCircle, Laptop, FileText } from 'lucide-react';
+import { Check, Copy, ExternalLink, Clock, Laptop, FileText, Globe, Mail, KeyRound, Sparkles } from 'lucide-react';
 import { SUPPORT_WHATSAPP } from '../data/config';
 
 interface UserData {
@@ -23,6 +23,7 @@ interface UserData {
   currency: string;
   nextBilling: string;
   trialEnds: string;
+  daysLeftInTrial: number | null;
   studdyEmail: string;
   studdyPassword: string;
   studdyUrl: string;
@@ -30,6 +31,8 @@ interface UserData {
   latestInvoiceUrl: string | null;
   cancelRequestedAt: string | null;
 }
+
+const HERO_GRADIENT = 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)';
 
 /* Copy to clipboard helper */
 function CopyButton({ text }: { text: string }) {
@@ -46,6 +49,29 @@ function CopyButton({ text }: { text: string }) {
       {copied ? <Check size={12} /> : <Copy size={12} />}
       {copied ? 'Copied' : 'Copy'}
     </button>
+  );
+}
+
+/* Small colored pill for subscription status, instead of plain text */
+function StatusPill({ status, isTrialing }: { status: string; isTrialing: boolean }) {
+  const map: Record<string, { bg: string; fg: string; dot: string; label: string }> = {
+    Trialing:  { bg: 'rgba(245,158,11,.12)', fg: '#92400e', dot: '#d97706', label: 'Free Trial' },
+    Active:    { bg: 'rgba(34,197,94,.12)',  fg: '#166534', dot: '#16a34a', label: 'Active' },
+    Failed:    { bg: 'rgba(239,68,68,.12)',  fg: '#991b1b', dot: '#dc2626', label: 'Payment Failed' },
+    Paused:    { bg: 'rgba(107,114,128,.12)',fg: '#374151', dot: '#6b7280', label: 'Paused' },
+    Cancelled: { bg: 'rgba(107,114,128,.12)',fg: '#374151', dot: '#6b7280', label: 'Cancelled' },
+    Disputed:  { bg: 'rgba(239,68,68,.12)',  fg: '#991b1b', dot: '#dc2626', label: 'Disputed' },
+    Refunded:  { bg: 'rgba(107,114,128,.12)',fg: '#374151', dot: '#6b7280', label: 'Refunded' },
+  };
+  const s = map[status] ?? { bg: 'var(--dim)', fg: 'var(--soft)', dot: 'var(--soft)', label: status || '—' };
+  const label = isTrialing ? map.Trialing.label : s.label;
+  const style = isTrialing ? map.Trialing : s;
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-bold"
+      style={{ background: style.bg, color: style.fg }}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: style.dot }} />
+      {label}
+    </span>
   );
 }
 
@@ -110,7 +136,7 @@ export default function Dashboard() {
   /* ── Loading ── */
   if (step === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dim)' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: HERO_GRADIENT }}>
         <div className="text-center">
           <div className="font-black text-[22px] mb-2"><span className="grad-text">studdy</span></div>
           <div className="text-[14px]" style={{ color: 'var(--soft)' }}>Loading your dashboard...</div>
@@ -122,7 +148,7 @@ export default function Dashboard() {
   /* ── No link found — no login form, just point to WhatsApp ── */
   if (step === 'no-link') {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--dim)' }}>
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: HERO_GRADIENT }}>
         <div className="w-full max-w-[420px]">
           <div className="bg-white rounded-3xl p-8 text-center" style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.08)' }}>
             <div className="font-black text-[22px] mb-4"><span className="grad-text">studdy</span></div>
@@ -159,7 +185,7 @@ export default function Dashboard() {
             style={{ color: 'var(--soft)' }}>
             ← Back to dashboard
           </button>
-          <div className="bg-white rounded-3xl p-8" style={{ border: '1.5px solid var(--border)' }}>
+          <div className="bg-white rounded-3xl p-8" style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.08)' }}>
             {!cancelSent ? (
               <>
                 <div className="font-black text-[18px] mb-1" style={{ color: 'var(--ink)' }}>
@@ -224,8 +250,8 @@ export default function Dashboard() {
 
   /* ── Main Dashboard ── */
   const isTrialing = user?.status === 'Trialing';
-  const isActive   = user?.status === 'Active';
   const alreadyRequestedCancel = Boolean(user?.cancelRequestedAt);
+  const amountLabel = isTrialing ? "You'll be charged" : 'Amount';
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--dim)' }}>
@@ -239,52 +265,61 @@ export default function Dashboard() {
         </span>
       </header>
 
-      <div className="max-w-[680px] mx-auto px-4 py-10">
-
-        {/* Welcome */}
-        <div className="mb-6">
-          <h1 className="font-black text-[24px]" style={{ color: 'var(--ink)' }}>
+      {/* Hero welcome band — same gradient language as checkout, so this
+          doesn't suddenly feel like a different, plainer product the
+          moment someone's card is charged. */}
+      <div className="px-4 pt-10 pb-8" style={{ background: HERO_GRADIENT }}>
+        <div className="max-w-[680px] mx-auto">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles size={18} style={{ color: 'var(--g3)' }} />
+            <span className="text-[12px] font-black uppercase tracking-wide" style={{ color: 'var(--g3)' }}>
+              You're in
+            </span>
+          </div>
+          <h1 className="font-black text-[28px] mb-1" style={{ color: 'var(--ink)' }}>
             Welcome{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 🎉
           </h1>
-          <p className="text-[14px] mt-1" style={{ color: 'var(--soft)' }}>
-            You're all set — this page is your permanent link. Save it or keep it in
-            WhatsApp; you can come back to it any time.
+          <p className="text-[14px] mb-4" style={{ color: 'var(--soft)' }}>
+            This page is your permanent link — save it or keep it in WhatsApp, you can
+            come back to it any time.
           </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill status={user?.status ?? ''} isTrialing={isTrialing} />
+            {isTrialing && user?.daysLeftInTrial != null && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold bg-white"
+                style={{ color: 'var(--ink)', border: '1px solid var(--border)' }}>
+                <Clock size={12} style={{ color: 'var(--g4)' }} />
+                {user.daysLeftInTrial === 0
+                  ? 'Trial ends today'
+                  : `${user.daysLeftInTrial} day${user.daysLeftInTrial === 1 ? '' : 's'} left in your trial`}
+              </span>
+            )}
+          </div>
         </div>
+      </div>
+
+      <div className="max-w-[680px] mx-auto px-4 -mt-2 pb-10">
 
         {/* Desktop-only notice */}
-        <div className="rounded-2xl p-4 mb-6 flex items-start gap-3"
-          style={{ background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.2)' }}>
-          <Laptop size={18} style={{ color: '#4f46e5', flexShrink: 0, marginTop: 2 }} />
+        <div className="rounded-2xl p-5 mb-5 flex items-center gap-4 bg-white"
+          style={{ border: '1.5px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }}>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--grad)' }}>
+            <Laptop size={20} color="#fff" />
+          </div>
           <div>
-            <div className="font-black text-[13px]" style={{ color: '#3730a3' }}>
-              Open Studdy AI on a laptop, desktop, or tablet
+            <div className="font-black text-[14px] mb-0.5" style={{ color: 'var(--ink)' }}>
+              Switch to Desktop
             </div>
-            <div className="text-[12px]" style={{ color: '#3730a3' }}>
-              It doesn't work properly on a phone browser yet. This dashboard page is
-              fine on mobile — just switch devices when you're ready to start using Studdy.
+            <div className="text-[12.5px]" style={{ color: 'var(--soft)' }}>
+              The interactive whiteboard works best on a larger screen. Open the link on
+              your laptop or desktop for the full experience.
             </div>
           </div>
         </div>
 
-        {/* Status banner */}
-        {isTrialing && (
-          <div className="rounded-2xl p-4 mb-6 flex items-center gap-3"
-            style={{ background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)' }}>
-            <AlertCircle size={18} style={{ color: '#d97706', flexShrink: 0 }} />
-            <div>
-              <div className="font-black text-[13px]" style={{ color: '#92400e' }}>
-                Free trial active — ends {user?.trialEnds}
-              </div>
-              <div className="text-[12px]" style={{ color: '#92400e' }}>
-                Your card will be charged {user?.amount} on {user?.trialEnds}. Cancel anytime before then.
-              </div>
-            </div>
-          </div>
-        )}
-
         {alreadyRequestedCancel && (
-          <div className="rounded-2xl p-4 mb-6"
+          <div className="rounded-2xl p-4 mb-5"
             style={{ background: 'rgba(107,114,128,.08)', border: '1px solid rgba(107,114,128,.25)' }}>
             <div className="font-black text-[13px]" style={{ color: 'var(--ink)' }}>
               Cancellation requested
@@ -296,8 +331,9 @@ export default function Dashboard() {
         )}
 
         {/* Studdy Access Card */}
-        <div className="bg-white rounded-2xl p-6 mb-4"
+        <div className="bg-white rounded-2xl p-6 mb-5 overflow-hidden relative"
           style={{ border: '1.5px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }}>
+          <div className="absolute top-0 left-0 right-0 h-1" style={{ background: 'var(--grad)' }} />
           <div className="flex items-center gap-2 mb-5">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ background: 'var(--grad)' }}>
@@ -337,11 +373,17 @@ export default function Dashboard() {
             {/* URL */}
             <div className="flex items-center justify-between p-3 rounded-xl"
               style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
-                  style={{ color: 'var(--soft)' }}>Website</div>
-                <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>
-                  {user?.studdyUrl ?? 'studdyai.com'}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: '#fff', border: '1px solid var(--border)' }}>
+                  <Globe size={14} style={{ color: 'var(--g3)' }} />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
+                    style={{ color: 'var(--soft)' }}>Website</div>
+                  <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>
+                    {user?.studdyUrl ?? 'studdyai.com'}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -358,11 +400,17 @@ export default function Dashboard() {
             {/* Email */}
             <div className="flex items-center justify-between p-3 rounded-xl"
               style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
-                  style={{ color: 'var(--soft)' }}>Google Account</div>
-                <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>
-                  {user?.studdyEmail ?? '—'}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: '#fff', border: '1px solid var(--border)' }}>
+                  <Mail size={14} style={{ color: 'var(--g3)' }} />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
+                    style={{ color: 'var(--soft)' }}>Google Account</div>
+                  <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>
+                    {user?.studdyEmail ?? '—'}
+                  </div>
                 </div>
               </div>
               <CopyButton text={user?.studdyEmail ?? ''} />
@@ -371,17 +419,23 @@ export default function Dashboard() {
             {/* Password */}
             <div className="flex items-center justify-between p-3 rounded-xl"
               style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
-                  style={{ color: 'var(--soft)' }}>Password</div>
-                <div className="text-[14px] font-bold font-mono" style={{ color: 'var(--ink)' }}>
-                  {showPwd ? (user?.studdyPassword ?? '—') : '••••••••••'}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: '#fff', border: '1px solid var(--border)' }}>
+                  <KeyRound size={14} style={{ color: 'var(--g3)' }} />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
+                    style={{ color: 'var(--soft)' }}>Password</div>
+                  <div className="text-[14px] font-bold font-mono" style={{ color: 'var(--ink)' }}>
+                    {showPwd ? (user?.studdyPassword ?? '—') : '••••••••••'}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowPwd(v => !v)}
                   className="text-[12px] font-bold px-3 py-1.5 rounded-lg"
-                  style={{ background: 'var(--dim)', color: 'var(--soft)', border: '1px solid var(--border)' }}>
+                  style={{ background: '#fff', color: 'var(--soft)', border: '1px solid var(--border)' }}>
                   {showPwd ? 'Hide' : 'Show'}
                 </button>
                 <CopyButton text={user?.studdyPassword ?? ''} />
@@ -391,7 +445,7 @@ export default function Dashboard() {
         </div>
 
         {/* Subscription Card */}
-        <div className="bg-white rounded-2xl p-6 mb-4"
+        <div className="bg-white rounded-2xl p-6 mb-5"
           style={{ border: '1.5px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }}>
           <div className="font-black text-[15px] mb-4" style={{ color: 'var(--ink)' }}>
             Subscription
@@ -399,14 +453,14 @@ export default function Dashboard() {
           <div className="space-y-3">
             {[
               { label: 'Plan', value: user?.plan ?? '—' },
-              { label: 'Status', value: isTrialing ? '🟡 Trial' : isActive ? '🟢 Active' : user?.status ?? '—' },
-              { label: 'Amount', value: user?.amount ?? '—' },
-              { label: isTrialing ? 'First payment' : 'Next billing', value: user?.nextBilling ?? '—' },
+              { label: 'Status', value: <StatusPill status={user?.status ?? ''} isTrialing={isTrialing} /> },
+              { label: amountLabel, value: user?.amount ?? '—' },
+              { label: isTrialing ? 'First payment date' : 'Next billing', value: user?.trialEnds && isTrialing ? user.trialEnds : (user?.nextBilling ?? '—') },
               ...(user && user.totalMonthsPaid > 0
                 ? [{ label: 'Payments made', value: String(user.totalMonthsPaid) }]
                 : []),
-            ].map(row => (
-              <div key={row.label} className="flex justify-between items-center py-2"
+            ].map((row, i) => (
+              <div key={i} className="flex justify-between items-center py-2"
                 style={{ borderBottom: '1px solid var(--border)' }}>
                 <div className="text-[13px]" style={{ color: 'var(--soft)' }}>{row.label}</div>
                 <div className="text-[13px] font-bold" style={{ color: 'var(--ink)' }}>{row.value}</div>
@@ -424,7 +478,7 @@ export default function Dashboard() {
         </div>
 
         {/* Support + Cancel */}
-        <div className="bg-white rounded-2xl p-6 mb-4"
+        <div className="bg-white rounded-2xl p-6"
           style={{ border: '1.5px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,.06)' }}>
           <div className="font-black text-[15px] mb-4" style={{ color: 'var(--ink)' }}>Need help?</div>
           <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer"

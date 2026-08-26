@@ -18,7 +18,7 @@
  */
 import Stripe from 'stripe';
 import { getSupabase } from './_lib/supabase.js';
-import { mapStatus, fmtDate, resolveNextBilling } from './_lib/status.js';
+import { mapStatus, fmtDate, resolveNextBilling, daysUntil } from './_lib/status.js';
 
 const FALLBACK_CREDENTIALS = {
   email: 'class1001@studdyai.org',
@@ -73,6 +73,7 @@ export default async function handler(req, res) {
         amount: lead.currency && lead.amount ? `${lead.currency} ${lead.amount}` : '',
         nextBilling: fmtDate(lead.next_billing_date),
         trialEnds: fmtDate(lead.trial_end_date),
+        daysLeftInTrial: daysUntil(lead.trial_end_date),
         studdyEmail,
         studdyPassword,
         studdyUrl,
@@ -115,6 +116,7 @@ export default async function handler(req, res) {
         ((sub?.items?.data?.[0]?.price?.unit_amount ?? 0) / 100).toFixed(2),
       nextBilling: fmtDate(nextBilling),
       trialEnds: fmtDate(trialEnd),
+      daysLeftInTrial: daysUntil(trialEnd),
       studdyEmail: FALLBACK_CREDENTIALS.email,
       studdyPassword: FALLBACK_CREDENTIALS.password,
       studdyUrl: FALLBACK_CREDENTIALS.url,

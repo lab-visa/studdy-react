@@ -48,7 +48,15 @@ function getUrlParams() {
 
 export type TrackEventName = 'opened' | 'checkout_viewed' | 'trial_clicked';
 
-export async function trackEvent(event: TrackEventName): Promise<string | null> {
+/* If the "opened" call is still in flight when "checkout_viewed" fires
+ * (someone navigating fast, before the first request finished and saved
+ * a lead_id to localStorage), the second call used to have no idea a
+ * lead_id was already on its way — so it created its own separate lead.
+ * Queuing every call behind the one before it means the second call
+ * always sees the lead_id the first one just got, instead of racing it. */
+let pending: Promise<string | null> = Promise.resolve(null);
+
+async function sendTrackEvent(event: TrackEventName): Promise<string | null> {
   const existingLeadId = getStoredLeadId();
 
   try {
@@ -72,6 +80,11 @@ export async function trackEvent(event: TrackEventName): Promise<string | null> 
   }
 
   return existingLeadId;
+}
+
+export function trackEvent(event: TrackEventName): Promise<string | null> {
+  pending = pending.then(() => sendTrackEvent(event));
+  return pending;
 }
 
 export function getLeadId(): string | null {
