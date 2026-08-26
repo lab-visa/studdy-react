@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  REGION_DATA, COUNTRY_TO_REGION, type Region,
+  REGION_DATA, COUNTRY_TO_REGION, REGION_GROUPS, type Region,
 } from '../data/config';
 import { track } from '../utils/analytics';
 import { trackEvent, getLeadId } from '../utils/tracking';
@@ -39,15 +39,24 @@ function getUTM() {
   };
 }
 
+/* Always shown, in this order, regardless of where the visitor is from —
+ * their own detected country is added in front of this list (unless it's
+ * already one of these four). */
+const PINNED_REGIONS: Region[] = ['us', 'uk', 'uae', 'au'];
+
 export default function Checkout() {
   const navigate  = useNavigate();
   const [region,  setRegion]  = useState<Region>('us');
+  const [detectedRegion, setDetectedRegion] = useState<Region | null>(null);
   const [plan,    setPlan]    = useState<Plan>('yearly');
   const [showAll, setShowAll] = useState(false);
 
   /* Detect country on mount */
   useEffect(() => {
-    detectRegion().then(setRegion);
+    detectRegion().then(r => {
+      setRegion(r);
+      setDetectedRegion(r);
+    });
   }, []);
 
   /* Log that this lead reached the checkout page */
@@ -101,7 +110,11 @@ export default function Checkout() {
     }
   }, [hasStripe, plan, region]);
 
-  const topRegions: Region[] = ['us', 'uk', 'uae', 'au', 'in'];
+  /* Your detected country goes first, then the 4 pinned ones — no repeats. */
+  const topRegions: Region[] =
+    detectedRegion && !PINNED_REGIONS.includes(detectedRegion)
+      ? [detectedRegion, ...PINNED_REGIONS]
+      : PINNED_REGIONS;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12"
@@ -179,19 +192,31 @@ export default function Checkout() {
                   </div>
 
                   {showAll && (
-                    <div className="mt-3 flex gap-1.5 flex-wrap">
-                      {(Object.keys(REGION_DATA) as Region[])
-                        .filter(r => !topRegions.includes(r))
-                        .map(r => (
-                          <button key={r} onClick={() => { setRegion(r); setShowAll(false); }}
-                            className="px-3 py-1 rounded-full text-[11px] font-bold transition-all"
-                            style={{
-                              background: region === r ? 'var(--ink)' : 'var(--dim)',
-                              color:      region === r ? '#fff' : 'var(--soft)',
-                            }}>
-                            {REGION_DATA[r].flag} {REGION_DATA[r].label}
-                          </button>
-                        ))}
+                    <div className="mt-3 space-y-3">
+                      {REGION_GROUPS.map(group => {
+                        const regions = group.regions.filter(r => !topRegions.includes(r));
+                        if (regions.length === 0) return null;
+                        return (
+                          <div key={group.label}>
+                            <div className="text-[10px] font-black uppercase tracking-wide mb-1.5"
+                              style={{ color: 'var(--soft)' }}>
+                              {group.label}
+                            </div>
+                            <div className="flex gap-1.5 flex-wrap">
+                              {regions.map(r => (
+                                <button key={r} onClick={() => { setRegion(r); setShowAll(false); }}
+                                  className="px-3 py-1 rounded-full text-[11px] font-bold transition-all"
+                                  style={{
+                                    background: region === r ? 'var(--ink)' : 'var(--dim)',
+                                    color:      region === r ? '#fff' : 'var(--soft)',
+                                  }}>
+                                  {REGION_DATA[r].flag} {REGION_DATA[r].label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
