@@ -72,23 +72,16 @@ export default function Checkout() {
     ? `${rd.symbol}${(parseFloat(rd.yearly.amount) / 12).toFixed(2)}/mo`
     : null;
 
-  /* Redirect to Stripe Payment Link — works immediately, no extra setup */
+  /* Redirect to Stripe Payment Link — works immediately, no extra setup.
+   * The link always comes straight from REGION_DATA (single source of
+   * truth in config.ts) so a region can never show "Start Free Trial" as
+   * enabled (hasStripe true) while secretly having nowhere to send the
+   * customer. */
   const handleStart = useCallback(() => {
     if (!hasStripe) return;
     track('checkout_started', { region, plan });
 
-    const paymentLinks: Partial<Record<Region, Record<Plan, string>>> = {
-      us: {
-        monthly: 'https://buy.stripe.com/14A5kFavJdycddxbZd5J61h',
-        yearly:  'https://buy.stripe.com/eVqdRbgU7gKogpJ5AP5J61i',
-      },
-      uk: {
-        monthly: 'https://buy.stripe.com/5kQ6oJ0V99hWddxfbp5J61j',
-        yearly:  'https://buy.stripe.com/4gMaEZbzN79OehB5AP5J61k',
-      },
-    };
-
-    const link = paymentLinks[region]?.[plan];
+    const link = planData.paymentLink;
     if (link) {
       /* Log this click — don't block the redirect waiting for it */
       trackEvent('trial_clicked');
