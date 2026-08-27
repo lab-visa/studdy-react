@@ -12,6 +12,11 @@ export default function Pricing() {
   const navigate = useNavigate();
   const [region, setRegion] = useState<Region>('us');
   const [detectedRegion, setDetectedRegion] = useState<Region | null>(null);
+  /* Which plan box is "selected" (gets the live gradient border) — you
+   * can click either card to switch it, independent of which one you
+   * actually start a trial on. Yearly is highlighted by default since
+   * it's the recommended plan everywhere else on the site. */
+  const [selectedPlan, setSelectedPlan] = useState<Plan>('yearly');
 
   /* Detect country on mount — defaults to United States / USD if the
    * lookup fails or the visitor is somewhere we don't have a mapping
@@ -67,8 +72,12 @@ export default function Pricing() {
 
         <div className="grid md:grid-cols-3 gap-5 items-stretch">
           {/* Monthly */}
-          <div className="rounded-2xl p-8 flex flex-col relative"
-            style={{ border: '1.5px solid var(--border)', background: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,.04)' }}>
+          <div
+            onClick={() => setSelectedPlan('monthly')}
+            className={`rounded-2xl p-8 flex flex-col relative cursor-pointer ${selectedPlan === 'monthly' ? 'gradient-border-live' : ''}`}
+            style={selectedPlan === 'monthly'
+              ? { boxShadow: '0 20px 60px rgba(140,121,224,.18)' }
+              : { border: '1.5px solid var(--border)', background: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,.04)' }}>
             <div className="text-[12px] font-black uppercase tracking-wide mb-3" style={{ color: 'var(--soft)' }}>Monthly</div>
             <div className="font-black mb-1" style={{ fontSize: '38px', letterSpacing: '-1.5px' }}>
               {rd.symbol}0 <span className="text-[14px] font-medium" style={{ color: 'var(--soft)' }}>today</span>
@@ -92,8 +101,11 @@ export default function Pricing() {
 
           {/* Yearly — Best Value */}
           <div
-            className="rounded-2xl p-8 flex flex-col relative"
-            style={{ border: '2px solid transparent', background: 'linear-gradient(#fff,#fff) padding-box, var(--grad) border-box', boxShadow: '0 20px 60px rgba(140,121,224,.18)' }}
+            onClick={() => setSelectedPlan('yearly')}
+            className={`rounded-2xl p-8 flex flex-col relative cursor-pointer ${selectedPlan === 'yearly' ? 'gradient-border-live' : ''}`}
+            style={selectedPlan === 'yearly'
+              ? { boxShadow: '0 20px 60px rgba(140,121,224,.18)' }
+              : { border: '1.5px solid var(--border)', background: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,.04)' }}
           >
             <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-white text-[11px] font-black px-4 py-1.5 rounded-full whitespace-nowrap" style={{ background: 'var(--grad)' }}>
               Best Value

@@ -4,9 +4,9 @@ import { Menu, X } from 'lucide-react';
 
 const NAV_LINKS = [
   { label: 'Experience', href: '#demo' },
-  { label: 'Subjects', href: '#subjects' },
-  { label: 'Reviews', href: '#reviews' },
   { label: 'Pricing', href: '#pricing' },
+  { label: 'Reviews', href: '#reviews' },
+  { label: 'FAQs', href: '#faq' },
 ];
 
 export default function Header() {

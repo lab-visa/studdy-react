@@ -24,3 +24,17 @@ body { font-family: 'Inter', system-ui, sans-serif; background: #fff; color: var
 .float-anim { animation: float 3s ease-in-out infinite; }
 @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 rgba(239,85,182,.4)} 70%{box-shadow:0 0 0 7px rgba(239,85,182,0)} }
 .pulse-dot { animation: pulse-dot 2s infinite; }
+
+/* Live/running gradient border — used to show which pricing plan is
+ * currently selected (Pricing section, Aug 2026). The border-box layer
+ * is a wide repeating gradient whose position we animate, so the color
+ * appears to continuously flow around the edge instead of sitting still. */
+@keyframes gradient-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+.gradient-border-live {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#fff,#fff) padding-box,
+    linear-gradient(90deg, #EF55B6, #C765C7, #8C79E0, #25A8F4, #EF55B6) border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: gradient-flow 3s linear infinite;
+}

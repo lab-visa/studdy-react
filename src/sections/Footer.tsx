@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { SUPPORT_WHATSAPP, SUPPORT_EMAIL } from '../data/config';
 import { track } from '../utils/analytics';
 
-const PRODUCT_LINKS = [['Experience','#demo'],['Subjects','#subjects'],['Pricing','#pricing'],['FAQ','#faq']];
+const PRODUCT_LINKS = [['Experience','#demo'],['Pricing','#pricing'],['Reviews','#reviews'],['FAQs','#faq']];
 const LEGAL_LINKS = [['Privacy Policy','/privacy'],['Terms of Service','/terms'],['Refund Policy','/refund'],['Cancellation','/cancellation']];
 
 export default function Footer() {
