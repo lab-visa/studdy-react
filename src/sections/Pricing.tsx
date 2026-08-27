@@ -16,7 +16,6 @@ export default function Pricing() {
   const navigate = useNavigate();
   const [region, setRegion] = useState<Region>('us');
   const [detectedRegion, setDetectedRegion] = useState<Region | null>(null);
-  const [plan, setPlan] = useState<Plan>('yearly');
   const [showAll, setShowAll] = useState(false);
 
   /* Detect country on mount — defaults to United States / USD if the
