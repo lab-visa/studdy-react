@@ -31,14 +31,19 @@ function getUTM() {
 export default function Checkout() {
   const navigate  = useNavigate();
   const location  = useLocation();
-  /* If the visitor picked a region on the homepage Pricing section (before
-   * clicking "Start Free Trial"), honor that choice here instead of
-   * silently re-detecting and possibly switching it on them. */
-  const passedRegion = (location.state as { region?: Region } | null)?.region ?? null;
+  /* If the visitor picked a region and/or a plan on the homepage Pricing
+   * section (before clicking "Start Free Trial"), honor those choices
+   * here instead of silently resetting them. Only an explicit "monthly"
+   * from that click overrides the default — every other entry point
+   * (header, footer, final CTA, direct link) still opens on Yearly, per
+   * Vish (Aug 2026). */
+  const passedState  = location.state as { region?: Region; plan?: Plan } | null;
+  const passedRegion = passedState?.region ?? null;
+  const passedPlan: Plan = passedState?.plan === 'monthly' ? 'monthly' : 'yearly';
 
   const [region,  setRegion]  = useState<Region>(passedRegion ?? 'us');
   const [detectedRegion, setDetectedRegion] = useState<Region | null>(passedRegion);
-  const [plan,    setPlan]    = useState<Plan>('yearly');
+  const [plan,    setPlan]    = useState<Plan>(passedPlan);
 
   /* Detect country on mount — but don't override an explicit choice
    * carried over from the Pricing section. */

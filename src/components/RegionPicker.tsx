@@ -7,7 +7,7 @@
  * onto the page when you click More" pattern, which looked cluttered
  * and pushed everything below it far down the page.
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { REGION_DATA, REGION_GROUPS, type Region } from '../data/config';
 
@@ -19,7 +19,12 @@ interface Props {
 
 export default function RegionPicker({ region, onChange, detectedRegion }: Props) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const wrapRef  = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  /* Extra horizontal nudge (px) added on top of the default centered
+   * position, so the panel never spills off the left/right edge of a
+   * narrow phone screen when the trigger button sits close to an edge. */
+  const [shift, setShift] = useState(0);
   const rd = REGION_DATA[region];
 
   useEffect(() => {
@@ -34,6 +39,32 @@ export default function RegionPicker({ region, onChange, detectedRegion }: Props
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onEsc);
     };
+  }, [open]);
+
+  /* Keep the panel fully on-screen. It's centered under the button by
+   * default; if that would push it past the left or right edge (common
+   * on phones, since the button isn't always centered on screen), nudge
+   * it back in by just enough — instead of letting the edge get clipped. */
+  useLayoutEffect(() => {
+    if (!open) { setShift(0); return; }
+
+    const measure = () => {
+      const el = panelRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const margin = 8;
+      let next = 0;
+      if (rect.left < margin) {
+        next = margin - rect.left;
+      } else if (rect.right > window.innerWidth - margin) {
+        next = (window.innerWidth - margin) - rect.right;
+      }
+      setShift(prev => (prev === next ? prev : next));
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, [open]);
 
   return (
@@ -60,10 +91,12 @@ export default function RegionPicker({ region, onChange, detectedRegion }: Props
 
       {open && (
         <div
+          ref={panelRef}
           role="listbox"
           aria-label="Choose your country"
           style={{
-            position: 'absolute', top: 'calc(100% + 10px)', left: '50%', transform: 'translateX(-50%)',
+            position: 'absolute', top: 'calc(100% + 10px)', left: '50%',
+            transform: `translateX(calc(-50% + ${shift}px))`,
             width: 'min(310px, 90vw)', maxHeight: '380px', overflowY: 'auto',
             background: '#fff', border: '1.5px solid var(--border)', borderRadius: '18px',
             boxShadow: '0 24px 60px rgba(0,0,0,.16)', padding: '10px', zIndex: 50,
