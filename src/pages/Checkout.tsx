@@ -10,25 +10,15 @@
  * 6. On complete → Stripe redirects to /dashboard?session_id=xxx
  */
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  REGION_DATA, COUNTRY_TO_REGION, REGION_GROUPS, type Region,
+  REGION_DATA, REGION_GROUPS, type Region,
 } from '../data/config';
+import { detectRegion } from '../utils/geo';
 import { track } from '../utils/analytics';
 import { trackEvent, getLeadId } from '../utils/tracking';
 
 type Plan = 'monthly' | 'yearly';
-
-/* Detect country from IP */
-async function detectRegion(): Promise<Region> {
-  try {
-    const res  = await fetch('https://ipapi.co/json/');
-    const data = await res.json();
-    return COUNTRY_TO_REGION[data?.country_code as string] ?? 'other';
-  } catch {
-    return 'us';
-  }
-}
 
 /* Read UTM params from URL */
 function getUTM() {
@@ -46,17 +36,25 @@ const PINNED_REGIONS: Region[] = ['us', 'uk', 'uae', 'au'];
 
 export default function Checkout() {
   const navigate  = useNavigate();
-  const [region,  setRegion]  = useState<Region>('us');
-  const [detectedRegion, setDetectedRegion] = useState<Region | null>(null);
+  const location  = useLocation();
+  /* If the visitor picked a region on the homepage Pricing section (before
+   * clicking "Start Free Trial"), honor that choice here instead of
+   * silently re-detecting and possibly switching it on them. */
+  const passedRegion = (location.state as { region?: Region } | null)?.region ?? null;
+
+  const [region,  setRegion]  = useState<Region>(passedRegion ?? 'us');
+  const [detectedRegion, setDetectedRegion] = useState<Region | null>(passedRegion);
   const [plan,    setPlan]    = useState<Plan>('yearly');
   const [showAll, setShowAll] = useState(false);
 
-  /* Detect country on mount */
+  /* Detect country on mount — but don't override an explicit choice
+   * carried over from the Pricing section. */
   useEffect(() => {
     detectRegion().then(r => {
-      setRegion(r);
-      setDetectedRegion(r);
+      setDetectedRegion(prev => prev ?? r);
+      if (!passedRegion) setRegion(r);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Log that this lead reached the checkout page */
@@ -262,7 +260,7 @@ export default function Checkout() {
                   disabled={!hasStripe}
                   style={{ opacity: !hasStripe ? 0.5 : 1 }}>
                   {hasStripe
-                    ? `Start Free Trial — ${rd.symbol}0 today`
+                    ? `Start Free Trial - ${rd.symbol}0 today`
                     : 'Coming Soon for Your Region'}
                 </button>
 

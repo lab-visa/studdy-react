@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { SUPPORT_WHATSAPP, SUPPORT_EMAIL } from '../data/config';
 import { track } from '../utils/analytics';
 
-const PRODUCT_LINKS = [['Experience','#demo'],['Use Cases','#subjects'],['Pricing','#pricing'],['FAQ','#faq']];
+const PRODUCT_LINKS = [['Experience','#demo'],['Subjects','#subjects'],['Pricing','#pricing'],['FAQ','#faq']];
 const LEGAL_LINKS = [['Privacy Policy','/privacy'],['Terms of Service','/terms'],['Refund Policy','/refund'],['Cancellation','/cancellation']];
 
 export default function Footer() {
@@ -12,10 +12,10 @@ export default function Footer() {
         <div className="flex flex-wrap justify-between gap-10 mb-8">
           <div>
             <div className="font-black text-[21px] mb-2" style={{ letterSpacing: '-0.5px' }}>
-              <span className="grad-text">studdy</span> lab
+              <span className="grad-text">studdy</span>
             </div>
             <p className="text-[13.5px] max-w-[200px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-              AI tutor for school, college and work — available 24/7.
+              AI tutor for school, college and work - available 24/7.
             </p>
           </div>
           <div className="flex flex-wrap gap-12">
@@ -43,7 +43,7 @@ export default function Footer() {
         </div>
         <div className="flex flex-wrap justify-between items-center gap-3 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
           <span className="text-[12px]" style={{ color: 'var(--soft)' }}>© 2026 Studdy Lab. All rights reserved.</span>
-          <span className="text-[12px]" style={{ color: 'var(--soft)' }}>Built for learners everywhere.</span>
+          <span className="text-[12px]" style={{ color: 'var(--soft)' }}>Built with ❤️ for learners everywhere.</span>
         </div>
       </div>
     </footer>

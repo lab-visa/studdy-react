@@ -9,7 +9,7 @@ export default function SubjectSelector() {
   return (
     <section id="subjects" className="py-24 px-6 overflow-hidden">
       <div className="max-w-[1200px] mx-auto">
-        <SectionHeading eyebrow="Use cases" heading="One tutor. Whatever you need to learn." />
+        <SectionHeading eyebrow="Subjects" heading="One tutor. Whatever you need to learn." />
 
         {/* Selector */}
         <div className="flex flex-wrap gap-2 mb-10">
