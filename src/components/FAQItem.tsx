@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface Props { q: string; a: string; }
+interface Props { q: string; a: string; last?: boolean; }
 
-export default function FAQItem({ q, a }: Props) {
+export default function FAQItem({ q, a, last }: Props) {
   const [open, setOpen] = useState(false);
   return (
     <div
-      className="border-b py-5 cursor-pointer select-none"
+      className={`py-5 cursor-pointer select-none ${last ? '' : 'border-b'}`}
       style={{ borderColor: 'var(--border)' }}
       onClick={() => setOpen(o => !o)}
     >

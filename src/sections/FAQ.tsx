@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import FAQItem from '../components/FAQItem';
 import SectionHeading from '../components/SectionHeading';
 
-/* 12 questions grouped into 3 themed sections of 4, per Vish's request
- * (Aug 2026) — easier to scan than one long list. */
+/* 12 questions grouped into 3 tabs, shown one tab at a time — like
+ * unischooly.com's FAQ section — instead of one long stacked list that
+ * makes the page keep scrolling. */
 const FAQ_GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
   {
     heading: 'Who it\'s for',
@@ -34,22 +36,35 @@ const FAQ_GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
 ];
 
 export default function FAQ() {
+  const [tab, setTab] = useState(0);
+
   return (
     <section id="faq" className="py-24 px-6" style={{ background: 'var(--dim)' }}>
       <div className="max-w-[780px] mx-auto">
-        <SectionHeading eyebrow="Questions" heading="Before you start." />
-        <div className="flex flex-col gap-10">
-          {FAQ_GROUPS.map(group => (
-            <div key={group.heading}>
-              <div
-                className="text-[11px] font-black uppercase tracking-wide mb-1"
-                style={{ color: 'var(--g2)', letterSpacing: '0.08em' }}
-              >
-                {group.heading}
-              </div>
-              {group.items.map((f, i) => <FAQItem key={i} {...f} />)}
-            </div>
+        <SectionHeading eyebrow="Questions" heading="Before you start." center />
+
+        {/* Tabs */}
+        <div className="flex gap-2 justify-center flex-wrap mb-8">
+          {FAQ_GROUPS.map((group, i) => (
+            <button
+              key={group.heading}
+              onClick={() => setTab(i)}
+              className="px-5 py-2.5 rounded-full text-[13px] font-bold transition-all"
+              style={{
+                background: tab === i ? 'var(--ink)' : '#fff',
+                color:      tab === i ? '#fff' : 'var(--soft)',
+                border: `1.5px solid ${tab === i ? 'transparent' : 'var(--border)'}`,
+              }}
+            >
+              {group.heading}
+            </button>
           ))}
+        </div>
+
+        {/* Only the active group's questions are rendered — no giant
+         * stacked list, no extra page scroll. */}
+        <div className="bg-white rounded-3xl px-6 sm:px-8" style={{ border: '1.5px solid var(--border)' }}>
+          {FAQ_GROUPS[tab].items.map((f, i) => <FAQItem key={f.q} {...f} last={i === FAQ_GROUPS[tab].items.length - 1} />)}
         </div>
       </div>
     </section>

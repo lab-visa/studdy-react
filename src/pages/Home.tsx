@@ -6,6 +6,7 @@ import AskStuddy from '../sections/AskStuddy';
 import ScrollStory from '../sections/ScrollStory';
 import HowItWorks from '../sections/HowItWorks';
 import Comparison from '../sections/Comparison';
+import SubjectSelector from '../sections/SubjectSelector';
 import Testimonials from '../sections/Testimonials';
 import Pricing from '../sections/Pricing';
 import FAQ from '../sections/FAQ';
@@ -24,6 +25,10 @@ export default function Home() {
         <ScrollStory />
         <HowItWorks />
         <Comparison />
+        {/* id="subjects" — this is what the "Subjects" link in the header
+         * and footer scrolls to. It was written but never actually placed
+         * on the page before, which is why that link did nothing. */}
+        <SubjectSelector />
         <Testimonials />
         <Pricing />
         <FAQ />

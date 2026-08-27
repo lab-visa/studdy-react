@@ -11,12 +11,11 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  REGION_DATA, REGION_GROUPS, type Region,
-} from '../data/config';
+import { REGION_DATA, type Region } from '../data/config';
 import { detectRegion } from '../utils/geo';
 import { track } from '../utils/analytics';
 import { trackEvent, getLeadId } from '../utils/tracking';
+import RegionPicker from '../components/RegionPicker';
 
 type Plan = 'monthly' | 'yearly';
 
@@ -29,11 +28,6 @@ function getUTM() {
   };
 }
 
-/* Always shown, in this order, regardless of where the visitor is from —
- * their own detected country is added in front of this list (unless it's
- * already one of these four). */
-const PINNED_REGIONS: Region[] = ['us', 'uk', 'uae', 'au'];
-
 export default function Checkout() {
   const navigate  = useNavigate();
   const location  = useLocation();
@@ -45,7 +39,6 @@ export default function Checkout() {
   const [region,  setRegion]  = useState<Region>(passedRegion ?? 'us');
   const [detectedRegion, setDetectedRegion] = useState<Region | null>(passedRegion);
   const [plan,    setPlan]    = useState<Plan>('yearly');
-  const [showAll, setShowAll] = useState(false);
 
   /* Detect country on mount — but don't override an explicit choice
    * carried over from the Pricing section. */
@@ -101,12 +94,6 @@ export default function Checkout() {
     }
   }, [hasStripe, plan, region]);
 
-  /* Your detected country goes first, then the 4 pinned ones — no repeats. */
-  const topRegions: Region[] =
-    detectedRegion && !PINNED_REGIONS.includes(detectedRegion)
-      ? [detectedRegion, ...PINNED_REGIONS]
-      : PINNED_REGIONS;
-
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12"
       style={{ background: 'var(--dim)' }}>
@@ -119,12 +106,16 @@ export default function Checkout() {
           ← Back
         </button>
 
-        <div className="bg-white rounded-3xl overflow-hidden"
+        {/* NOTE: no overflow-hidden here — the region picker below opens a
+         * dropdown panel that must be able to render outside this card's
+         * bounds. The header banner gets its own top corner radius instead
+         * of relying on the card clipping it. */}
+        <div className="bg-white rounded-3xl"
           style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.08)' }}>
 
           {/* Header */}
           <div className="px-8 pt-8 pb-6 text-center"
-            style={{ background: 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)' }}>
+            style={{ background: 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)', borderRadius: '24px 24px 0 0' }}>
             <div className="font-black text-[24px] mb-1">
               <span className="grad-text">studdy</span>
             </div>
@@ -158,58 +149,13 @@ export default function Checkout() {
                   ))}
                 </div>
 
-                {/* Region selector */}
+                {/* Region selector — one compact dropdown, same as Pricing */}
                 <div className="mb-6">
                   <div className="text-[11px] font-black uppercase tracking-wide mb-2"
                     style={{ color: 'var(--soft)' }}>
                     Your country
                   </div>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {topRegions.map(r => (
-                      <button key={r} onClick={() => setRegion(r)}
-                        className="px-3 py-1.5 rounded-full text-[12px] font-bold transition-all"
-                        style={{
-                          background: region === r ? 'var(--ink)' : 'var(--dim)',
-                          color:      region === r ? '#fff' : 'var(--soft)',
-                        }}>
-                        {REGION_DATA[r].flag} {REGION_DATA[r].label}
-                      </button>
-                    ))}
-                    <button onClick={() => setShowAll(v => !v)}
-                      className="px-3 py-1.5 rounded-full text-[12px] font-bold"
-                      style={{ background: 'var(--dim)', color: 'var(--soft)' }}>
-                      {showAll ? 'Less ↑' : 'More ↓'}
-                    </button>
-                  </div>
-
-                  {showAll && (
-                    <div className="mt-3 space-y-3">
-                      {REGION_GROUPS.map(group => {
-                        const regions = group.regions.filter(r => !topRegions.includes(r));
-                        if (regions.length === 0) return null;
-                        return (
-                          <div key={group.label}>
-                            <div className="text-[10px] font-black uppercase tracking-wide mb-1.5"
-                              style={{ color: 'var(--soft)' }}>
-                              {group.label}
-                            </div>
-                            <div className="flex gap-1.5 flex-wrap">
-                              {regions.map(r => (
-                                <button key={r} onClick={() => { setRegion(r); setShowAll(false); }}
-                                  className="px-3 py-1 rounded-full text-[11px] font-bold transition-all"
-                                  style={{
-                                    background: region === r ? 'var(--ink)' : 'var(--dim)',
-                                    color:      region === r ? '#fff' : 'var(--soft)',
-                                  }}>
-                                  {REGION_DATA[r].flag} {REGION_DATA[r].label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <RegionPicker region={region} onChange={setRegion} detectedRegion={detectedRegion} />
                 </div>
 
                 {/* Price summary */}
