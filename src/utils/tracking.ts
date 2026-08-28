@@ -1,15 +1,25 @@
 /**
  * Lead tracking — talks to /api/track-event.
  *
- * How it works:
- *  - First time anyone lands on the site, we grab any lead/campaign info
- *    from the URL (?lid=, ?utm_source=, ?aff_id=, etc.) and create a row
- *    for them in Supabase. The lead_id that comes back is saved in this
- *    browser's localStorage so every later call (checkout page, clicking
- *    Start Free Trial) can be tied back to the same person.
- *  - If someone arrives with no tracking info at all (typed the URL
- *    directly, organic visit), they still get a lead_id — just with
- *    blank source fields.
+ * As of Phase 3 (Aug 2026): /api/track-event no longer creates any
+ * database row for a visitor — it only bumps an anonymous daily counter.
+ * So the browser now owns its own tracking id from the very first moment,
+ * instead of asking the server for one:
+ *
+ *  - If the link they arrived on has a WhatsApp/campaign tag (?lid= or
+ *    ?source_lead_id=), that exact value becomes their tracking id — this
+ *    is what lets a real conversion later be matched back to the right
+ *    campaign, with zero database row needed before that happens.
+ *  - Otherwise (organic/direct visit), the browser makes up a random id
+ *    itself. Nothing about that id is ever sent anywhere or stored in the
+ *    database unless and until they actually start a trial.
+ *
+ * Either way, this id is saved in this browser's localStorage and reused
+ * for every later step (checkout page, "Start Free Trial" click), then
+ * sent to Stripe as client_reference_id — exactly like before. The only
+ * thing that changed is WHEN a database row appears: previously it was
+ * the instant someone landed on the site; now it's the instant they
+ * actually start a trial (handled by the Stripe webhook).
  */
 
 const LEAD_ID_KEY = 'sl_lead_id';
@@ -30,63 +40,55 @@ function storeLeadId(id: string) {
   }
 }
 
-function getUrlParams() {
+function randomId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* fall through to the manual fallback below */
+  }
+  // Fallback for older browsers without crypto.randomUUID
+  return `sl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getUrlSourceLeadId(): string | undefined {
   const p = new URLSearchParams(window.location.search);
-  return {
-    source_lead_id: p.get('lid') ?? p.get('source_lead_id') ?? undefined,
-    affiliate_id: p.get('aff_id') ?? undefined,
-    affiliate_name: p.get('aff_name') ?? undefined,
-    utm_source: p.get('utm_source') ?? undefined,
-    utm_medium: p.get('utm_medium') ?? undefined,
-    utm_campaign: p.get('utm_campaign') ?? undefined,
-    utm_content: p.get('utm_content') ?? undefined,
-    utm_term: p.get('utm_term') ?? undefined,
-    fmt: p.get('fmt') ?? undefined,
-    course_id: p.get('courseId') ?? undefined,
-  };
+  return p.get('lid') ?? p.get('source_lead_id') ?? undefined;
+}
+
+/**
+ * Returns this browser's tracking id, creating one the first time it's
+ * called: the WhatsApp/campaign tag from the URL if present, otherwise a
+ * fresh random id. Purely local — never touches the database by itself.
+ */
+function ensureLeadId(): string {
+  const existing = getStoredLeadId();
+  if (existing) return existing;
+
+  const id = getUrlSourceLeadId() || randomId();
+  storeLeadId(id);
+  return id;
 }
 
 export type TrackEventName = 'opened' | 'checkout_viewed' | 'trial_clicked';
 
-/* If the "opened" call is still in flight when "checkout_viewed" fires
- * (someone navigating fast, before the first request finished and saved
- * a lead_id to localStorage), the second call used to have no idea a
- * lead_id was already on its way — so it created its own separate lead.
- * Queuing every call behind the one before it means the second call
- * always sees the lead_id the first one just got, instead of racing it. */
-let pending: Promise<string | null> = Promise.resolve(null);
-
-async function sendTrackEvent(event: TrackEventName): Promise<string | null> {
-  const existingLeadId = getStoredLeadId();
-
-  try {
-    const body = existingLeadId
-      ? { event, lead_id: existingLeadId }
-      : { event, ...getUrlParams() };
-
-    const res = await fetch('/api/track-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-
-    if (data?.lead_id) {
-      storeLeadId(data.lead_id);
-      return data.lead_id;
-    }
-  } catch {
-    /* tracking must never break the site — fail silently */
-  }
-
-  return existingLeadId;
-}
-
 export function trackEvent(event: TrackEventName): Promise<string | null> {
-  pending = pending.then(() => sendTrackEvent(event));
-  return pending;
+  ensureLeadId(); // make sure a tracking id exists locally before Stripe needs it
+
+  /* Fire-and-forget — this only feeds an anonymous count on the backend,
+   * so nothing on the page should ever wait on it or break if it fails. */
+  fetch('/api/track-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event }),
+  }).catch(() => {
+    /* tracking must never break the site — fail silently */
+  });
+
+  return Promise.resolve(getStoredLeadId());
 }
 
 export function getLeadId(): string | null {
-  return getStoredLeadId();
+  return ensureLeadId();
 }

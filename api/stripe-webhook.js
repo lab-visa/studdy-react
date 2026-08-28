@@ -49,6 +49,26 @@ import Stripe from 'stripe';
 import { getSupabase } from './_lib/supabase.js';
 import { toDate } from './_lib/status.js';
 import { syncCheckoutSession, findLeadBy } from './_lib/sync-checkout-session.js';
+import {
+  syncCustomerFromCheckoutSession,
+  recordPaymentSucceeded,
+  recordPaymentFailed,
+  recordSubscriptionEnded,
+} from './_lib/sync-customer.js';
+
+/* Runs the new-CRM-tables sync alongside the existing `leads` sync above.
+ * Wrapped so that if anything in here ever throws, it's only logged —
+ * never allowed to affect the response Stripe gets, or the `leads` row a
+ * real customer's dashboard depends on. New-CRM-table sync being a few
+ * seconds late (retried on the next webhook) is fine; breaking a paying
+ * customer's checkout is not. */
+async function safely(label, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`sync-customer (${label}) error:`, err);
+  }
+}
 
 /* Vercel must NOT parse the body — Stripe's signature check needs the
  * exact raw bytes Stripe sent, not a re-serialized JSON object. */
@@ -123,6 +143,17 @@ export default async function handler(req, res) {
     if (event.type === 'checkout.session.completed') {
       const sessionSummary = event.data.object;
       await syncCheckoutSession(stripe, supabase, sessionSummary.id);
+
+      /* New-CRM-tables sync — this is the moment a Paid ID is created.
+       * Fetches the session again (separately from syncCheckoutSession
+       * above) so this addition can never risk changing what that
+       * existing, already-correct function does. */
+      await safely('checkout.session.completed', async () => {
+        const session = await stripe.checkout.sessions.retrieve(sessionSummary.id, {
+          expand: ['subscription', 'customer'],
+        });
+        await syncCustomerFromCheckoutSession(supabase, session);
+      });
     }
 
     /* ─────────────────────────────────────────────────────────────
@@ -161,6 +192,8 @@ export default async function handler(req, res) {
       } else {
         console.error(`invoice.payment_succeeded for unknown subscription ${subId} / customer ${invoice.customer}`);
       }
+
+      await safely('invoice.payment_succeeded', () => recordPaymentSucceeded(supabase, event));
     }
 
     /* ─────────────────────────────────────────────────────────────
@@ -183,6 +216,8 @@ export default async function handler(req, res) {
           })
           .eq('lead_id', lead.lead_id);
       }
+
+      await safely('invoice.payment_failed', () => recordPaymentFailed(supabase, event));
     }
 
     /* ─────────────────────────────────────────────────────────────
@@ -283,6 +318,8 @@ export default async function handler(req, res) {
           .eq('lead_id', lead.lead_id);
         await releaseStuddyAccount(supabase, lead.group_name);
       }
+
+      await safely('customer.subscription.deleted', () => recordSubscriptionEnded(supabase, event));
     }
 
     /* ─────────────────────────────────────────────────────────────
