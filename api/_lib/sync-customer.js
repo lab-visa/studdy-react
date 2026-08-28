@@ -3,18 +3,15 @@
  * subscriptions, payment_events) — running ALONGSIDE the existing
  * `leads`-table sync in sync-checkout-session.js, never replacing it.
  *
- * Deliberately does NOT touch Studdy account/seat assignment. The old
- * `studdy_accounts.active_customer_count` seat system (in
- * sync-checkout-session.js) keeps running completely unchanged — nobody's
- * actual Studdy login is affected by anything in this file. The new,
- * concurrency-safe seat ledger (account_assignments) is Phase 4 work, not
- * this one — see 0007_account_assignments.sql.
+ * Deliberately does NOT touch which real Studdy AI login a customer
+ * receives. The old `studdy_accounts.active_customer_count` system (in
+ * sync-checkout-session.js) keeps running completely unchanged for that.
+ * The new, concurrency-safe seat ledger (account_assignments) below is
+ * for CRM reporting only — kept deliberately separate.
  *
  * Every function here is wrapped in try/catch by its caller
  * (api/stripe-webhook.js) — if anything in here fails, the existing
  * `leads` row (and the customer's dashboard/checkout) is never affected.
- * Worst case, a customer's new-CRM row is a few seconds late instead of
- * something breaking for a real paying customer.
  */
 
 /** Looks up an existing customer by Stripe's customer id, if any. */
@@ -66,6 +63,7 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
   };
 
   let customerId;
+  let isNewCustomer = false;
   if (existing) {
     customerId = existing.id;
     await supabase.from('customers').update(customerFields).eq('id', existing.id);
@@ -77,6 +75,23 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
       .single();
     if (error) throw error;
     customerId = inserted.id;
+    isNewCustomer = true;
+  }
+
+  /* Phase 4: record their seat in the new account_assignments ledger,
+   * atomically (see 0011_seat_allocator.sql). Only for a genuinely
+   * brand-new customer — never re-run on a resync of someone who already
+   * has one. Does NOT decide which real Studdy AI login the customer
+   * sees — that still runs entirely through sync-checkout-session.js. */
+  if (isNewCustomer) {
+    const { data: seatAccountId, error: seatError } = await supabase.rpc('allocate_studdy_seat', {
+      p_customer_id: customerId,
+    });
+    if (seatError) {
+      console.error('allocate_studdy_seat error:', seatError);
+    } else if (!seatAccountId) {
+      console.error(`No free Studdy seat in the new ledger for customer ${customerId} — every studdy_accounts row is at max_capacity.`);
+    }
   }
 
   const subFields = {
@@ -193,6 +208,9 @@ export async function recordSubscriptionEnded(supabase, event) {
   const now = new Date().toISOString();
   await supabase.from('subscriptions').update({ status: 'cancelled', cancelled_at: now, ended_at: now, updated_at: now }).eq('id', subscription.id);
   await supabase.from('customers').update({ lifecycle: 'churned', access_status: 'ended', updated_at: now }).eq('id', subscription.customer_id);
+
+  const { error: releaseError } = await supabase.rpc('release_studdy_seat', { p_customer_id: subscription.customer_id });
+  if (releaseError) console.error('release_studdy_seat error:', releaseError);
 }
 
 /** Generic Stripe-event logger, deduplicated on Stripe's own event id. */
@@ -204,8 +222,5 @@ async function logPaymentEvent(supabase, event, fields) {
     raw_metadata: event.data.object,
     ...fields,
   });
-  /* stripe_event_id is unique — Stripe's occasional duplicate delivery of
-   * the exact same event hits this conflict (Postgres code 23505) and is
-   * silently ignored here, rather than double-counting a payment. */
   if (error && error.code !== '23505') throw error;
 }
