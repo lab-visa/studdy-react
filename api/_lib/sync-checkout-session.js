@@ -14,26 +14,100 @@
  */
 import { mapStatus, toDate, resolveNextBilling } from './status.js';
 
-/* Finds a Studdy account/group with a free seat (fewer than 7 active
- * customers) and claims one seat. If every existing group is full, returns
- * null — Vish needs to add a new group/account manually in that case. */
+/* How many times to retry the claim below if we lose a race for a seat.
+ * Each retry is a fresh read + a fresh conditional write, so this bounds
+ * how many concurrent requests can collide on the exact same account
+ * before one of them gives up rather than looping forever. 5 is generous
+ * for realistic concurrency (a handful of simultaneous checkouts) without
+ * risking a runaway loop under pathological contention. */
+const MAX_ALLOCATION_ATTEMPTS = 5;
+
+/* Finds a Studdy account/group with a free seat and atomically claims one
+ * seat — safe under concurrent Stripe checkouts.
+ *
+ * Capacity comes ONLY from studdy_accounts.max_capacity — configurable per
+ * row via plain SQL (`update studdy_accounts set max_capacity = ... where
+ * group_name = ...`), no code change or redeploy needed for it to take
+ * effect, since this queries the table fresh on every call. There is no
+ * hardcoded fallback number: a row with a missing/invalid max_capacity is
+ * skipped and logged as a data-integrity problem rather than silently
+ * treated as some default. Groups are tried in group_name order — first
+ * one with room wins, same priority as before.
+ *
+ * CONCURRENCY: a plain "read the count, then write count+1" is racy — two
+ * requests can both read the same active_customer_count before either
+ * writes, and both then believe they claimed a seat that only existed
+ * once. The fix here is an atomic conditional (compare-and-swap) update:
+ * `UPDATE studdy_accounts SET active_customer_count = observed + 1 WHERE
+ * id = ... AND active_customer_count = observed`. A single UPDATE
+ * statement is always executed atomically by Postgres, and its WHERE
+ * clause is re-evaluated against the row's current, correctly-locked
+ * value at the moment the statement actually runs — so if another request
+ * already changed active_customer_count since our read, this WHERE clause
+ * simply matches zero rows instead of the two writers silently
+ * overwriting each other. That is what makes this safe without a Postgres
+ * RPC/migration or an in-memory lock (which would not even be meaningful
+ * across separate serverless invocations): the atomicity comes from a
+ * single SQL statement, not from anything in this JS process.
+ *
+ * If we lose that race (0 rows updated), we do NOT return that account —
+ * we retry the whole read+claim from a fresh snapshot, which naturally
+ * finds the next eligible account (or discovers none are left). A
+ * customer only ever receives an account object here if the conditional
+ * update actually affected a row — never assumed. */
 async function assignStuddyAccount(supabase) {
-  const { data: groups, error } = await supabase
-    .from('studdy_accounts')
-    .select('*')
-    .order('group_name', { ascending: true });
+  for (let attempt = 0; attempt < MAX_ALLOCATION_ATTEMPTS; attempt++) {
+    const { data: groups, error } = await supabase
+      .from('studdy_accounts')
+      .select('*')
+      .order('group_name', { ascending: true });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  const open = (groups || []).find((g) => (g.active_customer_count ?? 0) < 7);
-  if (!open) return null;
+    const candidate = (groups || []).find((g) => {
+      const capacity = g.max_capacity;
+      if (typeof capacity !== 'number' || !Number.isFinite(capacity) || capacity <= 0) {
+        console.error(
+          `studdy_accounts row "${g.group_name}" (${g.id}) has a missing or invalid max_capacity ` +
+          `(${JSON.stringify(capacity)}) — skipping it for allocation until fixed in the database. ` +
+          `This is never silently treated as 7 or any other default.`
+        );
+        return false;
+      }
+      return (g.active_customer_count ?? 0) < capacity;
+    });
+    if (!candidate) return null; // nothing eligible right now, on a fresh read
 
-  await supabase
-    .from('studdy_accounts')
-    .update({ active_customer_count: (open.active_customer_count ?? 0) + 1 })
-    .eq('id', open.id);
+    const observedCount = candidate.active_customer_count ?? 0;
 
-  return open;
+    const { data: claimed, error: claimError } = await supabase
+      .from('studdy_accounts')
+      .update({ active_customer_count: observedCount + 1 })
+      .eq('id', candidate.id)
+      .eq('active_customer_count', observedCount) // atomic compare-and-swap condition
+      .select()
+      .maybeSingle();
+
+    if (claimError) throw claimError;
+
+    if (claimed) {
+      // The conditional UPDATE actually matched and changed this exact
+      // row — we genuinely own this seat. Only now is it safe to return.
+      return claimed;
+    }
+
+    // 0 rows matched: someone else claimed this exact seat between our
+    // read and our write. Never return this account — retry from a fresh
+    // read instead, which will see the account's true current state.
+    console.error(
+      `assignStuddyAccount: lost the race for "${candidate.group_name}" (expected ` +
+      `active_customer_count=${observedCount}, but it had already changed) — retrying ` +
+      `(attempt ${attempt + 1}/${MAX_ALLOCATION_ATTEMPTS}).`
+    );
+  }
+
+  console.error('assignStuddyAccount: exhausted retry attempts under contention — no seat claimed this call.');
+  return null;
 }
 
 export async function findLeadBy(supabase, column, value) {
