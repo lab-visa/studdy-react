@@ -12,6 +12,8 @@ const TermsPage      = lazy(() => import('./pages/Legal').then(m => ({ default: 
 const RefundPage     = lazy(() => import('./pages/Legal').then(m => ({ default: m.RefundPolicy })));
 const CancelPage     = lazy(() => import('./pages/Legal').then(m => ({ default: m.CancellationPolicy })));
 const ContactPage    = lazy(() => import('./pages/Legal').then(m => ({ default: m.ContactPage })));
+const AdminLogin      = lazy(() => import('./pages/admin/AdminLogin'));
+const AdminHome       = lazy(() => import('./pages/admin/AdminHome'));
 
 function LoadingFallback() {
   return (
@@ -121,9 +123,13 @@ function ScrollRestoration() {
 
 function AppRoutes() {
   /* Fire once per visit — anonymous counter only, no row created for this
-   * visitor unless/until they actually start a trial (Phase 3, Aug 2026). */
+   * visitor unless/until they actually start a trial (Phase 3, Aug 2026).
+   * Skipped on /admin — that's Vish opening his own CRM every day, not a
+   * marketing visitor, and would otherwise quietly inflate "site opens". */
   useEffect(() => {
-    trackEvent('opened');
+    if (!window.location.pathname.startsWith('/admin')) {
+      trackEvent('opened');
+    }
   }, []);
 
   return (
@@ -141,6 +147,8 @@ function AppRoutes() {
           <Route path="/refund"          element={<RefundPage />} />
           <Route path="/cancellation"    element={<CancelPage />} />
           <Route path="/contact"         element={<ContactPage />} />
+          <Route path="/admin/login"     element={<AdminLogin />} />
+          <Route path="/admin"           element={<AdminHome />} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>
