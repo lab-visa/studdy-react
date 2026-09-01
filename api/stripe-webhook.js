@@ -61,13 +61,83 @@ import {
  * never allowed to affect the response Stripe gets, or the `leads` row a
  * real customer's dashboard depends on. New-CRM-table sync being a few
  * seconds late (retried on the next webhook) is fine; breaking a paying
- * customer's checkout is not. */
-async function safely(label, fn) {
+ * customer's checkout is not.
+ *
+ * CRM-1 Objective 4: in addition to the existing console.error, also
+ * best-effort record the failure into the already-existing, previously
+ * unused `activity_log` table (migration 0008), so there's a durable,
+ * queryable failure history beyond Vercel's ephemeral logs. Identified
+ * only by Stripe's own event.id/event.type — never a name, email, card,
+ * or Studdy credential. This logging attempt is itself wrapped in its
+ * own try/catch, so a failure to log the failure can never throw or
+ * affect the response Stripe gets. */
+export async function safely(supabase, label, event, fn) {
   try {
     await fn();
   } catch (err) {
     console.error(`sync-customer (${label}) error:`, err);
+    await logSyncFailure(supabase, label, event);
   }
+}
+
+export async function logSyncFailure(supabase, label, event) {
+  try {
+    await supabase.from('activity_log').insert({
+      event_type: 'crm_sync_failed',
+      entity_type: 'stripe_event',
+      entity_id: event?.id ?? null,
+      actor: 'system',
+      metadata: { stripe_event_type: event?.type ?? null, label },
+    });
+  } catch (logErr) {
+    console.error('activity_log write failed (best-effort, ignored):', logErr);
+  }
+}
+
+/* CRM-1 Objective 3 (Revision 2.1 correction): atomic at-most-once claim
+ * for invoice.payment_succeeded, gating the legacy total_months_paid
+ * increment BEFORE it runs — not a "SELECT then decide" check, which is
+ * not atomic under concurrent duplicate delivery (two requests can both
+ * pass a SELECT before either writes). A single, plain INSERT into the
+ * dedicated payment_claims table (migration 0015) — deliberately NOT an
+ * upsert/"ON CONFLICT DO NOTHING" — is the only gate: payment_claims.
+ * stripe_event_id is that table's PRIMARY KEY, so a plain INSERT can only
+ * ever do one of two things: (1) succeed, meaning it just created exactly
+ * one new row (a plain INSERT with no ON CONFLICT clause can never
+ * silently affect zero rows), or (2) fail with Postgres error code 23505
+ * (unique-violation on the primary key) because some request — this
+ * process or another — already holds the claim for this exact event.
+ * Postgres's own primary-key enforcement is the sole arbiter of which
+ * concurrent request wins; there is no separate "check, then decide"
+ * step for a duplicate to race against. Deliberately its own table, not
+ * payment_events — payment_events is written by the best-effort new-CRM
+ * bookkeeping path below, which can legitimately fail or lag; the legacy
+ * path's correctness must never depend on that succeeding.
+ *
+ * Returns true if THIS call won the claim — positive evidence, not an
+ * absence-of-error assumption: `!error` is only reachable here if the
+ * INSERT actually completed, and a plain INSERT with no ON CONFLICT
+ * clause has no way to "succeed" without creating the row. Returns false
+ * only for a genuine 23505 (a real duplicate — this event is already,
+ * correctly, someone else's claim; skip the legacy increment). Any OTHER
+ * error is NOT a duplicate and must never be treated like one: silently
+ * returning false here would make the caller respond 200 to Stripe (no
+ * retry) while never running the legacy increment — a payment that's
+ * quietly never recorded. So an unexpected error is thrown instead,
+ * which propagates to this handler's own outer try/catch and produces a
+ * 500 — the correct, safe outcome, since Stripe will retry a 500. */
+export async function claimPaymentEvent(supabase, event) {
+  const { error } = await supabase
+    .from('payment_claims')
+    .insert({ stripe_event_id: event.id, event_type: event.type });
+
+  if (!error) return true;
+  if (error.code === '23505') return false;
+
+  console.error('claimPaymentEvent: unexpected error claiming event', event.id, error);
+  throw new Error(
+    `claimPaymentEvent: unexpected error claiming ${event.id}${error.message ? `: ${error.message}` : ''}`
+  );
 }
 
 /* Vercel must NOT parse the body — Stripe's signature check needs the
@@ -148,7 +218,7 @@ export default async function handler(req, res) {
        * Fetches the session again (separately from syncCheckoutSession
        * above) so this addition can never risk changing what that
        * existing, already-correct function does. */
-      await safely('checkout.session.completed', async () => {
+      await safely(supabase, 'checkout.session.completed', event, async () => {
         const session = await stripe.checkout.sessions.retrieve(sessionSummary.id, {
           expand: ['subscription', 'customer'],
         });
@@ -167,6 +237,23 @@ export default async function handler(req, res) {
         /* A $0 invoice (can happen right at trial creation on some Stripe
          * API versions) is not a real payment — ignore it. */
         return res.status(200).json({ received: true });
+      }
+
+      /* Atomic at-most-once claim — see claimPaymentEvent() above. Must
+       * run BEFORE any legacy increment. If this call didn't win the
+       * claim (lost a concurrent race, or this is a genuine Stripe
+       * redelivery of an event already processed), skip the legacy
+       * increment entirely and return 200 — correct, idempotent
+       * behavior either way. A genuine (non-duplicate) database error
+       * is intentionally NOT caught here — claimPaymentEvent() throws
+       * in that case, deliberately left to propagate to this handler's
+       * own outer try/catch below, which responds 500. Stripe treats a
+       * 500 as "retry me", which is the correct, safe recovery path for
+       * an unexpected infrastructure failure — never a silent 200 that
+       * would leave a real payment unrecorded. */
+      const claimed = await claimPaymentEvent(supabase, event);
+      if (!claimed) {
+        return res.status(200).json({ received: true, claimed: false });
       }
 
       const subId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
@@ -193,7 +280,7 @@ export default async function handler(req, res) {
         console.error(`invoice.payment_succeeded for unknown subscription ${subId} / customer ${invoice.customer}`);
       }
 
-      await safely('invoice.payment_succeeded', () => recordPaymentSucceeded(supabase, event));
+      await safely(supabase, 'invoice.payment_succeeded', event, () => recordPaymentSucceeded(supabase, event));
     }
 
     /* ─────────────────────────────────────────────────────────────
@@ -217,7 +304,7 @@ export default async function handler(req, res) {
           .eq('lead_id', lead.lead_id);
       }
 
-      await safely('invoice.payment_failed', () => recordPaymentFailed(supabase, event));
+      await safely(supabase, 'invoice.payment_failed', event, () => recordPaymentFailed(supabase, event));
     }
 
     /* ─────────────────────────────────────────────────────────────
@@ -319,7 +406,7 @@ export default async function handler(req, res) {
         await releaseStuddyAccount(supabase, lead.group_name);
       }
 
-      await safely('customer.subscription.deleted', () => recordSubscriptionEnded(supabase, event));
+      await safely(supabase, 'customer.subscription.deleted', event, () => recordSubscriptionEnded(supabase, event));
     }
 
     /* ─────────────────────────────────────────────────────────────
