@@ -383,7 +383,18 @@ export async function recordPaymentFailed(supabase, event) {
   });
 }
 
-/** customer.subscription.deleted — subscription actually ended. */
+/**
+ * customer.subscription.deleted — subscription actually ended.
+ *
+ * cancelled_at/ended_at use Stripe's own event.created (via
+ * eventOccurredAt(), the same helper payment_events.occurred_at
+ * already relies on below) rather than webhook-processing wall-clock
+ * time — this is the authoritative "when did this actually happen"
+ * timestamp the Activity Timeline's cancellation entry displays
+ * (buildActivityTimeline() in api/admin/customer-detail.js), and using
+ * Stripe's own event time keeps it accurate even if webhook processing
+ * is delayed or this event is redelivered later than it first fired.
+ */
 export async function recordSubscriptionEnded(supabase, event) {
   const sub = event.data.object;
   const { data: subscription } = await supabase
@@ -394,8 +405,12 @@ export async function recordSubscriptionEnded(supabase, event) {
 
   if (!subscription) return;
 
+  const occurredAt = eventOccurredAt(event);
   const now = new Date().toISOString();
-  await supabase.from('subscriptions').update({ status: 'cancelled', cancelled_at: now, ended_at: now, updated_at: now }).eq('id', subscription.id);
+  await supabase
+    .from('subscriptions')
+    .update({ status: 'cancelled', cancelled_at: occurredAt, ended_at: occurredAt, updated_at: now })
+    .eq('id', subscription.id);
   await supabase.from('customers').update({ lifecycle: 'churned', access_status: 'ended', updated_at: now }).eq('id', subscription.customer_id);
 
   /* Free their seat in the new ledger so allocate_studdy_seat can hand it

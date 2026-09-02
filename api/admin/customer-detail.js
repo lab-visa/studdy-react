@@ -23,26 +23,140 @@ import { formatIstDateTime } from '../_lib/reporting-timezone.js';
 
 const TIMELINE_ROW_CAP = 500;
 
-/** Merges payment_events + cancellation_requests + the customer's own creation into one chronological (oldest-first) IST-labeled timeline. Exported for direct unit testing. */
-export function buildActivityTimeline({ customer, paymentEvents, cancellationRequests }) {
+/**
+ * Every payment_events.event_type this codebase actually writes
+ * (see api/_lib/sync-customer.js), mapped to a plain-language label.
+ * An event type not in this map (should not happen, but never a
+ * reason to crash a timeline) falls back to the raw Stripe event
+ * type string verbatim — see the fallback in the loop below.
+ */
+const PAYMENT_EVENT_LABELS = {
+  'invoice.payment_succeeded': 'Payment succeeded',
+  'invoice.payment_failed': 'Payment failed',
+  'refund.created': 'Refund issued',
+  'charge.dispute.created': 'Dispute opened',
+  'charge.dispute.closed': 'Dispute closed',
+};
+
+/**
+ * Merges every timeline-worthy, DATABASE-BACKED event for a customer
+ * into one chronological (newest-first, stable secondary key) IST-
+ * labeled activity timeline. Exported for direct unit testing.
+ *
+ * Every entry here traces to a real stored column — see the CRM-3A
+ * Activity Timeline audit for the full mapping of which lifecycle
+ * events do and do not have an authoritative source today:
+ *   - checkout_started      <- lead_attribution.first_touched_at
+ *   - customer_created      <- customers.created_at
+ *   - access_assigned/
+ *     access_released       <- account_assignments.assigned_at/released_at
+ *   - attribution_recorded/
+ *     attribution_updated   <- customers.first_attribution_at/latest_attribution_at
+ *   - payment_event         <- payment_events (dedup already guaranteed by
+ *                              its stripe_event_id unique constraint, see
+ *                              logPaymentEvent() in sync-customer.js — a
+ *                              Stripe webhook retry can never produce a
+ *                              second payment_events row for the same
+ *                              event, so it can never produce a duplicate
+ *                              timeline entry either)
+ *   - cancellation_request  <- cancellation_requests.requested_at
+ *   - subscription_cancelled <- subscriptions.cancelled_at (fallback
+ *                              ended_at) — see buildCancellationEntry()
+ *
+ * Deliberately NOT included (no authoritative timestamped source
+ * exists today — see the audit): plan/billing changes, cancellation
+ * approved/rejected/reversed (schema supports these statuses but no
+ * code path anywhere ever writes them), and Sales Owner change
+ * history (no audit table — only the current value + a shared,
+ * frequently-overwritten updated_at exists). Adding any of these
+ * would need new schema/columns, reported rather than silently built.
+ */
+export function buildActivityTimeline({
+  customer,
+  subscription,
+  paymentEvents,
+  cancellationRequests,
+  leadAttribution,
+  accountAssignments,
+}) {
   const entries = [];
+
+  if (leadAttribution?.first_touched_at) {
+    entries.push({
+      type: 'checkout_started',
+      label: 'Checkout started',
+      source: 'lead_attribution.first_touched_at',
+      occurred_at: leadAttribution.first_touched_at,
+      sortAt: leadAttribution.first_touched_at,
+    });
+  }
 
   if (customer?.created_at) {
     entries.push({
       type: 'customer_created',
       label: 'Trial started / customer created',
+      source: 'customers.created_at',
       occurred_at: customer.created_at,
+      sortAt: customer.created_at,
+    });
+  }
+
+  for (const a of accountAssignments || []) {
+    if (a.assigned_at) {
+      entries.push({
+        type: 'access_assigned',
+        label: `Access assigned${a.group_name ? ` — ${a.group_name}` : ''}`,
+        source: 'account_assignments.assigned_at',
+        occurred_at: a.assigned_at,
+        sortAt: a.assigned_at,
+      });
+    }
+    if (a.released_at) {
+      entries.push({
+        type: 'access_released',
+        label: `Access released${a.group_name ? ` — ${a.group_name}` : ''}`,
+        source: 'account_assignments.released_at',
+        occurred_at: a.released_at,
+        sortAt: a.released_at,
+      });
+    }
+  }
+
+  if (customer?.first_attribution_at) {
+    entries.push({
+      type: 'attribution_recorded',
+      label: 'Campaign attribution recorded (first touch)',
+      detail: customer.first_utm_source || customer.first_utm_campaign
+        ? [customer.first_utm_source, customer.first_utm_campaign].filter(Boolean).join(' / ')
+        : null,
+      source: 'customers.first_attribution_at',
+      occurred_at: customer.first_attribution_at,
+      sortAt: customer.first_attribution_at,
+    });
+  }
+  if (customer?.latest_attribution_at && customer.latest_attribution_at !== customer.first_attribution_at) {
+    entries.push({
+      type: 'attribution_updated',
+      label: 'Campaign attribution updated (latest touch)',
+      detail: customer.latest_utm_source || customer.latest_utm_campaign
+        ? [customer.latest_utm_source, customer.latest_utm_campaign].filter(Boolean).join(' / ')
+        : null,
+      source: 'customers.latest_attribution_at',
+      occurred_at: customer.latest_attribution_at,
+      sortAt: customer.latest_attribution_at,
     });
   }
 
   for (const evt of paymentEvents || []) {
     entries.push({
       type: 'payment_event',
-      label: evt.event_type,
+      label: PAYMENT_EVENT_LABELS[evt.event_type] || evt.event_type,
+      source: `payment_events (${evt.event_type})`,
       amount: evt.amount,
       currency: evt.currency,
       status: evt.status,
       occurred_at: evt.occurred_at,
+      sortAt: evt.occurred_at,
     });
   }
 
@@ -50,13 +164,81 @@ export function buildActivityTimeline({ customer, paymentEvents, cancellationReq
     entries.push({
       type: 'cancellation_request',
       label: `Cancellation request: ${req.status}`,
+      source: 'cancellation_requests.requested_at',
       reason: req.reason,
       occurred_at: req.requested_at,
+      sortAt: req.requested_at,
     });
   }
 
-  entries.sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
-  return entries.map((e) => ({ ...e, occurred_at_ist: formatIstDateTime(e.occurred_at) }));
+  const cancellationEntry = buildCancellationEntry(subscription);
+  if (cancellationEntry) entries.push(cancellationEntry);
+
+  /* Newest first, per CRM-3A's explicit ordering requirement. `type` is
+   * the stable secondary key: for two entries that happen to share the
+   * exact same timestamp (rare, but possible — e.g. cancelled_at and a
+   * same-instant payment_events row), sorting also by `type` means the
+   * order is always the same across requests, never re-shuffled. */
+  entries.sort((a, b) => {
+    const diff = new Date(b.sortAt).getTime() - new Date(a.sortAt).getTime();
+    if (diff !== 0) return diff;
+    return a.type < b.type ? -1 : a.type > b.type ? 1 : 0;
+  });
+
+  return entries.map(({ sortAt: _sortAt, ...e }) => ({ ...e, occurred_at_ist: e.occurred_at ? formatIstDateTime(e.occurred_at) : null }));
+}
+
+/**
+ * The specific bug this round fixes: a customer whose subscription
+ * status is 'cancelled' had NO timeline entry at all showing when
+ * that happened, even though subscriptions.cancelled_at/ended_at are
+ * real, dedicated, reliably-written columns (see recordSubscriptionEnded()
+ * in api/_lib/sync-customer.js) — never derived from the shared,
+ * frequently-overwritten customers.updated_at or subscriptions.updated_at.
+ *
+ * Priority: cancelled_at (the actual moment recordSubscriptionEnded()
+ * ran, set from Stripe's own event time) is the primary source;
+ * ended_at is written in the exact same statement as a same-value
+ * fallback, kept here only for the rare case a row was written by
+ * some other path that set one but not the other. `cancel_at` (a
+ * FUTURE-scheduled cancellation instant, set by syncSubscriptionUpdated()
+ * on customer.subscription.updated) is deliberately NEVER used as the
+ * displayed cancellation date here — it is a schedule, not a
+ * completed fact, and using it would misrepresent an event that may
+ * not have actually happened yet as something that already did.
+ *
+ * If status is 'cancelled' but BOTH cancelled_at and ended_at are
+ * null (a genuinely possible historical/edge case — e.g. a row
+ * written before this column was populated, or by any future code
+ * path that sets status='cancelled' without setting either timestamp),
+ * this returns an entry with occurred_at: null and a label that says
+ * so explicitly, rather than inventing a date from updated_at or any
+ * other unrelated field. Sort position for this null-date case falls
+ * back to the subscription row's own updated_at, used ONLY to decide
+ * where the entry lands in the list — it is never returned as, or
+ * displayed as, the cancellation date itself.
+ */
+export function buildCancellationEntry(subscription) {
+  if (!subscription || subscription.status !== 'cancelled') return null;
+
+  const occurredAt = subscription.cancelled_at || subscription.ended_at || null;
+  if (occurredAt) {
+    return {
+      type: 'subscription_cancelled',
+      label: 'Subscription cancelled',
+      source: subscription.cancelled_at ? 'subscriptions.cancelled_at' : 'subscriptions.ended_at',
+      occurred_at: occurredAt,
+      sortAt: occurredAt,
+    };
+  }
+
+  return {
+    type: 'subscription_cancelled',
+    label: 'Cancelled — exact date unavailable',
+    source: null,
+    occurred_at: null,
+    sortAt: subscription.updated_at || subscription.created_at || null,
+  };
 }
 
 export default async function handler(req, res) {
@@ -78,7 +260,7 @@ export default async function handler(req, res) {
     if (customerError) throw customerError;
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
-    const [joinedArr, allCancellationRequestsRes, paymentEventsRes, legacyLeadRes] = await Promise.all([
+    const [joinedArr, allCancellationRequestsRes, paymentEventsRes, legacyLeadRes, leadAttributionRes, allAssignmentsRes] = await Promise.all([
       withLifecycle(supabase, [customer]),
       supabase
         .from('cancellation_requests')
@@ -99,19 +281,57 @@ export default async function handler(req, res) {
             .eq('stripe_customer_id', customer.stripe_customer_id)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      /* CRM-3A Activity Timeline audit — "Checkout started" entry.
+       * lead_attribution isn't linked to a customer by a foreign key,
+       * only by the same lead_id used as customers.source_lead_id
+       * (see migration 0016's own comment) — no row is a normal,
+       * expected case (a pre-CRM-3A customer, or one with no tracked
+       * link at all), not an error. */
+      customer.source_lead_id
+        ? supabase.from('lead_attribution').select('first_touched_at').eq('lead_id', customer.source_lead_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      /* ALL account_assignments rows (any status), not just the
+       * active one withLifecycle() already resolved above — the
+       * timeline needs the full assign/release HISTORY, not just the
+       * current state. */
+      supabase
+        .from('account_assignments')
+        .select('studdy_account_id, assigned_at, released_at, status')
+        .eq('customer_id', customer.id)
+        .order('assigned_at', { ascending: false })
+        .limit(TIMELINE_ROW_CAP),
     ]);
 
     if (allCancellationRequestsRes.error) throw allCancellationRequestsRes.error;
     if (paymentEventsRes.error) throw paymentEventsRes.error;
     if (legacyLeadRes.error) throw legacyLeadRes.error;
+    if (leadAttributionRes.error) throw leadAttributionRes.error;
+    if (allAssignmentsRes.error) throw allAssignmentsRes.error;
 
     const { subscription, openCancellationRequest, groupName, lifecycle } = joinedArr[0];
     const legacyLead = legacyLeadRes.data;
 
+    const assignmentRows = allAssignmentsRes.data || [];
+    const accountIds = [...new Set(assignmentRows.map((a) => a.studdy_account_id).filter(Boolean))];
+    let accountNamesById = new Map();
+    if (accountIds.length) {
+      const { data: accounts, error: accountsError } = await supabase
+        .from('studdy_accounts')
+        .select('id, group_name')
+        .in('id', accountIds)
+        .limit(TIMELINE_ROW_CAP);
+      if (accountsError) throw accountsError;
+      accountNamesById = new Map((accounts || []).map((a) => [a.id, a.group_name]));
+    }
+    const accountAssignments = assignmentRows.map((a) => ({ ...a, group_name: accountNamesById.get(a.studdy_account_id) || null }));
+
     const timeline = buildActivityTimeline({
       customer,
+      subscription,
       paymentEvents: paymentEventsRes.data,
       cancellationRequests: allCancellationRequestsRes.data,
+      leadAttribution: leadAttributionRes.data,
+      accountAssignments,
     });
 
     return res.status(200).json({

@@ -207,15 +207,16 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
                 <div className="text-[12.5px] font-medium" style={{ color: 'var(--soft)' }}>No activity recorded yet.</div>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {data.activity_timeline
-                    .slice()
-                    .reverse()
-                    .map((entry, i) => (
-                      <li key={i} className="text-[12.5px]" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '10px' }}>
-                        <div className="font-bold" style={{ color: 'var(--ink)' }}>{entry.label}</div>
-                        <div style={{ color: 'var(--soft)' }}>{entry.occurred_at_ist ?? entry.occurred_at}</div>
-                      </li>
-                    ))}
+                  {/* Backend already sorts newest-first with a stable
+                      secondary key (api/admin/customer-detail.js's
+                      buildActivityTimeline()) — no client-side re-sort. */}
+                  {data.activity_timeline.map((entry, i) => (
+                    <li key={i} className="text-[12.5px]" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '10px' }}>
+                      <div className="font-bold" style={{ color: 'var(--ink)' }}>{entry.label}</div>
+                      <div style={{ color: 'var(--soft)' }}>{entry.occurred_at_ist ?? 'Date unavailable'}</div>
+                      {entry.detail && <div style={{ color: 'var(--soft)' }}>{entry.detail}</div>}
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>

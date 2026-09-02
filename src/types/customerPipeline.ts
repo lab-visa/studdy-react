@@ -54,14 +54,17 @@ export interface CustomerListRow {
 
 export interface CustomersListResponse {
   generated_at: string;
-  row_cap: number;
   total_matching: number;
-  limit: number;
-  offset: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_previous: boolean;
+  has_next: boolean;
   customers: CustomerListRow[];
 }
 
 export interface CustomerFilters {
+  search?: string;
   from?: string;
   to?: string;
   country?: string;
@@ -80,11 +83,13 @@ export interface CustomerFilters {
 export interface ActivityTimelineEntry {
   type: string;
   label: string;
+  source?: string | null;
+  detail?: string | null;
   amount?: number | null;
   currency?: string | null;
   status?: string | null;
   reason?: string | null;
-  occurred_at: string;
+  occurred_at: string | null;
   occurred_at_ist: string | null;
 }
 

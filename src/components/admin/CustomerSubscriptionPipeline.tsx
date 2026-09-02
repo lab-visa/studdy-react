@@ -22,6 +22,22 @@ const TONE_COLORS: Record<string, string> = {
   danger: 'var(--g1)',
 };
 
+/**
+ * "1 customer" / "0 customers" when everything fits on one page (or
+ * there's nothing to show), "Showing 1–100 of 125,430 customers" once
+ * pagination is actually in play — never the old flat "N matching
+ * (capped at 2000)" wording, since there is no cap anymore (see
+ * migration 0017 / api/admin/customers.js).
+ */
+function customerCountLabel(data: CustomersListResponse): string {
+  const total = data.total_matching;
+  if (total === 1) return '1 customer';
+  if (data.total_pages <= 1) return `${total.toLocaleString()} customer${total === 1 ? '' : 's'}`;
+  const start = (data.page - 1) * data.page_size + 1;
+  const end = Math.min(data.page * data.page_size, total);
+  return `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} customers`;
+}
+
 function TodayTile({ label, count }: { label: string; count: number }) {
   return (
     <div className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5" style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
@@ -33,6 +49,7 @@ function TodayTile({ label, count }: { label: string; count: number }) {
 
 export default function CustomerSubscriptionPipeline({ onSessionExpired }: Props) {
   const [filters, setFilters] = useState<CustomerFilters>({});
+  const [page, setPage] = useState(1);
   const [listData, setListData] = useState<CustomersListResponse | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -42,13 +59,22 @@ export default function CustomerSubscriptionPipeline({ onSessionExpired }: Props
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
+  // Any filter (including search) changing means "start over from page 1" —
+  // the previous page number almost never still makes sense against a new
+  // result set, and silently keeping it risks landing past the new last page.
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
+    params.set('page', String(page));
+    params.set('pageSize', '50');
     return params.toString();
-  }, [filters]);
+  }, [filters, page]);
 
   const loadCustomers = useCallback(async () => {
     setListLoading(true);
@@ -144,6 +170,12 @@ export default function CustomerSubscriptionPipeline({ onSessionExpired }: Props
 
       <SectionCard title="Filters">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <FilterInput
+            label="Search"
+            value={filters.search ?? ''}
+            onChange={(v) => updateFilter('search', v)}
+            placeholder="Name, email, phone, or Paid ID"
+          />
           <FilterInput label="Country" value={filters.country ?? ''} onChange={(v) => updateFilter('country', v)} />
           <FilterInput label="Sales Owner" value={filters.salesOwner ?? ''} onChange={(v) => updateFilter('salesOwner', v)} placeholder="or 'unassigned'" />
           <FilterSelect
@@ -179,7 +211,7 @@ export default function CustomerSubscriptionPipeline({ onSessionExpired }: Props
         </div>
       </SectionCard>
 
-      <SectionCard title="Customers" description={listData ? `${listData.total_matching} matching (capped at ${listData.row_cap})` : undefined}>
+      <SectionCard title="Customers" description={listData ? customerCountLabel(listData) : undefined}>
         {listError && listData && (
           <p role="alert" className="text-[12.5px] font-bold mb-3" style={{ color: 'var(--g1)' }}>
             Last refresh failed — showing the most recently loaded data. {listError}
@@ -190,7 +222,34 @@ export default function CustomerSubscriptionPipeline({ onSessionExpired }: Props
             No customers match these filters.
           </div>
         ) : (
-          <CustomerTable rows={listData?.customers ?? []} onSelect={setSelectedCustomerId} />
+          <>
+            <CustomerTable rows={listData?.customers ?? []} onSelect={setSelectedCustomerId} />
+            {listData && listData.total_pages > 1 && (
+              <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                <button
+                  type="button"
+                  disabled={!listData.has_previous}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="rounded-lg px-3 py-1.5 text-[12.5px] font-bold disabled:opacity-40"
+                  style={{ background: 'var(--dim)', border: '1px solid var(--border)', color: 'var(--ink)' }}
+                >
+                  Previous
+                </button>
+                <span className="text-[12px] font-semibold" style={{ color: 'var(--soft)' }}>
+                  Page {listData.page} of {listData.total_pages}
+                </span>
+                <button
+                  type="button"
+                  disabled={!listData.has_next}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="rounded-lg px-3 py-1.5 text-[12.5px] font-bold disabled:opacity-40"
+                  style={{ background: 'var(--dim)', border: '1px solid var(--border)', color: 'var(--ink)' }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
         )}
       </SectionCard>
 

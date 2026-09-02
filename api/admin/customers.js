@@ -1,39 +1,49 @@
 /**
  * GET /api/admin/customers
  *
- * CRM-3A — Customer & Subscription pipeline list view. Protected,
- * read-only, JS-side filtered/paginated join over customers +
- * subscriptions + cancellation_requests + payment_events + account
- * allocation (api/_lib/customer-pipeline.js) — same style and row cap as
- * api/admin/reconciliation.js and api/_lib/metrics.js, for the same
- * documented reason (current data volume is small; a new Postgres
- * function/view is out of this round's additive-migration-only scope).
+ * CRM-3A — Customer & Subscription pipeline list view. Scalable
+ * server-side pagination: every filter (including free-text search)
+ * and the total count are computed entirely in Postgres, over the
+ * FULL customer population, via the search_customer_pipeline(...)
+ * function (migration 0017) — there is no PIPELINE_ROW_CAP-style
+ * ceiling on how many customers this endpoint can see or count.
  *
  * Query params (all optional):
- *   from, to            — customers.created_at range (ISO 8601). `to` is
- *                          exclusive, matching metrics.js's convention.
- *   country              — exact match, customers.country
- *   salesOwner            — exact match; the literal value "unassigned"
- *                            matches customers.sales_owner IS NULL
- *   accessStatus           — exact match, customers.access_status
- *   plan                    — exact match, subscriptions.plan_type
- *   currency                 — exact match, subscriptions.currency
- *   campaignSource             — matches EITHER latest_utm_source or
- *                                 first_utm_source (case-insensitive)
- *   paymentStatus                — exact match, subscriptions.status
- *   trialOrPaid                    — 'trial' (customers.lifecycle='trial')
- *                                    or 'paid' (lifecycle in
- *                                    converted/retained)
- *   cancellationStatus               — 'requested' (an open
- *                                       cancellation_requests row exists)
- *                                       or 'none'
- *   groupName                          — exact match, assigned Studdy
- *                                        group (account_assignments mirror)
- *   stage                               — exact match against the derived
- *                                         lifecycle.stage string
- *   limit, offset                        — pagination over the (already
- *                                          filtered) result, default 50 /
- *                                          0, capped at PIPELINE_ROW_CAP
+ *   search                — matches name/email/phone/paid_id (substring,
+ *                            case-insensitive), server-side, across the
+ *                            full population, not just the current page.
+ *   from, to               — customers.created_at range (ISO 8601). `to`
+ *                            is exclusive, matching metrics.js's convention.
+ *   country                 — exact match, customers.country
+ *   salesOwner               — exact match; the literal value "unassigned"
+ *                              matches customers.sales_owner IS NULL
+ *   accessStatus              — exact match, customers.access_status
+ *   plan                       — exact match, subscriptions.plan_type
+ *   currency                    — exact match, subscriptions.currency
+ *   campaignSource                — matches EITHER latest_utm_source or
+ *                                    first_utm_source (case-insensitive)
+ *   paymentStatus                   — exact match, subscriptions.status
+ *   trialOrPaid                       — 'trial' (customers.lifecycle='trial')
+ *                                       or 'paid' (lifecycle in
+ *                                       converted/retained)
+ *   cancellationStatus                  — 'requested' (an open
+ *                                          cancellation_requests row exists)
+ *                                          or 'none'
+ *   groupName                             — exact match, assigned Studdy
+ *                                           group (account_assignments mirror)
+ *   stage                                  — exact match against the derived
+ *                                            lifecycle.stage string
+ *   page                                    — 1-based page number, default 1.
+ *                                            Invalid/non-numeric/negative/
+ *                                            non-integer values fall back to
+ *                                            1, never a crash or a garbage page.
+ *   pageSize                                 — must be exactly 50 or 100;
+ *                                              any other value (including
+ *                                              missing) falls back to 50.
+ *                                              Deliberately not "whatever
+ *                                              number the client asks for" —
+ *                                              see the CRM-3A pagination
+ *                                              requirement this satisfies.
  *
  * Every value returned here is already safe for an admin CRM view — no
  * Studdy password/credential (those live only on `leads`/`studdy_accounts`
@@ -41,38 +51,28 @@
  */
 import { getSupabase } from '../_lib/supabase.js';
 import { requireAdminSession } from '../_lib/admin-auth.js';
-import { withLifecycle, PIPELINE_ROW_CAP } from '../_lib/customer-pipeline.js';
 
+export const ALLOWED_PAGE_SIZES = [50, 100];
 const DEFAULT_PAGE_SIZE = 50;
 
-function matchesTrialOrPaid(customer, value) {
-  if (!value) return true;
-  if (value === 'trial') return customer.lifecycle === 'trial';
-  if (value === 'paid') return customer.lifecycle === 'converted' || customer.lifecycle === 'retained';
-  return true;
+export function parsePageSize(raw) {
+  const n = Number(raw);
+  return ALLOWED_PAGE_SIZES.includes(n) ? n : DEFAULT_PAGE_SIZE;
 }
 
-function matchesCampaignSource(customer, value) {
-  if (!value) return true;
-  const needle = value.toLowerCase();
-  const latest = (customer.latest_utm_source || '').toLowerCase();
-  const first = (customer.first_utm_source || '').toLowerCase();
-  return latest === needle || first === needle;
-}
+// (page - 1) * pageSize is passed to Postgres as an int4 OFFSET
+// (max ~2.147 billion) — an absurdly large page number (a typo, a
+// scraping attempt, whatever) must degrade to "no results on this
+// page" like any other out-of-range page, never a raw 500 from an
+// integer-overflow error at the database. 10,000,000 is far beyond
+// any real total_pages this table will ever have, while
+// (10,000,000 - 1) * 100 stays safely inside int4 range.
+const MAX_PAGE = 10_000_000;
 
-export function applyRowFilters(rows, filters) {
-  return rows.filter(({ customer, subscription, openCancellationRequest, groupName, lifecycle }) => {
-    if (filters.plan && subscription?.plan_type !== filters.plan) return false;
-    if (filters.currency && subscription?.currency !== filters.currency) return false;
-    if (filters.paymentStatus && subscription?.status !== filters.paymentStatus) return false;
-    if (filters.trialOrPaid && !matchesTrialOrPaid(customer, filters.trialOrPaid)) return false;
-    if (filters.cancellationStatus === 'requested' && !openCancellationRequest) return false;
-    if (filters.cancellationStatus === 'none' && openCancellationRequest) return false;
-    if (filters.groupName && groupName !== filters.groupName) return false;
-    if (filters.campaignSource && !matchesCampaignSource(customer, filters.campaignSource)) return false;
-    if (filters.stage && lifecycle.stage !== filters.stage) return false;
-    return true;
-  });
+export function parsePage(raw) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) return 1;
+  return Math.min(n, MAX_PAGE);
 }
 
 export default async function handler(req, res) {
@@ -85,54 +85,74 @@ export default async function handler(req, res) {
   if (!adminUser) return;
 
   const q = req.query || {};
-  const limit = Math.min(Number(q.limit) || DEFAULT_PAGE_SIZE, PIPELINE_ROW_CAP);
-  const offset = Math.max(Number(q.offset) || 0, 0);
+  const pageSize = parsePageSize(q.pageSize);
+  const page = parsePage(q.page);
+  const offset = (page - 1) * pageSize;
 
   try {
-    let query = supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(PIPELINE_ROW_CAP);
-    if (q.from) query = query.gte('created_at', q.from);
-    if (q.to) query = query.lt('created_at', q.to);
-    if (q.country) query = query.eq('country', q.country);
-    if (q.accessStatus) query = query.eq('access_status', q.accessStatus);
-    if (q.salesOwner === 'unassigned') query = query.is('sales_owner', null);
-    else if (q.salesOwner) query = query.eq('sales_owner', q.salesOwner);
-
-    const { data: customers, error } = await query;
+    const { data, error } = await supabase.rpc('search_customer_pipeline', {
+      p_search: q.search || null,
+      p_from: q.from || null,
+      p_to: q.to || null,
+      p_country: q.country || null,
+      p_sales_owner: q.salesOwner && q.salesOwner !== 'unassigned' ? q.salesOwner : null,
+      p_sales_owner_unassigned: q.salesOwner === 'unassigned',
+      p_access_status: q.accessStatus || null,
+      p_plan: q.plan || null,
+      p_currency: q.currency || null,
+      p_campaign_source: q.campaignSource || null,
+      p_payment_status: q.paymentStatus || null,
+      p_trial_or_paid: q.trialOrPaid || null,
+      p_cancellation_status: q.cancellationStatus || null,
+      p_group_name: q.groupName || null,
+      p_stage: q.stage || null,
+      p_limit: pageSize,
+      p_offset: offset,
+    });
     if (error) throw error;
 
-    const joined = await withLifecycle(supabase, customers || []);
-    const filtered = applyRowFilters(joined, q);
-    const page = filtered.slice(offset, offset + limit);
+    const rows = data || [];
+    // The "marker row" case (search_customer_pipeline's own LEFT JOIN
+    // technique, see migration 0017): a page with zero matching
+    // customers still returns exactly one row, carrying only
+    // total_count with every customer field null. Detect and drop it
+    // here rather than showing a single all-blank row.
+    const isMarkerOnly = rows.length === 1 && rows[0].id === null;
+    const customers = isMarkerOnly ? [] : rows;
+    const totalCount = rows.length ? Number(rows[0].total_count) : 0;
+    const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize);
 
     return res.status(200).json({
       generated_at: new Date().toISOString(),
-      row_cap: PIPELINE_ROW_CAP,
-      total_matching: filtered.length,
-      limit,
-      offset,
-      customers: page.map(({ customer, subscription, openCancellationRequest, groupName, lifecycle }) => ({
-        id: customer.id,
-        paid_id: customer.paid_id,
-        name: customer.name,
-        email: customer.email,
-        phone: customer.phone,
-        country: customer.country,
-        sales_owner: customer.sales_owner,
-        plan_type: subscription?.plan_type ?? null,
-        currency: subscription?.currency ?? null,
-        stripe_customer_id: customer.stripe_customer_id,
-        stripe_subscription_id: subscription?.stripe_subscription_id ?? null,
-        trial_start: subscription?.trial_start ?? null,
-        trial_end: subscription?.trial_end ?? null,
-        current_period_end: subscription?.current_period_end ?? null,
-        first_utm_source: customer.first_utm_source,
-        first_utm_campaign: customer.first_utm_campaign,
-        latest_utm_source: customer.latest_utm_source,
-        latest_utm_campaign: customer.latest_utm_campaign,
-        group_name: groupName,
-        cancellation_status: openCancellationRequest ? openCancellationRequest.status : null,
-        lifecycle,
-        created_at: customer.created_at,
+      total_matching: totalCount,
+      page,
+      page_size: pageSize,
+      total_pages: totalPages,
+      has_previous: page > 1,
+      has_next: totalPages > 0 && page < totalPages,
+      customers: customers.map((r) => ({
+        id: r.id,
+        paid_id: r.paid_id,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
+        country: r.country,
+        sales_owner: r.sales_owner,
+        plan_type: r.plan_type,
+        currency: r.currency,
+        stripe_customer_id: r.stripe_customer_id,
+        stripe_subscription_id: r.stripe_subscription_id,
+        trial_start: r.trial_start,
+        trial_end: r.trial_end,
+        current_period_end: r.current_period_end,
+        first_utm_source: r.first_utm_source,
+        first_utm_campaign: r.first_utm_campaign,
+        latest_utm_source: r.latest_utm_source,
+        latest_utm_campaign: r.latest_utm_campaign,
+        group_name: r.group_name,
+        cancellation_status: r.cancellation_status,
+        lifecycle: r.lifecycle,
+        created_at: r.created_at,
       })),
     });
   } catch (err) {
