@@ -26,9 +26,9 @@ This directory was not previously committed to GitHub (confirmed absent in CRM-0
 
 ## Production execution order for the pending migrations
 
-`0012 → verify → 0013 → verify → 0014 → verify → 0015 → verify → 0016 → verify`, one file at a time, never batched, never run out of order.
+`0012 → verify → 0013 → verify → 0014 → verify → 0015 → verify → 0016 → verify → 0017 → verify`, one file at a time, never batched, never run out of order.
 
-**0012–0016 are done and verified in production.** `0017` is written and awaiting review/approval — see its own header. It is not run against production by anything in this round.
+**0012–0016 are done and verified in production.** `0017` is the next (and, as of this round, still the only) file in that sequence — it is written, has been through a second review round (ChatGPT review round 2 — security hardening on `search_customer_pipeline()`, corrected concurrent-write documentation, and other fixes; see the file's own header and this round's delivery report), and remains **PENDING**, awaiting the same review/approval process as every prior migration before anyone runs it. It is not run against production by anything in this round.
 
 ## Before running any pending migration against production
 

@@ -144,7 +144,12 @@ export interface CustomerDetailResponse {
   };
   lifecycle: LifecycleResult;
   activity_timeline: ActivityTimelineEntry[];
-  row_cap: number;
+  timeline_page: number;
+  timeline_page_size: number;
+  timeline_total_count: number;
+  timeline_total_pages: number;
+  timeline_has_previous: boolean;
+  timeline_has_next: boolean;
 }
 
 interface TouchInfo {

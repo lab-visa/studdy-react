@@ -21,7 +21,34 @@ import { requireAdminSession } from '../_lib/admin-auth.js';
 import { withLifecycle } from '../_lib/customer-pipeline.js';
 import { formatIstDateTime } from '../_lib/reporting-timezone.js';
 
-const TIMELINE_ROW_CAP = 500;
+/**
+ * CHATGPT REVIEW FIX (round 2, "complete activity history"): this used
+ * to be a single TIMELINE_ROW_CAP=500 applied to every source query
+ * (payment_events, cancellation_requests, account_assignments) — any
+ * customer with more than 500 rows in any ONE of those tables silently
+ * lost everything past row 500, with no indication in the response
+ * that anything was cut. That cap is gone: every source query below is
+ * fetched in full for this ONE customer (a single-customer scope is
+ * inherently bounded by real subscription/billing history — the same
+ * "not the full population" exemption migration 0017's own header
+ * comment already gives this endpoint), and the merged, sorted
+ * timeline is paginated in memory instead, via timelinePage/
+ * timelinePageSize below, so every stored event stays reachable
+ * (just possibly on a later page) instead of some silently vanishing.
+ */
+export const ALLOWED_TIMELINE_PAGE_SIZES = [25, 50, 100];
+const DEFAULT_TIMELINE_PAGE_SIZE = 50;
+
+export function parseTimelinePageSize(raw) {
+  const n = Number(raw);
+  return ALLOWED_TIMELINE_PAGE_SIZES.includes(n) ? n : DEFAULT_TIMELINE_PAGE_SIZE;
+}
+
+export function parseTimelinePage(raw) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) return 1;
+  return n;
+}
 
 /**
  * Every payment_events.event_type this codebase actually writes
@@ -250,7 +277,8 @@ export default async function handler(req, res) {
   const adminUser = await requireAdminSession(req, res, supabase);
   if (!adminUser) return;
 
-  const { id } = req.query || {};
+  const q = req.query || {};
+  const { id } = q;
   if (!id) {
     return res.status(400).json({ error: 'id is required' });
   }
@@ -266,14 +294,12 @@ export default async function handler(req, res) {
         .from('cancellation_requests')
         .select('*')
         .eq('customer_id', customer.id)
-        .order('requested_at', { ascending: false })
-        .limit(TIMELINE_ROW_CAP),
+        .order('requested_at', { ascending: false }),
       supabase
         .from('payment_events')
         .select('*')
         .eq('customer_id', customer.id)
-        .order('occurred_at', { ascending: false })
-        .limit(TIMELINE_ROW_CAP),
+        .order('occurred_at', { ascending: false }),
       customer.stripe_customer_id
         ? supabase
             .from('leads')
@@ -298,8 +324,7 @@ export default async function handler(req, res) {
         .from('account_assignments')
         .select('studdy_account_id, assigned_at, released_at, status')
         .eq('customer_id', customer.id)
-        .order('assigned_at', { ascending: false })
-        .limit(TIMELINE_ROW_CAP),
+        .order('assigned_at', { ascending: false }),
     ]);
 
     if (allCancellationRequestsRes.error) throw allCancellationRequestsRes.error;
@@ -315,17 +340,18 @@ export default async function handler(req, res) {
     const accountIds = [...new Set(assignmentRows.map((a) => a.studdy_account_id).filter(Boolean))];
     let accountNamesById = new Map();
     if (accountIds.length) {
+      // Bounded by accountIds.length itself (an IN-list) — no separate
+      // row cap needed or meaningful here.
       const { data: accounts, error: accountsError } = await supabase
         .from('studdy_accounts')
         .select('id, group_name')
-        .in('id', accountIds)
-        .limit(TIMELINE_ROW_CAP);
+        .in('id', accountIds);
       if (accountsError) throw accountsError;
       accountNamesById = new Map((accounts || []).map((a) => [a.id, a.group_name]));
     }
     const accountAssignments = assignmentRows.map((a) => ({ ...a, group_name: accountNamesById.get(a.studdy_account_id) || null }));
 
-    const timeline = buildActivityTimeline({
+    const fullTimeline = buildActivityTimeline({
       customer,
       subscription,
       paymentEvents: paymentEventsRes.data,
@@ -333,6 +359,21 @@ export default async function handler(req, res) {
       leadAttribution: leadAttributionRes.data,
       accountAssignments,
     });
+
+    // In-memory pagination of the already-sorted, already-complete
+    // (no per-source row cap — see the module comment above) timeline.
+    // A single customer's full activity history is bounded by real
+    // subscription/billing volume, not by an attacker-controlled
+    // population size, so building it in full before paginating is
+    // safe here in a way it would not be for the customer LIST view
+    // (see migration 0017 / api/admin/customers.js for that scalable,
+    // server-side-paginated case).
+    const timelinePage = parseTimelinePage(q.timelinePage);
+    const timelinePageSize = parseTimelinePageSize(q.timelinePageSize);
+    const timelineTotalCount = fullTimeline.length;
+    const timelineTotalPages = timelineTotalCount === 0 ? 0 : Math.ceil(timelineTotalCount / timelinePageSize);
+    const timelineStart = (timelinePage - 1) * timelinePageSize;
+    const timeline = fullTimeline.slice(timelineStart, timelineStart + timelinePageSize);
 
     return res.status(200).json({
       generated_at: new Date().toISOString(),
@@ -409,7 +450,12 @@ export default async function handler(req, res) {
       },
       lifecycle,
       activity_timeline: timeline,
-      row_cap: TIMELINE_ROW_CAP,
+      timeline_page: timelinePage,
+      timeline_page_size: timelinePageSize,
+      timeline_total_count: timelineTotalCount,
+      timeline_total_pages: timelineTotalPages,
+      timeline_has_previous: timelinePage > 1,
+      timeline_has_next: timelineTotalPages > 0 && timelinePage < timelineTotalPages,
     });
   } catch (err) {
     console.error('admin/customer-detail error:', err);

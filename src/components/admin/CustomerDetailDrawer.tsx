@@ -48,12 +48,24 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
   const [ownerDraft, setOwnerDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // CRM-3A ChatGPT review round 2 — "complete activity history": the
+  // timeline is now server-paginated (no silent TIMELINE_ROW_CAP=500
+  // truncation — see api/admin/customer-detail.js), so every stored
+  // event stays reachable via Previous/Next instead of some vanishing.
+  const [timelinePage, setTimelinePage] = useState(1);
+
+  useEffect(() => {
+    setTimelinePage(1);
+  }, [customerId]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/customer-detail?id=${encodeURIComponent(customerId)}`, { credentials: 'same-origin' });
+      const res = await fetch(
+        `/api/admin/customer-detail?id=${encodeURIComponent(customerId)}&timelinePage=${timelinePage}`,
+        { credentials: 'same-origin' }
+      );
       if (res.status === 401) {
         onSessionExpired();
         return;
@@ -67,7 +79,7 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
     } finally {
       setLoading(false);
     }
-  }, [customerId, onSessionExpired]);
+  }, [customerId, timelinePage, onSessionExpired]);
 
   useEffect(() => {
     load();
@@ -200,24 +212,56 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
             </div>
 
             <div>
-              <div className="text-[10.5px] font-black uppercase tracking-wide mb-1.5" style={{ color: 'var(--soft)' }}>
-                Activity timeline (IST)
+              <div className="flex items-baseline justify-between mb-1.5">
+                <div className="text-[10.5px] font-black uppercase tracking-wide" style={{ color: 'var(--soft)' }}>
+                  Activity timeline (IST)
+                </div>
+                {data.timeline_total_count > 0 && (
+                  <div className="text-[11px] font-semibold" style={{ color: 'var(--soft)' }}>
+                    {`${(data.timeline_page - 1) * data.timeline_page_size + 1}–${Math.min(data.timeline_page * data.timeline_page_size, data.timeline_total_count)} of ${data.timeline_total_count}`}
+                  </div>
+                )}
               </div>
               {data.activity_timeline.length === 0 ? (
                 <div className="text-[12.5px] font-medium" style={{ color: 'var(--soft)' }}>No activity recorded yet.</div>
               ) : (
-                <ul className="flex flex-col gap-2">
-                  {/* Backend already sorts newest-first with a stable
-                      secondary key (api/admin/customer-detail.js's
-                      buildActivityTimeline()) — no client-side re-sort. */}
-                  {data.activity_timeline.map((entry, i) => (
-                    <li key={i} className="text-[12.5px]" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '10px' }}>
-                      <div className="font-bold" style={{ color: 'var(--ink)' }}>{entry.label}</div>
-                      <div style={{ color: 'var(--soft)' }}>{entry.occurred_at_ist ?? 'Date unavailable'}</div>
-                      {entry.detail && <div style={{ color: 'var(--soft)' }}>{entry.detail}</div>}
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="flex flex-col gap-2">
+                    {/* Backend already sorts newest-first with a stable
+                        secondary key (api/admin/customer-detail.js's
+                        buildActivityTimeline()) — no client-side re-sort. */}
+                    {data.activity_timeline.map((entry, i) => (
+                      <li key={i} className="text-[12.5px]" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '10px' }}>
+                        <div className="font-bold" style={{ color: 'var(--ink)' }}>{entry.label}</div>
+                        <div style={{ color: 'var(--soft)' }}>{entry.occurred_at_ist ?? 'Date unavailable'}</div>
+                        {entry.detail && <div style={{ color: 'var(--soft)' }}>{entry.detail}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                  {(data.timeline_has_previous || data.timeline_has_next) && (
+                    <div className="flex items-center justify-between mt-2.5">
+                      <button
+                        type="button"
+                        className="gbtn py-1.5! px-3! text-[12px]!"
+                        disabled={!data.timeline_has_previous || loading}
+                        onClick={() => setTimelinePage((p) => Math.max(1, p - 1))}
+                      >
+                        Previous
+                      </button>
+                      <div className="text-[11px] font-semibold" style={{ color: 'var(--soft)' }}>
+                        Page {data.timeline_page} of {data.timeline_total_pages}
+                      </div>
+                      <button
+                        type="button"
+                        className="gbtn py-1.5! px-3! text-[12px]!"
+                        disabled={!data.timeline_has_next || loading}
+                        onClick={() => setTimelinePage((p) => p + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </>

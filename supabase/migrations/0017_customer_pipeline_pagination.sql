@@ -90,6 +90,53 @@
 -- being wrapped in %...% (see the `params` CTE), so a search term
 -- that happens to contain a literal % or _ is matched literally,
 -- never treated as a wildcard the user didn't type.
+--
+-- CONSISTENCY UNDER CONCURRENT INSERTS — corrected claim (ChatGPT
+-- review round 2): OFFSET/LIMIT pagination here is stable for TIES —
+-- the `order by created_at desc, id asc` secondary key guarantees two
+-- requests for the SAME page, against an UNCHANGED table, always
+-- return the same rows in the same order (this is what
+-- customer-pipeline-pagination.test.mjs's "no jump/duplicate across
+-- pages" tests actually prove). It does NOT, and this comment
+-- previously did not claim otherwise, but is now spelled out
+-- explicitly to prevent that gap being read as a guarantee: provide a
+-- fixed, consistent SNAPSHOT of the table across multiple page
+-- requests made while OTHER rows are concurrently being inserted or
+-- deleted. A row inserted between the caller reading page 1 and page 2
+-- can shift every subsequent row's OFFSET position, which can (depending
+-- on where the new row sorts) cause a row to be skipped or, more
+-- rarely, repeated across those two requests — the classic, well-known
+-- limitation of OFFSET pagination under concurrent writes, not
+-- specific to this function. A true point-in-time snapshot would need
+-- a keyset/cursor scheme (e.g. paginate strictly by (created_at, id) <
+-- the last row seen, not by OFFSET) or a serializable-isolation read —
+-- out of scope for this round; flagged here so nobody mistakes today's
+-- design for something it is not.
+--
+-- SECURITY — least-privilege execution (ChatGPT review round 2):
+--
+--   SECURITY INVOKER is declared explicitly on the function below
+--   (Postgres's actual default for a function with no SECURITY clause
+--   at all — but written out here so it can never be silently changed
+--   to SECURITY DEFINER by a future edit without that change being
+--   obvious in review). Every table reference inside the function body
+--   is schema-qualified (`public.customers`, not bare `customers`) and
+--   the function pins its own `search_path = public, pg_catalog` for
+--   the duration of every call — both are defense against the classic
+--   Postgres "mutable search_path" attack, where a malicious or simply
+--   differently-configured caller's own search_path could otherwise
+--   cause this function to silently resolve `customers`/`subscriptions`/
+--   etc. against an attacker-controlled schema/shadow table instead of
+--   the real ones. EXECUTE on the function itself is REVOKEd from
+--   PUBLIC and explicitly from `anon`/`authenticated` (Supabase's two
+--   browser-facing roles) and GRANTed only to `service_role` — the role
+--   behind this backend's own service-role Supabase key (see
+--   api/_lib/supabase.js). See the REVOKE/GRANT block after the
+--   function body, and
+--   test/cases/customer-pipeline-function-privileges.test.mjs, which
+--   proves this behaviorally (a real, non-superuser, non-BYPASSRLS
+--   Postgres role denied EXECUTE while `service_role` succeeds) rather
+--   than merely asserting the SQL text says so.
 
 begin;
 
@@ -184,6 +231,8 @@ returns table (
 )
 language sql
 stable
+security invoker
+set search_path = public, pg_catalog
 as $$
   with params as (
     select
@@ -200,7 +249,7 @@ as $$
   ),
   customer_base as (
     select c.*
-    from customers c, params p
+    from public.customers c, params p
     where
       (p.search_esc is null or
         c.name ilike '%' || p.search_esc || '%' escape '\' or
@@ -238,14 +287,14 @@ as $$
     from customer_base cb
     left join lateral (
       select s.*
-      from subscriptions s
+      from public.subscriptions s
       where s.customer_id = cb.id
       order by s.created_at desc
       limit 1
     ) ls on true
     left join lateral (
       select cr.status
-      from cancellation_requests cr
+      from public.cancellation_requests cr
       where cr.customer_id = cb.id
         and cr.status = any (array['pending_discussion', 'approved_for_cancellation', 'cancel_scheduled'])
       order by cr.requested_at desc
@@ -253,8 +302,8 @@ as $$
     ) oc on true
     left join lateral (
       select sa.group_name
-      from account_assignments aa
-      join studdy_accounts sa on sa.id = aa.studdy_account_id
+      from public.account_assignments aa
+      join public.studdy_accounts sa on sa.id = aa.studdy_account_id
       where aa.customer_id = cb.id and aa.status = 'active'
       limit 1
     ) ag on true
@@ -308,8 +357,17 @@ as $$
     select *
     from filtered
     order by created_at desc, id asc
-    limit greatest(coalesce(p_limit, 50), 0)
-    offset greatest(coalesce(p_offset, 0), 0)
+    -- Defense in depth (ChatGPT review round 2): api/admin/customers.js
+    -- already only ever sends p_limit in {50, 100} and clamps the page
+    -- number before computing p_offset (see parsePage()'s MAX_PAGE
+    -- there), but this function is itself the actual security/scale
+    -- boundary — it must not trust a well-behaved caller to be the
+    -- only caller. p_limit is clamped to [1, 100] regardless of what's
+    -- passed in, and p_offset to a sane, comfortably-int4-safe upper
+    -- bound, so this can never be made to do an unbounded-size fetch
+    -- or overflow an int4 OFFSET no matter what calls it directly.
+    limit least(greatest(coalesce(p_limit, 50), 1), 100)
+    offset least(greatest(coalesce(p_offset, 0), 0), 2000000000)
   )
   select
     pg.id, pg.paid_id, pg.name, pg.email, pg.phone, pg.country, pg.sales_owner,
@@ -355,6 +413,33 @@ as $$
 $$;
 
 comment on function search_customer_pipeline is
-  'CRM-3A Customer & Subscription pipeline list: filters, derives lifecycle stage, and paginates the FULL customer population server-side (no PIPELINE_ROW_CAP-style ceiling). Returns an exact total_count on every call, including an empty page, via a LEFT JOIN "marker row" (see this migration''s own header comment). stage logic is a deliberate, tested-for-parity duplicate of api/_lib/lifecycle.js''s deriveCustomerLifecycle().';
+  'CRM-3A Customer & Subscription pipeline list: filters, derives lifecycle stage, and paginates the FULL customer population server-side (no PIPELINE_ROW_CAP-style ceiling). Returns an exact total_count on every call, including an empty page, via a LEFT JOIN "marker row" (see this migration''s own header comment). stage logic is a deliberate, tested-for-parity duplicate of api/_lib/lifecycle.js''s deriveCustomerLifecycle(). SECURITY INVOKER; EXECUTE restricted to service_role only — see this migration''s own header comment and the REVOKE/GRANT statements immediately below.';
+
+-- ---- Least-privilege execution (ChatGPT review round 2) ----
+--
+-- PUBLIC gets EXECUTE on every newly-created function by default in
+-- Postgres — that default is exactly wrong for a function returning
+-- full customer PII (name/email/phone/address) across the entire
+-- population. Only the backend's own service-role connection
+-- (api/_lib/supabase.js) may ever call this. anon/authenticated
+-- (Supabase's two browser-facing roles, used by PostgREST for
+-- unauthenticated and logged-in end-user requests respectively) are
+-- revoked explicitly and separately from PUBLIC below, as defense in
+-- depth — belt-and-braces, not merely relying on the PUBLIC revoke
+-- alone to cover them.
+revoke all on function search_customer_pipeline(
+  text, timestamptz, timestamptz, text, text, boolean, text, text, text,
+  text, text, text, text, text, text, int, int
+) from public;
+
+revoke execute on function search_customer_pipeline(
+  text, timestamptz, timestamptz, text, text, boolean, text, text, text,
+  text, text, text, text, text, text, int, int
+) from anon, authenticated;
+
+grant execute on function search_customer_pipeline(
+  text, timestamptz, timestamptz, text, text, boolean, text, text, text,
+  text, text, text, text, text, text, int, int
+) to service_role;
 
 commit;

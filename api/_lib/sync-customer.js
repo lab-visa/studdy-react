@@ -384,16 +384,60 @@ export async function recordPaymentFailed(supabase, event) {
 }
 
 /**
+ * CHATGPT REVIEW FIX (round 2, "cancellation timestamp precedence"):
+ * converts a Stripe unix-seconds timestamp field to ISO, or null if
+ * the field is missing/not a valid positive number. Shared by
+ * subscriptionCancelledAt()/subscriptionEndedAt() below.
+ */
+function stripeTimestampToIso(unixSeconds) {
+  return typeof unixSeconds === 'number' && Number.isFinite(unixSeconds) && unixSeconds > 0
+    ? new Date(unixSeconds * 1000).toISOString()
+    : null;
+}
+
+/**
+ * The authoritative "when was this subscription cancelled" instant,
+ * for the subscriptions.cancelled_at column. Stripe's Subscription
+ * object carries its OWN `canceled_at` (when cancellation was decided/
+ * requested — Stripe's own US spelling) and `ended_at` (when access
+ * actually stopped) fields — both far more precise than event.created
+ * (merely when Stripe happened to emit THIS webhook, which can lag the
+ * real moment on a delayed or redelivered event). Precedence: Stripe's
+ * own canceled_at first, then its own ended_at, and only if the
+ * Subscription object genuinely carries neither does this fall back to
+ * event.created — never to wall-clock "now", and never to updated_at.
+ */
+function subscriptionCancelledAt(sub, event) {
+  return stripeTimestampToIso(sub?.canceled_at) || stripeTimestampToIso(sub?.ended_at) || eventOccurredAt(event);
+}
+
+/**
+ * The authoritative "when did access actually stop" instant, for the
+ * subscriptions.ended_at column. Mirrors subscriptionCancelledAt()'s
+ * precedence but with ended_at/canceled_at swapped — Stripe's own
+ * ended_at is the truest source for THIS column specifically, falling
+ * back to canceled_at (the two are often the same instant, but not
+ * always — e.g. a subscription cancelled well before its scheduled
+ * period end) and only then to event.created.
+ */
+function subscriptionEndedAt(sub, event) {
+  return stripeTimestampToIso(sub?.ended_at) || stripeTimestampToIso(sub?.canceled_at) || eventOccurredAt(event);
+}
+
+/**
  * customer.subscription.deleted — subscription actually ended.
  *
- * cancelled_at/ended_at use Stripe's own event.created (via
- * eventOccurredAt(), the same helper payment_events.occurred_at
- * already relies on below) rather than webhook-processing wall-clock
- * time — this is the authoritative "when did this actually happen"
- * timestamp the Activity Timeline's cancellation entry displays
- * (buildActivityTimeline() in api/admin/customer-detail.js), and using
- * Stripe's own event time keeps it accurate even if webhook processing
- * is delayed or this event is redelivered later than it first fired.
+ * cancelled_at/ended_at each prefer Stripe's OWN Subscription-object
+ * fields (subscriptionCancelledAt()/subscriptionEndedAt() above) over
+ * event.created, which is used only as a last-resort fallback if the
+ * Subscription object genuinely carries neither — this is the
+ * authoritative "when did this actually happen" timestamp the Activity
+ * Timeline's cancellation entry displays (buildActivityTimeline() in
+ * api/admin/customer-detail.js). Idempotent under Stripe's occasional
+ * duplicate webhook delivery: the SAME event object always yields the
+ * SAME computed timestamps on a retry (Stripe's own fields are
+ * deterministic, no wall-clock involved), so a redelivery can never
+ * shift a previously-recorded cancellation date forward.
  */
 export async function recordSubscriptionEnded(supabase, event) {
   const sub = event.data.object;
@@ -405,11 +449,12 @@ export async function recordSubscriptionEnded(supabase, event) {
 
   if (!subscription) return;
 
-  const occurredAt = eventOccurredAt(event);
+  const cancelledAt = subscriptionCancelledAt(sub, event);
+  const endedAt = subscriptionEndedAt(sub, event);
   const now = new Date().toISOString();
   await supabase
     .from('subscriptions')
-    .update({ status: 'cancelled', cancelled_at: occurredAt, ended_at: occurredAt, updated_at: now })
+    .update({ status: 'cancelled', cancelled_at: cancelledAt, ended_at: endedAt, updated_at: now })
     .eq('id', subscription.id);
   await supabase.from('customers').update({ lifecycle: 'churned', access_status: 'ended', updated_at: now }).eq('id', subscription.customer_id);
 
@@ -447,8 +492,23 @@ export async function recordSubscriptionEnded(supabase, event) {
  * own distinct Stripe event and already handles it. A subscription.updated
  * that happens to carry status:'canceled' (edge case — Stripe usually
  * also sends a matching .deleted) only updates this table's own status
- * column here; it can never re-trigger churn/seat-release logic that
- * belongs to .deleted alone.
+ * column (plus cancelled_at/ended_at — see below) here; it can never
+ * re-trigger churn/seat-release logic that belongs to .deleted alone.
+ *
+ * CHATGPT REVIEW FIX (round 2, "cancellation timestamp precedence"):
+ * if this .updated event happens to carry status:'canceled', its
+ * cancelled_at/ended_at are ALSO persisted here now — but ONLY from
+ * Stripe's own genuine sub.canceled_at/sub.ended_at fields (same
+ * precedence as recordSubscriptionEnded()'s subscriptionCancelledAt()/
+ * subscriptionEndedAt()). Deliberately NO event.created fallback on
+ * THIS path, unlike .deleted: if the Subscription object genuinely
+ * carries neither field here, the columns are left untouched rather
+ * than inventing an approximate date from an event that isn't itself
+ * the authoritative cancellation event — recordSubscriptionEnded()
+ * (.deleted) remains the primary source; this is a defensive
+ * completeness improvement for the rarer case .deleted is delayed,
+ * missed, or arrives after this .updated already ran, never a
+ * replacement for it.
  *
  * Status vocabulary: Stripe's own words (trialing/active/past_due/unpaid/
  * incomplete/incomplete_expired) are stored as-is, except 'canceled'
@@ -480,19 +540,28 @@ export async function syncSubscriptionUpdated(supabase, event) {
   const currentPeriodEnd = item?.current_period_end ?? sub?.current_period_end;
   const toIso = (unixSeconds) => (unixSeconds ? new Date(unixSeconds * 1000).toISOString() : null);
 
-  await supabase
-    .from('subscriptions')
-    .update({
-      status: mapSubscriptionStatus(sub.status),
-      trial_start: toIso(sub.trial_start),
-      trial_end: toIso(sub.trial_end),
-      current_period_start: toIso(currentPeriodStart),
-      current_period_end: toIso(currentPeriodEnd),
-      cancel_at: toIso(sub.cancel_at),
-      cancel_at_period_end: Boolean(sub.cancel_at_period_end),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', subscription.id);
+  const mappedStatus = mapSubscriptionStatus(sub.status);
+  const updateFields = {
+    status: mappedStatus,
+    trial_start: toIso(sub.trial_start),
+    trial_end: toIso(sub.trial_end),
+    current_period_start: toIso(currentPeriodStart),
+    current_period_end: toIso(currentPeriodEnd),
+    cancel_at: toIso(sub.cancel_at),
+    cancel_at_period_end: Boolean(sub.cancel_at_period_end),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (mappedStatus === 'cancelled') {
+    // See this function's own header comment: genuine Stripe fields
+    // only, no event.created/wall-clock fallback on this secondary path.
+    const cancelledAt = stripeTimestampToIso(sub.canceled_at) || stripeTimestampToIso(sub.ended_at);
+    const endedAt = stripeTimestampToIso(sub.ended_at) || stripeTimestampToIso(sub.canceled_at);
+    if (cancelledAt) updateFields.cancelled_at = cancelledAt;
+    if (endedAt) updateFields.ended_at = endedAt;
+  }
+
+  await supabase.from('subscriptions').update(updateFields).eq('id', subscription.id);
 }
 
 /**

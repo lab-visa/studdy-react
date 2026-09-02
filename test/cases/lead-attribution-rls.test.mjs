@@ -34,11 +34,13 @@ const { Pool } = pg;
 
 let pool;
 let schemaName;
+let dbName;
 
 before(async () => {
   pool = await getTestPool();
-  const { rows } = await pool.query('SELECT current_schema() AS schema');
+  const { rows } = await pool.query('SELECT current_schema() AS schema, current_database() AS db');
   schemaName = rows[0].schema;
+  dbName = rows[0].db;
 });
 
 after(async () => {
@@ -78,7 +80,7 @@ test('a non-bypassing, non-superuser role is denied ALL access to lead_attributi
   );
 
   await pool.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${rolePassword}' NOSUPERUSER NOBYPASSRLS`);
-  await pool.query(`GRANT CONNECT ON DATABASE crm_test TO "${roleName}"`);
+  await pool.query(`GRANT CONNECT ON DATABASE "${dbName}" TO "${roleName}"`);
   await pool.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`);
   // Deliberately grant table-level SELECT/INSERT — exactly the mistake a
   // future anon/authenticated policy grant could make — to prove RLS
@@ -99,7 +101,7 @@ test('a non-bypassing, non-superuser role is denied ALL access to lead_attributi
       port: Number(process.env.PGPORT || 5432),
       user: roleName,
       password: rolePassword,
-      database: process.env.PGDATABASE || 'crm_test',
+      database: dbName,
       options: `-c search_path=${schemaName},public`,
     });
 
@@ -120,7 +122,7 @@ test('a non-bypassing, non-superuser role is denied ALL access to lead_attributi
     // fails due to lingering ACL entries referencing this role.
     await pool.query(`REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA "${schemaName}" FROM "${roleName}"`);
     await pool.query(`REVOKE USAGE ON SCHEMA "${schemaName}" FROM "${roleName}"`);
-    await pool.query(`REVOKE CONNECT ON DATABASE crm_test FROM "${roleName}"`);
+    await pool.query(`REVOKE CONNECT ON DATABASE "${dbName}" FROM "${roleName}"`);
     await pool.query(`DROP ROLE IF EXISTS "${roleName}"`);
   }
 });
