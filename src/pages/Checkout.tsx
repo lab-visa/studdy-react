@@ -14,18 +14,21 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { REGION_DATA, type Region } from '../data/config';
 import { detectRegion } from '../utils/geo';
 import { track } from '../utils/analytics';
-import { trackEvent, getLeadId } from '../utils/tracking';
+import { trackEvent, getLeadId, getCampaignCode } from '../utils/tracking';
+import { buildPaymentLinkUrl } from '../utils/checkoutLink';
 import RegionPicker from '../components/RegionPicker';
 
 type Plan = 'monthly' | 'yearly';
 
-/* Read UTM params from URL */
-function getUTM() {
+/* utm_source stays read directly from this page's own URL, unchanged —
+ * out of scope for the CRM-2A campaign-attribution fix (see tracking.ts).
+ * utm_campaign (campaign IDENTITY) is read via getCampaignCode() below
+ * instead of from this page's URL directly, so it survives navigation
+ * from wherever the visitor first landed with ?utm_campaign=..., not only
+ * when it happens to still be present on /checkout's own URL. */
+function getUtmSource() {
   const p = new URLSearchParams(window.location.search);
-  return {
-    utmSource:   p.get('utm_source')   ?? 'direct',
-    utmCampaign: p.get('utm_campaign') ?? 'none',
-  };
+  return p.get('utm_source') ?? 'direct';
 }
 
 export default function Checkout() {
@@ -85,17 +88,14 @@ export default function Checkout() {
       /* Append UTM + our lead_id (as Stripe's client_reference_id) to the link.
        * client_reference_id is a built-in Stripe field — it rides along through
        * checkout and comes back on the completed session, so the webhook can
-       * match this payment back to the exact lead who started it. */
-      const { utmSource, utmCampaign } = getUTM();
+       * match this payment back to the exact lead who started it.
+       * utm_campaign now comes from the persisted, first-landing-captured
+       * campaign code (tracking.ts) rather than this page's own URL only —
+       * see the getUtmSource()/import comment above. */
+      const utmSource = getUtmSource();
+      const utmCampaign = getCampaignCode() ?? 'none';
       const leadId = getLeadId();
-      /* IMPORTANT: link has no existing "?" — the first param must start
-       * the query string with "?", not continue one that was never opened. */
-      const separator = link.includes('?') ? '&' : '?';
-      let fullLink = `${link}${separator}utm_source=${utmSource}&utm_campaign=${utmCampaign}`;
-      if (leadId) {
-        fullLink += `&client_reference_id=${encodeURIComponent(leadId)}`;
-      }
-      window.location.href = fullLink;
+      window.location.href = buildPaymentLinkUrl(link, { utmSource, utmCampaign, leadId });
     }
   }, [hasStripe, plan, region]);
 

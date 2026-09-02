@@ -72,7 +72,23 @@ export async function checkMissingSubscriptions(supabase) {
   return { check: 'MISSING_SUBSCRIPTION_ROW', count: flagged.length, items: flagged };
 }
 
-/** Check #3 — allocation mirror missing or mismatched vs. the legacy leads.group_name. */
+/**
+ * Check #3 — allocation mirror missing or mismatched vs. the legacy
+ * leads.group_name.
+ *
+ * CRM-2A correction: an active `account_assignments` mirror is only
+ * EXPECTED for a customer whose access is still meant to be active — a
+ * customer who has genuinely churned (customers.access_status='ended',
+ * their seat correctly released by recordSubscriptionEnded()'s
+ * release_studdy_seat() call) is SUPPOSED to have no active assignment.
+ * Flagging that as a gap was the bug: a released assignment for a
+ * churned/ended customer is healthy, not a mirror gap. Only a customer
+ * whose access_status is NOT 'ended' (i.e. access genuinely is or should
+ * be active) is checked for a missing active mirror below. The
+ * mismatched-group check is unaffected — a customer whose access is still
+ * active but whose mirror points at the wrong account is a real
+ * discrepancy regardless.
+ */
 export async function checkAllocationMirror(supabase) {
   const { data: realLeads, error: leadsError } = await supabase
     .from('leads')
@@ -85,7 +101,7 @@ export async function checkAllocationMirror(supabase) {
 
   const { data: customers, error: customersError } = await supabase
     .from('customers')
-    .select('id, stripe_customer_id')
+    .select('id, stripe_customer_id, access_status')
     .limit(RECONCILIATION_ROW_CAP);
   if (customersError) throw customersError;
 
@@ -102,25 +118,28 @@ export async function checkAllocationMirror(supabase) {
     .limit(RECONCILIATION_ROW_CAP);
   if (accountsError) throw accountsError;
 
-  const customerIdByStripeId = new Map((customers || []).map((c) => [c.stripe_customer_id, c.id]));
+  const customerByStripeId = new Map((customers || []).map((c) => [c.stripe_customer_id, c]));
   const activeAssignmentByCustomer = new Map((assignments || []).map((a) => [a.customer_id, a.studdy_account_id]));
   const groupNameByAccountId = new Map((accounts || []).map((a) => [a.id, a.group_name]));
 
   const flagged = [];
   for (const lead of realLeads || []) {
-    const customerId = customerIdByStripeId.get(lead.stripe_customer_id);
-    if (!customerId) continue; // no customers row at all — that's check #1's gap, not this one's
+    const customer = customerByStripeId.get(lead.stripe_customer_id);
+    if (!customer) continue; // no customers row at all — that's check #1's gap, not this one's
 
-    const assignedAccountId = activeAssignmentByCustomer.get(customerId);
+    const assignedAccountId = activeAssignmentByCustomer.get(customer.id);
     if (!assignedAccountId) {
-      flagged.push({ lead_id: lead.lead_id, customer_id: customerId, issue: 'no_active_assignment' });
+      /* A churned/ended customer having no active assignment is expected
+       * and healthy (their seat was correctly released) — not a gap. */
+      if (customer.access_status === 'ended') continue;
+      flagged.push({ lead_id: lead.lead_id, customer_id: customer.id, issue: 'no_active_assignment' });
       continue;
     }
     const assignedGroupName = groupNameByAccountId.get(assignedAccountId);
     if (assignedGroupName !== lead.group_name) {
       flagged.push({
         lead_id: lead.lead_id,
-        customer_id: customerId,
+        customer_id: customer.id,
         issue: 'mismatched_group',
         legacy_group_name: lead.group_name,
         assigned_group_name: assignedGroupName ?? null,

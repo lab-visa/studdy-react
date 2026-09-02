@@ -29,11 +29,25 @@ class QueryBuilder {
     this.updateObj = null;
     this.singleMode = null;
     this.limitN = null;
-    this.orderCol = null;
-    this.orderAscending = true;
+    this.orders = []; // [{ col, ascending }, ...] — supports multi-column ORDER BY via chained .order() calls
+    this.rangeFrom = null;
+    this.rangeTo = null;
+    this.countExact = false;
+    this.headMode = false;
   }
 
-  select() {
+  /**
+   * Matches supabase-js's real select(columns, { count, head }) signature.
+   * `columns` itself is ignored (this shim always does SELECT * for a real
+   * row fetch, same as before) — only the count/head option matters,
+   * added for the CRM-2A code-review fix ("use exact DB count/head
+   * semantics" for pure-count metrics instead of fetching+truncating
+   * rows). head:true + count:'exact' switches _execute() to run a real
+   * SQL COUNT(*) instead of a row SELECT.
+   */
+  select(_columns, opts = {}) {
+    if (opts && opts.count === 'exact') this.countExact = true;
+    if (opts && opts.head === true) this.headMode = true;
     return this;
   }
 
@@ -74,14 +88,32 @@ class QueryBuilder {
     return this;
   }
 
+  gte(col, val) {
+    this.filters.push({ type: 'gte', col, val });
+    return this;
+  }
+
+  /** Chainable — matches supabase-js's own .order(col1).order(col2) multi-column pattern. */
   order(col, opts = {}) {
-    this.orderCol = col;
-    this.orderAscending = opts.ascending !== false;
+    this.orders.push({ col, ascending: opts.ascending !== false });
     return this;
   }
 
   limit(n) {
     this.limitN = n;
+    return this;
+  }
+
+  /**
+   * Matches supabase-js's .range(from, to) — an INCLUSIVE zero-based row
+   * range, translated to SQL LIMIT/OFFSET. Added for the CRM-2A
+   * code-review fix: authoritative metric functions now fully paginate
+   * via .range() (see api/_lib/metrics.js's fetchAllRows()) instead of a
+   * single arbitrary .limit() that could silently truncate.
+   */
+  range(from, to) {
+    this.rangeFrom = from;
+    this.rangeTo = to;
     return this;
   }
 
@@ -126,6 +158,10 @@ class QueryBuilder {
         clauses.push(`"${f.col}" < $${idx}`);
         params.push(f.val);
         idx++;
+      } else if (f.type === 'gte') {
+        clauses.push(`"${f.col}" >= $${idx}`);
+        params.push(f.val);
+        idx++;
       }
     }
     return { clauseSql: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params, nextIdx: idx };
@@ -135,9 +171,23 @@ class QueryBuilder {
     try {
       if (this.mode === 'select') {
         const { clauseSql, params } = this._buildWhere(1);
+
+        if (this.headMode && this.countExact) {
+          const countSql = `SELECT count(*)::int AS count FROM "${this.table}" ${clauseSql}`;
+          const res = await this.pool.query(countSql, params);
+          return { data: null, error: null, count: res.rows[0].count };
+        }
+
         let sql = `SELECT * FROM "${this.table}" ${clauseSql}`;
-        if (this.orderCol) sql += ` ORDER BY "${this.orderCol}" ${this.orderAscending ? 'ASC' : 'DESC'}`;
-        if (this.limitN) sql += ` LIMIT ${Number(this.limitN)}`;
+        if (this.orders.length) {
+          sql += ` ORDER BY ` + this.orders.map((o) => `"${o.col}" ${o.ascending ? 'ASC' : 'DESC'}`).join(', ');
+        }
+        if (this.rangeFrom !== null && this.rangeTo !== null) {
+          const rangeLimit = this.rangeTo - this.rangeFrom + 1;
+          sql += ` LIMIT ${Number(rangeLimit)} OFFSET ${Number(this.rangeFrom)}`;
+        } else if (this.limitN) {
+          sql += ` LIMIT ${Number(this.limitN)}`;
+        }
         const res = await this.pool.query(sql, params);
         return this._shapeResult(res.rows);
       }

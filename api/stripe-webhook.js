@@ -54,6 +54,9 @@ import {
   recordPaymentSucceeded,
   recordPaymentFailed,
   recordSubscriptionEnded,
+  recordRefund,
+  recordDisputeCreated,
+  recordDisputeClosed,
 } from './_lib/sync-customer.js';
 
 /* Runs the new-CRM-tables sync alongside the existing `leads` sync above.
@@ -359,6 +362,13 @@ export default async function handler(req, res) {
             updated_at: new Date().toISOString(),
           })
           .eq('lead_id', lead.lead_id);
+
+        /* CRM-2A: additive payment_events ledger entry — see
+         * sync-customer.js's recordDisputeClosed() comment. Never affects
+         * the leads update above or the response Stripe gets. */
+        await safely(supabase, 'charge.dispute.closed', event, () =>
+          recordDisputeClosed(supabase, event, { stripeCustomerId: lead.stripe_customer_id })
+        );
       }
     }
 
@@ -383,6 +393,13 @@ export default async function handler(req, res) {
             updated_at: new Date().toISOString(),
           })
           .eq('lead_id', lead.lead_id);
+
+        /* CRM-2A: additive payment_events ledger entry — see
+         * sync-customer.js's recordRefund() comment. Never affects the
+         * leads update above or the response Stripe gets. */
+        await safely(supabase, 'refund.created', event, () =>
+          recordRefund(supabase, event, { stripeCustomerId: lead.stripe_customer_id })
+        );
       }
     }
 
@@ -425,6 +442,13 @@ export default async function handler(req, res) {
             updated_at: new Date().toISOString(),
           })
           .eq('lead_id', matched.lead_id);
+
+        /* CRM-2A: additive payment_events ledger entry — see
+         * sync-customer.js's recordDisputeCreated() comment. Never affects
+         * the leads update above or the response Stripe gets. */
+        await safely(supabase, 'charge.dispute.created', event, () =>
+          recordDisputeCreated(supabase, event, { stripeCustomerId: matched.stripe_customer_id })
+        );
       }
       console.error(`Dispute raised on charge ${dispute.charge} — check Stripe Dashboard > Disputes.`);
     }
