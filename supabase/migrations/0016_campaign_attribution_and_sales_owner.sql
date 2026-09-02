@@ -5,6 +5,12 @@
 -- new nullable columns. Nothing existing is dropped, renamed,
 -- retyped, or made NOT NULL. Do not run against production
 -- until reviewed and approved per this directory's README.
+--
+-- SECURITY CORRECTION (same day, before production application):
+-- lead_attribution now enables Row Level Security with no policies —
+-- see the comment directly above that statement below for the full
+-- rationale. Backend-only table; the app's existing service-role
+-- connection is unaffected.
 -- ============================================================
 --
 -- 0016_campaign_attribution_and_sales_owner.sql
@@ -79,6 +85,25 @@ create table if not exists lead_attribution (
 
 comment on table lead_attribution is
   'Per-lead campaign-attribution capture, keyed by the same lead_id sent to Stripe as client_reference_id. Written once a visitor clicks Start Free Trial (api/track-attribution.js) — never for a mere site visit. Also the first real per-lead "checkout started" signal, since site_traffic_daily only ever counts anonymous aggregates.';
+
+-- SECURITY — backend-only table, no anon/authenticated access of any kind.
+--
+-- Every read and write against this table already goes through server-side
+-- code only (api/track-attribution.js's write path; every read in
+-- api/_lib/attribution.js and the admin endpoints under api/admin/), all
+-- using getSupabase()'s SERVICE ROLE key (see api/_lib/supabase.js's own
+-- header comment) — a key which bypasses Row Level Security by design, so
+-- this table's real access path is unaffected by the statement below.
+--
+-- RLS is enabled anyway, defensively: if an anon or authenticated
+-- (browser-facing) Supabase key were ever pointed at this table by mistake
+-- — directly, or through a future PostgREST/client-side integration nobody
+-- has written yet — it must see and write NOTHING. Deliberately no policy
+-- is created for any role. With RLS enabled and zero policies, every
+-- non-bypassing role is denied by default; only a service-role (or
+-- superuser) connection can read or write this table, which matches how
+-- the application already uses it.
+alter table lead_attribution enable row level security;
 
 alter table customers
   add column if not exists sales_owner            text,
