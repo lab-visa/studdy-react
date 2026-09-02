@@ -328,6 +328,18 @@ export async function recordPaymentFailed(supabase, event) {
     customer_id: subscription.customer_id,
     subscription_id: subscription.id,
     invoice_id: invoice.id,
+    /* CODE-REVIEW FIX (round 2, "complete failed-payment ledger
+     * fields"): the attempted amount/currency are now retained for
+     * operational visibility (e.g. "how much did this failed attempt
+     * total"), NOT for revenue — grossRevenue()/netRevenue() in
+     * metrics.js only ever sum rows explicitly filtered to
+     * event_type='invoice.payment_succeeded', so a failed row having a
+     * numeric amount can never leak into a revenue total. amount_due is
+     * the invoice's attempted amount for this flow (the amount Stripe
+     * tried to collect and failed), distinct from amount_paid, which is
+     * 0 on a failed invoice. */
+    amount: (invoice.amount_due ?? 0) / 100,
+    currency: invoice.currency || null,
     status: 'failed',
   });
 }
@@ -354,12 +366,126 @@ export async function recordSubscriptionEnded(supabase, event) {
   if (releaseError) console.error('release_studdy_seat error:', releaseError);
 }
 
+/**
+ * CRM-2A — payment_events ledger completeness (refunds/disputes).
+ *
+ * `payment_claims` (api/stripe-webhook.js) is untouched by any of this —
+ * it remains solely the atomic at-most-once idempotency gate for the
+ * legacy total_months_paid increment. These three functions only extend
+ * the SAME best-effort, dedup-on-stripe_event_id `payment_events` ledger
+ * that recordPaymentSucceeded()/recordPaymentFailed() above already
+ * write to, so refunds and disputes stop being single-slot-overwrite
+ * fields on `leads` ONLY (which they still also remain, unchanged, for
+ * backward compatibility — this is additive, not a replacement).
+ *
+ * Amount convention, per design review: every payment_events.amount is
+ * the raw, positive/absolute Stripe amount (Stripe itself never returns
+ * a negative `amount` for a refund or a dispute) — no sign games. There
+ * is deliberately no generic `sum(payment_events.amount)` anywhere;
+ * metric functions (api/_lib/metrics.js) always scope by `event_type`
+ * explicitly (e.g. gross_revenue sums only 'invoice.payment_succeeded'
+ * rows), so a failed-payment or dispute row can never silently leak into
+ * a revenue total merely because it happens to have a numeric amount.
+ *
+ * Each function resolves the new-CRM customer_id from the Stripe
+ * customer id the caller already has in hand (stripe-webhook.js's
+ * findLeadByChargeId() already fetched the underlying charge to find the
+ * matching `leads` row, which itself carries `stripe_customer_id` — so no
+ * second Stripe API call is needed here). If no matching `customers` row
+ * exists yet (e.g. a legacy pre-CRM-1 customer), the ledger write is
+ * skipped — exactly the same "don't invent a row, just skip" rule
+ * `mirrorLegacyAllocation()` already follows above.
+ */
+
+/** refund.created — a refund was issued (e.g. Vish refunding someone manually in Stripe). */
+export async function recordRefund(supabase, event, { stripeCustomerId }) {
+  const refund = event.data.object;
+  const customer = await findCustomerByStripeCustomerId(supabase, stripeCustomerId);
+  if (!customer) return; // no new-CRM customer row for this Stripe customer yet — nothing to ledger
+
+  await logPaymentEvent(supabase, event, {
+    customer_id: customer.id,
+    invoice_id: null,
+    payment_intent_id: typeof refund.payment_intent === 'string' ? refund.payment_intent : refund.payment_intent?.id || null,
+    amount: (refund.amount ?? 0) / 100,
+    currency: refund.currency || null,
+    status: refund.status || 'refunded',
+  });
+}
+
+/** charge.dispute.created — customer or bank raised a dispute/chargeback. */
+export async function recordDisputeCreated(supabase, event, { stripeCustomerId }) {
+  const dispute = event.data.object;
+  const customer = await findCustomerByStripeCustomerId(supabase, stripeCustomerId);
+  if (!customer) return;
+
+  await logPaymentEvent(supabase, event, {
+    customer_id: customer.id,
+    invoice_id: null,
+    amount: (dispute.amount ?? 0) / 100,
+    currency: dispute.currency || null,
+    status: dispute.status || 'needs_response',
+  });
+}
+
+/**
+ * charge.dispute.closed — a dispute already flagged is now resolved
+ * (won/lost/warning_closed/etc). `amount` mirrors the original disputed
+ * amount (Stripe's dispute.closed payload carries the same `amount` as
+ * the corresponding dispute.created payload for the same dispute id) —
+ * the outcome itself lives in `status` and in the full Stripe object
+ * already captured verbatim in `raw_metadata` by logPaymentEvent().
+ *
+ * Correlation with the matching charge.dispute.created row is by
+ * Stripe's own stable dispute id — available at `raw_metadata->>'id'` on
+ * BOTH rows, since `logPaymentEvent()` stores `event.data.object`
+ * (the dispute object itself, whose own `id` field, format `dp_...`, is
+ * identical across the created and closed events for the same dispute —
+ * distinct from `raw_metadata->>'charge'`, the underlying charge id).
+ */
+export async function recordDisputeClosed(supabase, event, { stripeCustomerId }) {
+  const dispute = event.data.object;
+  const customer = await findCustomerByStripeCustomerId(supabase, stripeCustomerId);
+  if (!customer) return;
+
+  await logPaymentEvent(supabase, event, {
+    customer_id: customer.id,
+    invoice_id: null,
+    amount: (dispute.amount ?? 0) / 100,
+    currency: dispute.currency || null,
+    status: dispute.status || null,
+  });
+}
+
+/**
+ * CODE-REVIEW FIX (round 2, "use Stripe event time for
+ * payment_events.occurred_at"): Stripe's own `event.created` (unix
+ * seconds — the moment Stripe says the event actually occurred) is the
+ * authoritative occurred_at, NOT webhook processing time. Processing time
+ * can lag behind the real event (retries, delivery delays, a later
+ * backfill/replay) and would otherwise corrupt every date-scoped metric
+ * that reads payment_events.occurred_at: revenue-by-day, first-payment
+ * date, trial_to_paid_14d, refund date, dispute date, any period
+ * comparison. Falls back to current time ONLY defensively, if
+ * event.created is missing or not a valid positive number — this should
+ * never happen for a real Stripe delivery, but must never throw/break
+ * the webhook if it somehow does. Historical rows already written with
+ * processing-time timestamps are NOT backfilled by this change.
+ */
+function eventOccurredAt(event) {
+  const created = event?.created;
+  if (typeof created === 'number' && Number.isFinite(created) && created > 0) {
+    return new Date(created * 1000).toISOString();
+  }
+  return new Date().toISOString();
+}
+
 /** Generic Stripe-event logger, deduplicated on Stripe's own event id. */
 async function logPaymentEvent(supabase, event, fields) {
   const { error } = await supabase.from('payment_events').insert({
     stripe_event_id: event.id,
     event_type: event.type,
-    occurred_at: new Date().toISOString(),
+    occurred_at: eventOccurredAt(event),
     raw_metadata: event.data.object,
     ...fields,
   });

@@ -1,6 +1,6 @@
 /** Minimal fake req/res for calling Vercel-style (req, res) handlers directly in tests. */
-export function fakeReq({ method = 'GET', body = {}, headers = {} } = {}) {
-  return { method, body, headers };
+export function fakeReq({ method = 'GET', body = {}, headers = {}, query = {} } = {}) {
+  return { method, body, headers, query };
 }
 
 export function fakeRes() {
