@@ -12,7 +12,7 @@ export function DashboardSkeleton() {
         <div
           key={i}
           className="rounded-2xl p-5 h-[104px] animate-pulse"
-          style={{ background: '#fff', border: '1px solid var(--border)' }}
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         >
           <div className="h-3 w-2/3 rounded mb-4" style={{ background: 'var(--dim)' }} />
           <div className="h-6 w-1/2 rounded" style={{ background: 'var(--dim)' }} />
@@ -33,7 +33,7 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
     <div
       role="alert"
       className="rounded-2xl p-8 flex flex-col items-center text-center gap-3"
-      style={{ background: '#fff', border: '1.5px solid rgba(239,85,182,.35)' }}
+      style={{ background: 'var(--surface)', border: '1.5px solid rgba(239,85,182,.35)' }}
     >
       <AlertTriangle size={28} style={{ color: 'var(--g1)' }} />
       <div>

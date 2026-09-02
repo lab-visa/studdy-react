@@ -4,11 +4,17 @@
  * verification and logout wiring live one level up (AdminHome.tsx) —
  * this component is presentation-only so it can wrap any future admin
  * page, not just Command Center.
+ *
+ * Visual refinement: the root element carries `admin-shell` +
+ * `data-theme` — see src/index.css's scoped light/dark tokens and
+ * src/hooks/useAdminTheme.ts. This is the ONLY part of the app with
+ * dark-mode support; the public marketing site is unaffected.
  */
 import { useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import { useAdminTheme } from '../../hooks/useAdminTheme';
 
 interface AdminLayoutProps {
   currentPath: string;
@@ -30,13 +36,14 @@ export default function AdminLayout({
   children,
 }: AdminLayoutProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { theme, toggleTheme } = useAdminTheme();
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--dim)' }}>
+    <div className="admin-shell min-h-screen flex" data-theme={theme} style={{ background: 'var(--dim)', color: 'var(--ink)' }}>
       {/* Desktop sidebar */}
       <aside
         className="hidden lg:flex lg:flex-col w-64 shrink-0 sticky top-0 h-screen"
-        style={{ background: '#fff', borderRight: '1px solid var(--border)' }}
+        style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}
       >
         <BrandHeader />
         <div className="flex-1 overflow-y-auto">
@@ -55,7 +62,7 @@ export default function AdminLayout({
           />
           <aside
             className="absolute inset-y-0 left-0 w-72 max-w-[85vw] flex flex-col"
-            style={{ background: '#fff' }}
+            style={{ background: 'var(--surface)' }}
           >
             <div className="flex items-center justify-between px-4 pt-4">
               <BrandHeader compact />
@@ -84,6 +91,8 @@ export default function AdminLayout({
           onLogout={onLogout}
           loggingOut={loggingOut}
           onOpenMobileNav={() => setMobileNavOpen(true)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
         <main className="flex-1 px-4 sm:px-6 py-6 max-w-[1400px] w-full mx-auto">{children}</main>
       </div>

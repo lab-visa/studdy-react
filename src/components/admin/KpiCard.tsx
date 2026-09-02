@@ -22,7 +22,7 @@ export default function KpiCard({ label, value, kind, hint, tone = 'default' }: 
     <div
       className="rounded-2xl p-5 flex flex-col gap-2"
       style={{
-        background: '#fff',
+        background: 'var(--surface)',
         border: tone === 'warning' ? '1.5px solid rgba(239,85,182,.35)' : '1px solid var(--border)',
       }}
     >

@@ -38,7 +38,7 @@ export default function AlertsBanner({ metrics }: AlertsBannerProps) {
       style={{ background: 'rgba(239,85,182,.06)', border: '1px solid rgba(239,85,182,.25)' }}
     >
       {alerts.map((a) => (
-        <div key={a} className="flex items-start gap-2 text-[13px] font-semibold" style={{ color: '#c4278c' }}>
+        <div key={a} className="flex items-start gap-2 text-[13px] font-semibold" style={{ color: 'var(--warn-text)' }}>
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
           {a}
         </div>

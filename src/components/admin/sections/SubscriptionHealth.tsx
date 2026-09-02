@@ -33,7 +33,7 @@ function HealthStat({ label, sub, value }: { label: string; sub: string; value: 
         </span>
         <span
           className="text-[9.5px] font-black uppercase tracking-wide rounded-full px-1.5 py-0.5"
-          style={{ background: '#fff', color: 'var(--soft)', border: '1px solid var(--border)' }}
+          style={{ background: 'var(--surface)', color: 'var(--soft)', border: '1px solid var(--border)' }}
         >
           {sub}
         </span>

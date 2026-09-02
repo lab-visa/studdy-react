@@ -49,7 +49,7 @@ export default function RangeControls({
             style={
               preset === p.value
                 ? { background: 'var(--grad)', color: '#fff' }
-                : { background: '#fff', color: 'var(--ink)', border: '1px solid var(--border)' }
+                : { background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--border)' }
             }
           >
             {p.label}
@@ -65,7 +65,7 @@ export default function RangeControls({
               onChange={(e) => onCustomChange(e.target.value, customTo)}
               aria-label="Custom range start date"
               className="rounded-lg px-2 py-1 text-[12.5px] font-semibold"
-              style={{ border: '1px solid var(--border)' }}
+              style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
             />
             <span style={{ color: 'var(--soft)' }}>–</span>
             <input
@@ -74,14 +74,14 @@ export default function RangeControls({
               onChange={(e) => onCustomChange(customFrom, e.target.value)}
               aria-label="Custom range end date"
               className="rounded-lg px-2 py-1 text-[12.5px] font-semibold"
-              style={{ border: '1px solid var(--border)' }}
+              style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
             />
           </span>
         )}
       </div>
 
       {customIsInvalid ? (
-        <p role="alert" className="text-[12px] font-bold" style={{ color: '#c4278c' }}>
+        <p role="alert" className="text-[12px] font-bold" style={{ color: 'var(--warn-text)' }}>
           End date must be on or after the start date.
         </p>
       ) : (

@@ -25,7 +25,7 @@ export default function CohortControl({ cohortFrom, cohortTo, onChange }: Cohort
           type="button"
           onClick={() => onChange(preset.cohortFrom, preset.cohortTo)}
           className="rounded-full px-3.5 py-1.5 text-[12.5px] font-bold"
-          style={{ background: '#fff', color: 'var(--ink)', border: '1px solid var(--border)' }}
+          style={{ background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--border)' }}
         >
           Use {preset.label}
         </button>
@@ -35,7 +35,7 @@ export default function CohortControl({ cohortFrom, cohortTo, onChange }: Cohort
           onChange={(e) => onChange(e.target.value, cohortTo)}
           aria-label="Cohort start date (trial start)"
           className="rounded-lg px-2 py-1 text-[12.5px] font-semibold"
-          style={{ border: '1px solid var(--border)' }}
+          style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
         />
         <span style={{ color: 'var(--soft)' }}>–</span>
         <input
@@ -44,7 +44,7 @@ export default function CohortControl({ cohortFrom, cohortTo, onChange }: Cohort
           onChange={(e) => onChange(cohortFrom, e.target.value)}
           aria-label="Cohort end date (trial start)"
           className="rounded-lg px-2 py-1 text-[12.5px] font-semibold"
-          style={{ border: '1px solid var(--border)' }}
+          style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
         />
         {hasSelection && (
           <button
@@ -58,7 +58,7 @@ export default function CohortControl({ cohortFrom, cohortTo, onChange }: Cohort
         )}
       </div>
       {isInvalid && (
-        <p role="alert" className="text-[12px] font-bold" style={{ color: '#c4278c' }}>
+        <p role="alert" className="text-[12px] font-bold" style={{ color: 'var(--warn-text)' }}>
           End date must be on or after the start date.
         </p>
       )}

@@ -5,6 +5,75 @@
   --grad: linear-gradient(90deg, #EF55B6, #C765C7 35%, #8C79E0 65%, #25A8F4);
   --ink: #15131F; --soft: #6B6575; --dim: #F8F7FC; --border: #EDE9F4;
 }
+
+/* ── CRM-2B admin shell: scoped light/dark theming ──────────────────────
+ * These overrides apply ONLY inside .admin-shell (the /admin dashboard),
+ * never to the public marketing site — Home/Checkout/etc keep their
+ * existing fixed-light styling unchanged, per "preserve current public
+ * website behaviour". --surface is a new token (card background) so the
+ * public site's own hardcoded '#fff' usages are untouched by this.
+ * Defaults to the visitor's OS preference (prefers-color-scheme); the
+ * admin TopBar's theme toggle overrides that via [data-theme] and
+ * persists the choice (localStorage, that viewer's browser only). */
+.admin-shell {
+  --surface: #ffffff;
+  --surface-rgb: 255, 255, 255;
+  --surface-soft: var(--dim);
+  --warn-text: #c4278c;
+  color-scheme: light;
+  transition: background-color .2s ease, color .2s ease;
+}
+.admin-shell * { transition: background-color .2s ease, border-color .2s ease, color .2s ease; }
+
+/* System preference — only when the toggle hasn't set an explicit theme. */
+@media (prefers-color-scheme: dark) {
+  .admin-shell:not([data-theme='light']) {
+    --ink: #F1EEF9;
+    --soft: #A79FC0;
+    --dim: #1C1830;
+    --border: #34304E;
+    --surface: #241F3B;
+    --surface-rgb: 36, 31, 59;
+    --surface-soft: #1C1830;
+    --warn-text: #FF8FD4;
+    color-scheme: dark;
+  }
+}
+
+/* Explicit toggle — wins in both directions regardless of OS preference. */
+.admin-shell[data-theme='dark'] {
+  --ink: #F1EEF9;
+  --soft: #A79FC0;
+  --dim: #1C1830;
+  --border: #34304E;
+  --surface: #241F3B;
+  --surface-rgb: 36, 31, 59;
+  --surface-soft: #1C1830;
+  --warn-text: #FF8FD4;
+  color-scheme: dark;
+}
+.admin-shell[data-theme='light'] {
+  --ink: #15131F;
+  --soft: #6B6575;
+  --dim: #F8F7FC;
+  --border: #EDE9F4;
+  --surface: #ffffff;
+  --surface-rgb: 255, 255, 255;
+  --surface-soft: #F8F7FC;
+  --warn-text: #c4278c;
+  color-scheme: light;
+}
+
+/* .gost/.gbtn below are shared with the public site and hardcode a
+ * light-mode look (#fff bg / var(--ink) text) — correct for the
+ * marketing pages, which have no dark mode. Inside the admin shell only,
+ * repoint .gost at the theme surface so it never renders near-white text
+ * on a near-white button in dark mode (var(--ink) already flips per
+ * theme; --surface must flip with it). .gbtn is untouched — it's already
+ * a fixed, theme-independent gradient with white text, which reads fine
+ * in both modes as-is. */
+.admin-shell .gost { background: var(--surface); color: var(--ink); }
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { font-family: 'Inter', system-ui, sans-serif; background: #fff; color: var(--ink); -webkit-font-smoothing: antialiased; }

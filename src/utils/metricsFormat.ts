@@ -41,6 +41,21 @@ export function hasNoCurrencyData(byCurrency: Record<string, number> | null | un
 }
 
 /**
+ * Every currency code appearing in ANY of gross/refund/net (sorted) —
+ * used to render one per-currency comparison chart each. A currency
+ * missing from one of the three objects means a real, literal 0 for
+ * that metric in that currency (matching sumAmountByCurrency's own
+ * semantics) — never fabricated, never silently dropped from the union.
+ */
+export function unionCurrencyCodes(...byCurrencyObjs: Array<Record<string, number> | null | undefined>): string[] {
+  const codes = new Set<string>();
+  for (const obj of byCurrencyObjs) {
+    for (const code of Object.keys(obj ?? {})) codes.add(code);
+  }
+  return [...codes].sort((a, b) => a.localeCompare(b));
+}
+
+/**
  * A whole percentage with one decimal, or the honest "Not available"
  * placeholder — NEVER computed client-side from two counts (that would
  * fabricate a rate the backend deliberately does not calculate, e.g.

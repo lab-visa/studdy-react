@@ -16,6 +16,7 @@ import AlertsBanner from '../../components/admin/AlertsBanner';
 import { DashboardSkeleton, ErrorState } from '../../components/admin/StateViews';
 import ExecutiveOverview from '../../components/admin/sections/ExecutiveOverview';
 import AcquisitionFunnel from '../../components/admin/sections/AcquisitionFunnel';
+import PaymentOutcomeSection from '../../components/admin/sections/PaymentOutcomeSection';
 import SubscriptionHealth from '../../components/admin/sections/SubscriptionHealth';
 import RevenueOverview from '../../components/admin/sections/RevenueOverview';
 import ChurnOverview from '../../components/admin/sections/ChurnOverview';
@@ -112,7 +113,7 @@ export default function CommandCenter({ onSessionExpired }: CommandCenterProps) 
     <div className="flex flex-col gap-6">
       <div
         className="rounded-2xl p-4 sm:p-5 flex flex-col gap-4"
-        style={{ background: '#fff', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
       >
         <div className="flex flex-col gap-3">
           <div>
@@ -149,7 +150,7 @@ export default function CommandCenter({ onSessionExpired }: CommandCenterProps) 
       </div>
 
       {error && data && (
-        <p role="alert" className="text-[12.5px] font-bold" style={{ color: '#c4278c' }}>
+        <p role="alert" className="text-[12.5px] font-bold" style={{ color: 'var(--warn-text)' }}>
           Last refresh failed — showing the most recently loaded data. {error}
         </p>
       )}
@@ -159,6 +160,7 @@ export default function CommandCenter({ onSessionExpired }: CommandCenterProps) 
           <AlertsBanner metrics={data.metrics} />
           <ExecutiveOverview metrics={data.metrics} />
           <AcquisitionFunnel metrics={data.metrics} />
+          <PaymentOutcomeSection metrics={data.metrics} />
           <SubscriptionHealth metrics={data.metrics} />
           <RevenueOverview metrics={data.metrics} />
           <ChurnOverview metrics={data.metrics} />
