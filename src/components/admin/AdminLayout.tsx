@@ -9,12 +9,23 @@
  * `data-theme` — see src/index.css's scoped light/dark tokens and
  * src/hooks/useAdminTheme.ts. This is the ONLY part of the app with
  * dark-mode support; the public marketing site is unaffected.
+ *
+ * Shell refinement: the desktop sidebar collapses to an icon-only rail
+ * (see src/hooks/useSidebarCollapsed.ts for the persisted preference).
+ * This is desktop-only — the mobile slide-over below always renders
+ * Sidebar expanded (no `collapsed` prop passed) regardless of the
+ * desktop preference, per "do not force the desktop collapsed sidebar
+ * onto mobile."
  */
 import { useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import { useAdminTheme } from '../../hooks/useAdminTheme';
+import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed';
+
+const SIDEBAR_EXPANDED_WIDTH = '20rem';
+const SIDEBAR_COLLAPSED_WIDTH = '4.75rem';
 
 interface AdminLayoutProps {
   currentPath: string;
@@ -37,27 +48,54 @@ export default function AdminLayout({
 }: AdminLayoutProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { theme, toggleTheme } = useAdminTheme();
+  const { collapsed, toggleCollapsed } = useSidebarCollapsed();
 
   return (
     <div className="admin-shell min-h-screen flex" data-theme={theme} style={{ background: 'var(--dim)', color: 'var(--ink)' }}>
-      {/* Desktop sidebar — w-[21rem] (not w-64) gives the longer CRM-2B
-          nav labels ("Customer & Subscription", "Operations & Capacity")
-          comfortable room to render in full on one line instead of
-          truncating (w-80 fit them to within a sub-pixel and still
-          triggered the ellipsis on some renders — this leaves real
-          margin). */}
+      {/* Desktop sidebar — collapsible between SIDEBAR_EXPANDED_WIDTH
+          (full labels, section headings, "Later" badges) and
+          SIDEBAR_COLLAPSED_WIDTH (icon-only rail, tooltip on hover/
+          focus — see Sidebar.tsx). Width is set inline (not swapped
+          Tailwind classes) so the `transition-[width]` below animates
+          it smoothly; the global prefers-reduced-motion rule in
+          index.css zeroes that duration automatically for anyone who
+          asked for reduced motion.
+          The toggle button pokes out past the right border via a
+          negative offset, so `overflow-hidden` lives on the INNER
+          content wrapper (which keeps the brief expand transition from
+          letting full-width labels spill past a still-narrow rail),
+          never on the aside itself — an overflow-hidden aside would
+          clip the toggle button along with everything else. */}
       <aside
-        className="hidden lg:flex lg:flex-col w-[21rem] shrink-0 sticky top-0 h-screen"
-        style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}
+        className="hidden lg:flex lg:flex-col shrink-0 sticky top-0 h-screen relative transition-[width] duration-200 ease-in-out"
+        style={{
+          width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
+          background: 'var(--surface)',
+          borderRight: '1px solid var(--border)',
+        }}
       >
-        <BrandHeader />
-        <div className="flex-1 overflow-y-auto">
-          <Sidebar currentPath={currentPath} />
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <BrandHeader collapsed={collapsed} />
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <Sidebar currentPath={currentPath} collapsed={collapsed} />
+          </div>
+          <SidebarFooter collapsed={collapsed} />
         </div>
-        <SidebarFooter />
+
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-pressed={collapsed}
+          className="absolute -right-3.5 top-[4.25rem] z-10 flex items-center justify-center rounded-full p-1.5 shadow-sm cursor-pointer"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink)' }}
+        >
+          {collapsed ? <PanelLeftOpen size={14} strokeWidth={2.5} /> : <PanelLeftClose size={14} strokeWidth={2.5} />}
+        </button>
       </aside>
 
-      {/* Mobile slide-over sidebar */}
+      {/* Mobile slide-over sidebar — always expanded; the desktop
+          collapsed preference never applies here. */}
       {mobileNavOpen && (
         <div className="lg:hidden fixed inset-0 z-40">
           <button
@@ -105,7 +143,16 @@ export default function AdminLayout({
   );
 }
 
-function BrandHeader({ compact = false }: { compact?: boolean }) {
+function BrandHeader({ compact = false, collapsed = false }: { compact?: boolean; collapsed?: boolean }) {
+  // Collapsed rail (76px) can't fit the full "studdy CRM" wordmark —
+  // fall back to a small monogram rather than truncating or wrapping it.
+  if (collapsed) {
+    return (
+      <div className="pt-6 pb-5 flex justify-center" title="Studdy CRM">
+        <span className="font-black text-[20px] grad-text">S</span>
+      </div>
+    );
+  }
   return (
     <div className={compact ? 'px-2 pb-4' : 'px-5 pt-6 pb-5'}>
       <div className="font-black text-[18px]">
@@ -116,7 +163,10 @@ function BrandHeader({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function SidebarFooter() {
+function SidebarFooter({ collapsed = false }: { collapsed?: boolean }) {
+  if (collapsed) {
+    return <div style={{ borderTop: '1px solid var(--border)' }} className="h-4" />;
+  }
   return (
     <div className="px-5 py-4 text-[11px] font-semibold" style={{ color: 'var(--soft)', borderTop: '1px solid var(--border)' }}>
       Studdy Business OS
