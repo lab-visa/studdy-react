@@ -40,9 +40,14 @@ export default function AdminLayout({
 
   return (
     <div className="admin-shell min-h-screen flex" data-theme={theme} style={{ background: 'var(--dim)', color: 'var(--ink)' }}>
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — w-[21rem] (not w-64) gives the longer CRM-2B
+          nav labels ("Customer & Subscription", "Operations & Capacity")
+          comfortable room to render in full on one line instead of
+          truncating (w-80 fit them to within a sub-pixel and still
+          triggered the ellipsis on some renders — this leaves real
+          margin). */}
       <aside
-        className="hidden lg:flex lg:flex-col w-64 shrink-0 sticky top-0 h-screen"
+        className="hidden lg:flex lg:flex-col w-[21rem] shrink-0 sticky top-0 h-screen"
         style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}
       >
         <BrandHeader />
@@ -61,7 +66,7 @@ export default function AdminLayout({
             onClick={() => setMobileNavOpen(false)}
           />
           <aside
-            className="absolute inset-y-0 left-0 w-72 max-w-[85vw] flex flex-col"
+            className="absolute inset-y-0 left-0 w-[21rem] max-w-[85vw] flex flex-col"
             style={{ background: 'var(--surface)' }}
           >
             <div className="flex items-center justify-between px-4 pt-4">
