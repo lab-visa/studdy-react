@@ -1,21 +1,29 @@
 /**
- * AdminHome.tsx — CRM-1B V1 protected placeholder.
+ * AdminHome.tsx — /admin route entry point.
  *
- * Deliberately minimal per CRM-1B scope: no Dashboard, Customers,
- * Payments, Campaigns, Analytics, Settings, or Mr. Snoofy UI yet — that
- * is explicitly out of scope for this round (CRM-2+).
+ * CRM-2B: the CRM-1B placeholder ("CRM setup in progress") is replaced by
+ * the real Executive Command Center, but the actual security behavior is
+ * unchanged from CRM-1B — this still confirms the session server-side via
+ * /api/admin/whoami before rendering ANY admin data, and still redirects
+ * to /admin/login on no/expired/revoked session. Logout still calls
+ * /api/admin/logout, which revokes the server-side session row (not just
+ * a cookie clear) — see api/_lib/admin-auth.js's revokeSession().
  *
- * Confirms the session server-side via /api/admin/whoami before showing
- * anything — direct navigation to /admin with no/expired/revoked session
- * shows no admin data, only a redirect to /admin/login.
+ * A second 401 while the dashboard is open (CommandCenter's own fetch to
+ * /api/admin/metrics, e.g. the session expiring mid-visit) is handled the
+ * same way, via the onSessionExpired callback passed down.
  */
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import AdminLayout from '../../components/admin/AdminLayout';
+import CommandCenter from './CommandCenter';
 
 export default function AdminHome() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,21 +46,31 @@ export default function AdminHome() {
     };
   }, [navigate]);
 
-  async function handleLogout() {
-    await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });
+  const handleLogout = useCallback(async () => {
+    setLoggingOut(true);
+    try {
+      await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });
+    } finally {
+      navigate('/admin/login');
+    }
+  }, [navigate]);
+
+  const handleSessionExpired = useCallback(() => {
     navigate('/admin/login');
-  }
+  }, [navigate]);
 
   if (checking || !displayName) return null;
 
   return (
-    <div className="min-h-screen px-6 py-10" style={{ background: 'var(--dim)' }}>
-      <div className="max-w-lg mx-auto rounded-2xl p-8" style={{ background: '#fff', border: '1px solid var(--border)' }}>
-        <h1 className="font-black text-[22px] mb-1">Studdy Lab CRM</h1>
-        <p className="text-[14px] mb-1">Logged in as: <strong>{displayName}</strong></p>
-        <p className="text-[13px] mb-6" style={{ color: 'var(--soft)' }}>CRM setup in progress.</p>
-        <button className="gost" onClick={handleLogout}>Logout</button>
-      </div>
-    </div>
+    <AdminLayout
+      currentPath={location.pathname}
+      pageTitle="Command Center"
+      pageSubtitle="Real-time overview of leads, revenue, and Studdy account capacity"
+      displayName={displayName}
+      onLogout={handleLogout}
+      loggingOut={loggingOut}
+    >
+      <CommandCenter onSessionExpired={handleSessionExpired} />
+    </AdminLayout>
   );
 }
