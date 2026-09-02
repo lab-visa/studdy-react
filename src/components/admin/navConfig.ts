@@ -70,7 +70,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     label: 'Analytics',
     items: [
       { key: 'sales-dashboard', label: 'Sales Dashboard', icon: BarChart3, path: '/admin/sales', status: 'comingLater' },
-      { key: 'customer-subscription', label: 'Customer & Subscription', icon: Repeat2, path: '/admin/subscriptions', status: 'comingLater' },
+      { key: 'customer-subscription', label: 'Customer & Subscription', icon: Repeat2, path: '/admin/subscriptions', status: 'active' },
       { key: 'revenue', label: 'Revenue', icon: DollarSign, path: '/admin/revenue', status: 'comingLater' },
       { key: 'finance', label: 'Finance & P&L', icon: PiggyBank, path: '/admin/finance', status: 'comingLater' },
       { key: 'cash-flow', label: 'Cash Flow', icon: Wallet, path: '/admin/cash-flow', status: 'comingLater' },

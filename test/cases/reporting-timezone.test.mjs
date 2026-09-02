@@ -10,7 +10,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reportingDayFor, reportingDayBoundsUtc, REPORTING_TIMEZONE } from '../../api/_lib/reporting-timezone.js';
+import { reportingDayFor, reportingDayBoundsUtc, REPORTING_TIMEZONE, formatIstDateTime } from '../../api/_lib/reporting-timezone.js';
 
 test('REPORTING_TIMEZONE is Asia/Kolkata, per the approved design', () => {
   assert.equal(REPORTING_TIMEZONE, 'Asia/Kolkata');
@@ -49,4 +49,30 @@ test('reportingDayBoundsUtc round-trips: the UTC start of an IST day, converted 
 test('IST midnight for a given day is UTC 18:30 the previous day (the fixed +05:30 offset)', () => {
   const { startUtc } = reportingDayBoundsUtc('2026-09-02');
   assert.equal(startUtc.toISOString(), '2026-09-01T18:30:00.000Z');
+});
+
+// ── CRM-3A — formatIstDateTime ─────────────────────────────────────────
+
+test('formatIstDateTime: null/undefined/invalid input returns null, never "Invalid Date" or a throw', () => {
+  assert.equal(formatIstDateTime(null), null);
+  assert.equal(formatIstDateTime(undefined), null);
+  assert.equal(formatIstDateTime('not-a-date'), null);
+});
+
+test('formatIstDateTime: a UTC instant renders in Asia/Kolkata local time, suffixed "IST"', () => {
+  // 2026-09-01T18:30:00Z is exactly IST midnight 2026-09-02 (per the fixed
+  // +05:30 offset test above) — proving this reads the real IST wall
+  // clock, not just re-labeling the UTC instant.
+  const formatted = formatIstDateTime('2026-09-01T18:30:00.000Z');
+  assert.ok(formatted, 'expected a formatted string');
+  assert.match(formatted, /IST$/);
+  // Month spelling ("Sep"/"Sept") is locale/ICU-version-dependent — assert
+  // on the day and year, which are not.
+  assert.match(formatted, /^2 Sep/, 'IST midnight for 2026-09-02 falls on the 2nd, not the 1st (the UTC date)');
+  assert.match(formatted, /2026/);
+});
+
+test('formatIstDateTime accepts a Date object directly, not only a string', () => {
+  const formatted = formatIstDateTime(new Date('2026-01-01T19:00:00.000Z'));
+  assert.match(formatted, /^2 Jan/, 'same UTC-vs-IST divergence case as the reportingDayFor test above');
 });

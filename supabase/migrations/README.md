@@ -21,12 +21,13 @@ This directory was not previously committed to GitHub (confirmed absent in CRM-0
 | 0013 | `cancellation_requests_open_index.sql` | **APPLIED — confirmed in production Sep 1, 2026** | Verified: `cancellation_requests_one_open_per_customer` partial unique index exists on `(customer_id)`, predicate covers exactly `pending_discussion`/`approved_for_cancellation`/`cancel_scheduled`, row counts (this table and `leads`/`customers`/`subscriptions`/`account_assignments`) unchanged. No further action. |
 | 0014 | `admin_auth.sql` | **APPLIED — confirmed in production Sep 1, 2026** | Verified: `admin_users` (10 columns) and `admin_sessions` (6 columns) exist with exact expected schema, unique `lower(display_name)` index, `admin_sessions.admin_user_id` FK → `admin_users(id)`, unique `session_token_hash`; both tables have 0 rows (no admin account, PIN, hash, or salt exists yet); unrelated row counts unchanged. No further action. |
 | 0015 | `payment_claims.sql` | **APPLIED — confirmed in production Sep 1, 2026** | Verified: `payment_claims` exists with the exact expected schema (`stripe_event_id` primary key, `event_type` not null, `claimed_at` default `now()`), empty at creation, no other table affected. No further action. |
+| 0016 | `campaign_attribution_and_sales_owner.sql` | **PENDING — not yet applied.** Written for CRM-3A (Sep 2026), branch `crm-3a`, based on `origin/main` at `37dc3b6` (which has migrations only through `0015`). Additive only: new `lead_attribution` table, new nullable columns on `customers` (`sales_owner`, `first_*`/`latest_*` UTM/GHL attribution fields). | **DO NOT RUN** until reviewed and approved per the process below. (Note: a *different* `0016_crm_contacts_and_leads.sql` exists on the separate, unmerged `crm-3a-sales-import-draft` branch, for a different, not-yet-approved feature. That branch was never merged into `main`, so its `0016` was never actually assigned on the branch this migration ships from — `crm-3a` here is a fresh branch cut from `origin/main`, which has no `0016` of its own. The two `0016` files are unrelated, on divergent branches, and must never both land in the same history — whichever branch merges into `main` first fixes that filename for real; do not rename either to avoid a collision preemptively.) |
 
 ## Production execution order for the pending migrations
 
 `0012 → verify → 0013 → verify → 0014 → verify → 0015 → verify`, one file at a time, never batched, never run out of order.
 
-**All four (0012–0015) are done and verified in production.** No migration is currently pending.
+**0012–0015 are done and verified in production.** `0016` is written and awaiting review/approval — see its own header. It is not run against production by anything in this round.
 
 ## Before running any pending migration against production
 

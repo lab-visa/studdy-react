@@ -18,7 +18,10 @@
  *     -> the card was declined -> status = 'Failed'
  *
  *   customer.subscription.updated
- *     -> catches pause/resume
+ *     -> catches pause/resume (legacy leads table)
+ *     -> CRM-3A: also best-effort syncs status/cancel_at_period_end/
+ *        cancel_at/current_period_start/end into the new subscriptions
+ *        table (see sync-customer.js's syncSubscriptionUpdated())
  *
  *   customer.subscription.deleted
  *     -> subscription actually ended (cancelled in Stripe, by us or by
@@ -57,6 +60,7 @@ import {
   recordRefund,
   recordDisputeCreated,
   recordDisputeClosed,
+  syncSubscriptionUpdated,
 } from './_lib/sync-customer.js';
 
 /* Runs the new-CRM-tables sync alongside the existing `leads` sync above.
@@ -323,6 +327,13 @@ export default async function handler(req, res) {
           .update({ status: 'Paused', updated_at: new Date().toISOString() })
           .eq('lead_id', lead.lead_id);
       }
+
+      /* CRM-3A: additive sync into the new subscriptions table — status,
+       * cancel_at_period_end, cancel_at, current_period_start/end. Never
+       * affects the legacy leads update above or the response Stripe
+       * gets. See sync-customer.js's syncSubscriptionUpdated() comment
+       * for exactly why this was a real gap before this round. */
+      await safely(supabase, 'customer.subscription.updated', event, () => syncSubscriptionUpdated(supabase, event));
     }
 
     /* ─────────────────────────────────────────────────────────────

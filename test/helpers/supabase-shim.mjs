@@ -137,7 +137,17 @@ class QueryBuilder {
         params.push(f.val);
         idx++;
       } else if (f.type === 'in') {
-        clauses.push(`"${f.col}" = ANY($${idx}::text[])`);
+        /* CRM-3A: real supabase-js/PostgREST casts an .in() array to match
+         * the target column's actual type — a uuid column compared
+         * against a ::text[] array fails in real Postgres ("operator does
+         * not exist: uuid = text", no implicit cast). This shim now
+         * detects a UUID-shaped array (every value matches the standard
+         * 8-4-4-4-12 hex form) and casts ::uuid[] instead, so tests that
+         * .in() on a foreign-key column (e.g. customer_id) behave like
+         * production rather than erroring only in this test harness. */
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const isUuidArray = Array.isArray(f.val) && f.val.length > 0 && f.val.every((v) => typeof v === 'string' && uuidPattern.test(v));
+        clauses.push(`"${f.col}" = ANY($${idx}::${isUuidArray ? 'uuid' : 'text'}[])`);
         params.push(f.val);
         idx++;
       } else if (f.type === 'not') {
