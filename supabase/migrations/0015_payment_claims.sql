@@ -1,7 +1,11 @@
 -- ============================================================
--- NEW / PENDING — NOT YET APPLIED TO PRODUCTION.
--- Run once, manually, in the Supabase SQL Editor, after 0014 is
--- verified applied. See CRM-1 Objective 3 (Revision 2.1 correction).
+-- APPLIED TO PRODUCTION — confirmed Sep 1, 2026 (read-only
+-- verification: payment_claims exists with the exact expected
+-- schema, empty at creation, no other table affected).
+-- DO NOT RE-RUN THIS FILE AGAINST PRODUCTION.
+-- Committed here for version-control history; see
+-- supabase/migrations/README.md for the authoritative status
+-- table. No migration is currently pending.
 -- ============================================================
 --
 -- 0015_payment_claims.sql
