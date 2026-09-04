@@ -113,7 +113,8 @@
 -- out of scope for this round; flagged here so nobody mistakes today's
 -- design for something it is not.
 --
--- SECURITY — least-privilege execution (ChatGPT review round 2):
+-- SECURITY — least-privilege execution (ChatGPT review round 2,
+-- search_path corrected in round 3 — see below):
 --
 --   SECURITY INVOKER is declared explicitly on the function below
 --   (Postgres's actual default for a function with no SECURITY clause
@@ -121,13 +122,37 @@
 --   to SECURITY DEFINER by a future edit without that change being
 --   obvious in review). Every table reference inside the function body
 --   is schema-qualified (`public.customers`, not bare `customers`) and
---   the function pins its own `search_path = public, pg_catalog` for
---   the duration of every call — both are defense against the classic
+--   the function pins its own `search_path = ''` (empty) for the
+--   duration of every call — both are defense against the classic
 --   Postgres "mutable search_path" attack, where a malicious or simply
 --   differently-configured caller's own search_path could otherwise
 --   cause this function to silently resolve `customers`/`subscriptions`/
 --   etc. against an attacker-controlled schema/shadow table instead of
---   the real ones. EXECUTE on the function itself is REVOKEd from
+--   the real ones.
+--
+--   CORRECTION (ChatGPT review round 3): this previously pinned
+--   `search_path = public, pg_catalog`, which the round-3 review
+--   correctly flagged — listing `public` (a schema any role with
+--   CREATE on it could add objects to) AHEAD of `pg_catalog` does not
+--   actually defend against schema-shadowing the way this comment
+--   claimed, and `pg_catalog` is in any case ALWAYS implicitly
+--   searched first by Postgres regardless of what search_path says, so
+--   there was never a genuine need to list either schema. An empty
+--   search_path is the unambiguous fix: every built-in this function
+--   calls (now(), coalesce, nullif, lower, greatest/least,
+--   jsonb_build_object, array[...], casts, etc.) still resolves via
+--   the always-searched pg_catalog; the only names that ever needed
+--   schema-qualification were this project's own tables, which were
+--   already qualified as `public.*` everywhere below and remain so —
+--   nothing about the query logic changed, only the search_path value
+--   itself. The pg_trgm GIN indexes below need no qualification change
+--   either: index selection is a planner/catalog decision tied to the
+--   qualified table reference in the query, not to search_path.
+--   test/cases/customer-pipeline-function-privileges.test.mjs's
+--   catalog-level search_path test now asserts the exact corrected
+--   value, not merely that some search_path is set.
+--
+--   EXECUTE on the function itself is REVOKEd from
 --   PUBLIC and explicitly from `anon`/`authenticated` (Supabase's two
 --   browser-facing roles) and GRANTed only to `service_role` — the role
 --   behind this backend's own service-role Supabase key (see
@@ -232,7 +257,7 @@ returns table (
 language sql
 stable
 security invoker
-set search_path = public, pg_catalog
+set search_path = ''
 as $$
   with params as (
     select
@@ -413,7 +438,7 @@ as $$
 $$;
 
 comment on function search_customer_pipeline is
-  'CRM-3A Customer & Subscription pipeline list: filters, derives lifecycle stage, and paginates the FULL customer population server-side (no PIPELINE_ROW_CAP-style ceiling). Returns an exact total_count on every call, including an empty page, via a LEFT JOIN "marker row" (see this migration''s own header comment). stage logic is a deliberate, tested-for-parity duplicate of api/_lib/lifecycle.js''s deriveCustomerLifecycle(). SECURITY INVOKER; EXECUTE restricted to service_role only — see this migration''s own header comment and the REVOKE/GRANT statements immediately below.';
+  'CRM-3A Customer & Subscription pipeline list: filters, derives lifecycle stage, and paginates the FULL customer population server-side (no PIPELINE_ROW_CAP-style ceiling). Returns an exact total_count on every call, including an empty page, via a LEFT JOIN "marker row" (see this migration''s own header comment). stage logic is a deliberate, tested-for-parity duplicate of api/_lib/lifecycle.js''s deriveCustomerLifecycle(). SECURITY INVOKER; search_path pinned to empty (corrected in round 3 from public,pg_catalog — see this migration''s own header comment); EXECUTE restricted to service_role only — see the REVOKE/GRANT statements immediately below.';
 
 -- ---- Least-privilege execution (ChatGPT review round 2) ----
 --

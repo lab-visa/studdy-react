@@ -432,8 +432,9 @@ function subscriptionEndedAt(sub, event) {
  * event.created, which is used only as a last-resort fallback if the
  * Subscription object genuinely carries neither — this is the
  * authoritative "when did this actually happen" timestamp the Activity
- * Timeline's cancellation entry displays (buildActivityTimeline() in
- * api/admin/customer-detail.js). Idempotent under Stripe's occasional
+ * Timeline's cancellation entry displays (the subscription_cancelled
+ * branch of search_customer_activity_timeline(), migration 0018 —
+ * never re-derived there, only read). Idempotent under Stripe's occasional
  * duplicate webhook delivery: the SAME event object always yields the
  * SAME computed timestamps on a retry (Stripe's own fields are
  * deterministic, no wall-clock involved), so a redelivery can never

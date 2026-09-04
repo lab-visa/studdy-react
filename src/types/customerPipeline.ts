@@ -91,6 +91,21 @@ export interface ActivityTimelineEntry {
   reason?: string | null;
   occurred_at: string | null;
   occurred_at_ist: string | null;
+  /** Stable, genuinely unique per-entry key (migration 0018) — the
+   *  underlying row's own id (payment_events.id, cancellation_requests.id,
+   *  account_assignments.id, subscriptions.id, lead_attribution.lead_id)
+   *  or, for a customer-row-derived entry, customers.id plus a fixed
+   *  suffix. Use this as the React list key instead of the array index —
+   *  see CustomerDetailDrawer.tsx. */
+  event_key: string;
+}
+
+/** Opaque keyset/cursor token for the NEXT Activity Timeline page
+ *  (migration 0018's search_customer_activity_timeline) — pass both
+ *  fields back verbatim as timelineCursorSortAt/timelineCursorEventKey. */
+export interface ActivityTimelineCursor {
+  sort_at: string;
+  event_key: string;
 }
 
 export interface CustomerDetailResponse {
@@ -144,12 +159,11 @@ export interface CustomerDetailResponse {
   };
   lifecycle: LifecycleResult;
   activity_timeline: ActivityTimelineEntry[];
-  timeline_page: number;
   timeline_page_size: number;
   timeline_total_count: number;
-  timeline_total_pages: number;
   timeline_has_previous: boolean;
   timeline_has_next: boolean;
+  timeline_next_cursor: ActivityTimelineCursor | null;
 }
 
 interface TouchInfo {

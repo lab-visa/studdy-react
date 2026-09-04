@@ -10,7 +10,7 @@
  */
 import { useEffect, useState, useCallback } from 'react';
 import { X } from 'lucide-react';
-import type { CustomerDetailResponse } from '../../types/customerPipeline';
+import type { ActivityTimelineCursor, CustomerDetailResponse } from '../../types/customerPipeline';
 import { stageTone } from '../../utils/lifecycleDisplay';
 
 interface Props {
@@ -48,24 +48,35 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
   const [ownerDraft, setOwnerDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // CRM-3A ChatGPT review round 2 — "complete activity history": the
-  // timeline is now server-paginated (no silent TIMELINE_ROW_CAP=500
-  // truncation — see api/admin/customer-detail.js), so every stored
-  // event stays reachable via Previous/Next instead of some vanishing.
-  const [timelinePage, setTimelinePage] = useState(1);
+  // CRM-3A ChatGPT review round 3 — "genuine server-side pagination":
+  // the Activity Timeline is now cursor/keyset-paginated (migration
+  // 0018's search_customer_activity_timeline), not OFFSET/page-number.
+  // cursorStack[0] is always null (the first page); cursorStack[i] for
+  // i>0 is the cursor that fetches page i+1. cursorIndex is which page
+  // is currently displayed — Previous just moves the index back
+  // (no refetch of a NEW cursor needed, the stack already holds it);
+  // Next either reuses an already-known cursor (the user went back then
+  // forward again) or, at the tail, pushes the cursor the last response
+  // just gave us.
+  const [cursorStack, setCursorStack] = useState<Array<ActivityTimelineCursor | null>>([null]);
+  const [cursorIndex, setCursorIndex] = useState(0);
+  const currentCursor = cursorStack[cursorIndex] ?? null;
 
   useEffect(() => {
-    setTimelinePage(1);
+    setCursorStack([null]);
+    setCursorIndex(0);
   }, [customerId]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/admin/customer-detail?id=${encodeURIComponent(customerId)}&timelinePage=${timelinePage}`,
-        { credentials: 'same-origin' }
-      );
+      const params = new URLSearchParams({ id: customerId });
+      if (currentCursor) {
+        params.set('timelineCursorSortAt', currentCursor.sort_at);
+        params.set('timelineCursorEventKey', currentCursor.event_key);
+      }
+      const res = await fetch(`/api/admin/customer-detail?${params.toString()}`, { credentials: 'same-origin' });
       if (res.status === 401) {
         onSessionExpired();
         return;
@@ -79,7 +90,24 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
     } finally {
       setLoading(false);
     }
-  }, [customerId, timelinePage, onSessionExpired]);
+  }, [customerId, currentCursor, onSessionExpired]);
+
+  const handleTimelineNext = () => {
+    setCursorStack((prev) => {
+      // Discard any stale forward history past the current page (the
+      // user went back and is now paging forward again down a
+      // different tail) and append the cursor the last response gave
+      // us for "the page after this one".
+      const next = prev.slice(0, cursorIndex + 1);
+      if (data?.timeline_next_cursor) next.push(data.timeline_next_cursor);
+      return next;
+    });
+    setCursorIndex((i) => i + 1);
+  };
+
+  const handleTimelinePrevious = () => {
+    setCursorIndex((i) => Math.max(0, i - 1));
+  };
 
   useEffect(() => {
     load();
@@ -218,7 +246,7 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
                 </div>
                 {data.timeline_total_count > 0 && (
                   <div className="text-[11px] font-semibold" style={{ color: 'var(--soft)' }}>
-                    {`${(data.timeline_page - 1) * data.timeline_page_size + 1}–${Math.min(data.timeline_page * data.timeline_page_size, data.timeline_total_count)} of ${data.timeline_total_count}`}
+                    {`${cursorIndex * data.timeline_page_size + 1}–${Math.min(cursorIndex * data.timeline_page_size + data.activity_timeline.length, data.timeline_total_count)} of ${data.timeline_total_count}`}
                   </div>
                 )}
               </div>
@@ -227,11 +255,14 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
               ) : (
                 <>
                   <ul className="flex flex-col gap-2">
-                    {/* Backend already sorts newest-first with a stable
-                        secondary key (api/admin/customer-detail.js's
-                        buildActivityTimeline()) — no client-side re-sort. */}
-                    {data.activity_timeline.map((entry, i) => (
-                      <li key={i} className="text-[12.5px]" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '10px' }}>
+                    {/* Backend already sorts newest-first with a stable,
+                        genuinely unique secondary key — each entry's own
+                        event_key (migration 0018's
+                        search_customer_activity_timeline), used as the
+                        list key below instead of the array index — no
+                        client-side re-sort. */}
+                    {data.activity_timeline.map((entry) => (
+                      <li key={entry.event_key} className="text-[12.5px]" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '10px' }}>
                         <div className="font-bold" style={{ color: 'var(--ink)' }}>{entry.label}</div>
                         <div style={{ color: 'var(--soft)' }}>{entry.occurred_at_ist ?? 'Date unavailable'}</div>
                         {entry.detail && <div style={{ color: 'var(--soft)' }}>{entry.detail}</div>}
@@ -244,18 +275,21 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
                         type="button"
                         className="gbtn py-1.5! px-3! text-[12px]!"
                         disabled={!data.timeline_has_previous || loading}
-                        onClick={() => setTimelinePage((p) => Math.max(1, p - 1))}
+                        onClick={handleTimelinePrevious}
                       >
                         Previous
                       </button>
                       <div className="text-[11px] font-semibold" style={{ color: 'var(--soft)' }}>
-                        Page {data.timeline_page} of {data.timeline_total_pages}
+                        Page {cursorIndex + 1}
+                        {data.timeline_total_count > 0
+                          ? ` of ${Math.ceil(data.timeline_total_count / data.timeline_page_size)}`
+                          : ''}
                       </div>
                       <button
                         type="button"
                         className="gbtn py-1.5! px-3! text-[12px]!"
                         disabled={!data.timeline_has_next || loading}
-                        onClick={() => setTimelinePage((p) => p + 1)}
+                        onClick={handleTimelineNext}
                       >
                         Next
                       </button>

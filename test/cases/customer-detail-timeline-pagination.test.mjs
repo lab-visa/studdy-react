@@ -1,15 +1,20 @@
 /**
- * CRM-3A ChatGPT review round 2 — "complete activity history": proves
- * the silent TIMELINE_ROW_CAP=500 behavior removed from
- * api/admin/customer-detail.js is genuinely gone, and that the
- * replacement in-memory pagination (timelinePage/timelinePageSize)
- * makes every stored event reachable, with accurate page/has_more
- * information — not merely "the cap number changed".
+ * CRM-3A ChatGPT review round 3 — "genuine server-side pagination":
+ * proves the Activity Timeline is truly cursor/keyset-paginated through
+ * the real HTTP handler, not merely fetch-everything-then-slice-in-Node
+ * (round 2's fix) and not vulnerable to any implicit row limit a real
+ * Supabase/PostgREST project might apply to a plain table SELECT
+ * (commonly 1,000 rows) — every event source is now read ONLY through
+ * migration 0018's search_customer_activity_timeline() RPC, which
+ * itself returns at most timelinePageSize rows per call (see that
+ * file's own header comment).
  *
- * Uses the real HTTP handler end-to-end (same mock.module +
- * fakeReq/fakeRes pattern as customer-activity-timeline.test.mjs),
- * seeding 600 payment_events for ONE customer (bulk INSERT, not 600
- * round trips) — past the old 500-row cutoff.
+ * Seeds 1,200 payment_events for ONE customer — comfortably past the
+ * 1,000-row boundary a real Supabase project's PostgREST config
+ * commonly enforces on an ordinary `.select()`, which the OLD
+ * (round-2) code path was still exposed to for any source table with
+ * no explicit `.range()`/`.limit()` (see api/admin/customer-detail.js's
+ * own module comment, ChatGPT review round 3 note).
  */
 import { test, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +31,7 @@ process.env.NODE_ENV = 'test';
 const repoRoot = join(new URL('.', import.meta.url).pathname, '..', '..');
 const supabaseModUrl = pathToFileURL(join(repoRoot, 'api/_lib/supabase.js')).href;
 
-const PAYMENT_EVENT_COUNT = 600;
+const PAYMENT_EVENT_COUNT = 1200;
 
 let pool;
 let supabase;
@@ -60,9 +65,11 @@ before(async () => {
 
   /* One bulk INSERT of PAYMENT_EVENT_COUNT rows — i=1 is the OLDEST
    * (occurred_at furthest in the past), i=PAYMENT_EVENT_COUNT the
-   * NEWEST — so the timeline's newest-first ordering puts row i=600
-   * first, i=1 last, with no ties/ambiguity about which event lands
-   * on which page. */
+   * NEWEST — so the timeline's newest-first ordering puts row
+   * i=PAYMENT_EVENT_COUNT first, i=1 last, with no ties/ambiguity about
+   * which event lands on which page. Comfortably past the 1,000-row
+   * boundary a real Supabase/PostgREST project commonly enforces on an
+   * un-ranged .select() — see this file's own header comment. */
   await pool.query(
     `INSERT INTO payment_events (stripe_event_id, event_type, customer_id, amount, currency, status, occurred_at)
      SELECT
@@ -89,76 +96,112 @@ async function fetchDetail(query = {}) {
   return res._json;
 }
 
-test('timeline_total_count reflects the FULL event history, not capped at 500', async () => {
+// Preserves the SAME timelinePageSize the caller was already using — a
+// real client always re-sends its own page-size choice on every
+// request (there is no server-side "session" remembering it), so the
+// walk below must do the same or it would silently fall back to the
+// default 50 on every page after the first, which is a TEST bug, not a
+// product one (parseTimelinePageSize is per-request, by design).
+function nextPageQuery(body) {
+  assert.ok(body.timeline_next_cursor, 'expected a timeline_next_cursor while timeline_has_next is true');
+  return {
+    timelinePageSize: String(body.timeline_page_size),
+    timelineCursorSortAt: body.timeline_next_cursor.sort_at,
+    timelineCursorEventKey: body.timeline_next_cursor.event_key,
+  };
+}
+
+test('timeline_total_count reflects the FULL event history, not capped at any page size', async () => {
   const body = await fetchDetail({});
   // +1 for the customer_created entry itself.
   assert.equal(body.timeline_total_count, PAYMENT_EVENT_COUNT + 1);
 });
 
-test('default page (pageSize=50) returns exactly 50 entries, the newest first', async () => {
+test('default page (pageSize=50) returns exactly 50 entries, the newest first, with no previous page', async () => {
   const body = await fetchDetail({});
   assert.equal(body.activity_timeline.length, 50);
-  assert.equal(body.timeline_page, 1);
   assert.equal(body.timeline_page_size, 50);
   assert.equal(body.timeline_has_previous, false);
   assert.equal(body.timeline_has_next, true);
-  // Newest payment event (i=600) sorts ahead of customer_created (2 years old).
+  assert.ok(body.timeline_next_cursor);
+  // Newest payment event sorts ahead of customer_created (2 years old).
   assert.equal(body.activity_timeline[0].source, 'payment_events (invoice.payment_succeeded)');
 });
 
-test('an event beyond the old row-500 cutoff is reachable via a later page — proves no silent truncation', async () => {
-  // pageSize=100 => 6 full pages of payment_events + a 7th holding
-  // customer_created. Page 6 (offset 500) covers events ranked 501-600
-  // newest-first, i.e. bulk events i=100..1 in seed order — exactly the
-  // range a TIMELINE_ROW_CAP=500 query() would have silently dropped
-  // entirely before this fix.
-  const body = await fetchDetail({ timelinePage: '6', timelinePageSize: '100' });
-  assert.equal(body.activity_timeline.length, 100);
-  assert.ok(body.activity_timeline.every((e) => e.type === 'payment_event'));
-});
-
-test('walking every page (pageSize=100) yields exactly timeline_total_count entries, no duplicates, no gaps', async () => {
-  const first = await fetchDetail({ timelinePageSize: '100' });
-  const totalPages = first.timeline_total_pages;
+test('walking every page via timeline_next_cursor (pageSize=100) reaches every event, including the OLDEST one, with no duplicates and no gaps', async () => {
+  let body = await fetchDetail({ timelinePageSize: '100' });
   const seenKeys = new Set();
+  let pages = 0;
+  const MAX_PAGES = 20; // (1200 + 1) / 100 = 13 pages — generous ceiling against an infinite loop bug
 
-  for (let page = 1; page <= totalPages; page++) {
-    const body = await fetchDetail({ timelinePage: String(page), timelinePageSize: '100' });
+  for (;;) {
     for (const e of body.activity_timeline) {
-      // No stable id on a timeline entry — (type, occurred_at, amount)
-      // is unique enough across this synthetic, one-event-per-hour dataset.
-      const key = `${e.type}:${e.occurred_at}:${e.amount ?? ''}`;
-      assert.ok(!seenKeys.has(key), `entry ${key} appeared on more than one page (page ${page})`);
-      seenKeys.add(key);
+      assert.ok(!seenKeys.has(e.event_key), `event_key ${e.event_key} appeared on more than one page`);
+      seenKeys.add(e.event_key);
     }
+    pages++;
+    if (!body.timeline_has_next) break;
+    assert.ok(pages < MAX_PAGES, 'walked more pages than should be possible — likely an infinite loop / cursor not advancing');
+    body = await fetchDetail(nextPageQuery(body));
   }
 
-  assert.equal(seenKeys.size, PAYMENT_EVENT_COUNT + 1);
+  assert.equal(seenKeys.size, PAYMENT_EVENT_COUNT + 1, 'every event, including the very oldest payment_event (i=1) and customer_created, must be reachable by walking the cursor to the end');
+  assert.equal(body.timeline_has_next, false, 'the final page must report no further pages');
+  assert.equal(body.timeline_next_cursor, null);
+
+  // customer_created was seeded 2 years ago (see `before`), older than
+  // every payment_event (the newest is ~"now", the oldest, i=1, is
+  // PAYMENT_EVENT_COUNT hours ago — a matter of weeks) — so
+  // customer_created is genuinely the single oldest event overall and
+  // must be the very last thing reached.
+  const oldestEntry = body.activity_timeline[body.activity_timeline.length - 1];
+  assert.equal(oldestEntry.type, 'customer_created');
+
+  // Separately, the whole point of this test: the OLDEST payment_event
+  // (i=1) specifically — the row that would sit past the old
+  // TIMELINE_ROW_CAP=500 cutoff, and past a real Supabase/PostgREST
+  // project's commonly-configured 1,000-row implicit SELECT limit —
+  // must actually be reachable, not silently dropped.
+  const { rows: oldestPaymentEventRows } = await pool.query(`SELECT id FROM payment_events WHERE stripe_event_id = 'evt_bulk_1'`);
+  assert.equal(oldestPaymentEventRows.length, 1);
+  assert.ok(
+    seenKeys.has(`payment_events:${oldestPaymentEventRows[0].id}`),
+    'the oldest payment_event (i=1) must be reachable by walking the cursor to the end'
+  );
 });
 
-test('the last real page is full/partial as expected, timeline_has_next=false', async () => {
-  const totalPages = Math.ceil((PAYMENT_EVENT_COUNT + 1) / 100); // 7
-  const body = await fetchDetail({ timelinePage: String(totalPages), timelinePageSize: '100' });
-  assert.equal(body.timeline_has_next, false);
-  assert.equal(body.timeline_has_previous, true);
-  assert.equal(body.activity_timeline.length, PAYMENT_EVENT_COUNT + 1 - (totalPages - 1) * 100);
+test('a page requested with a cursor built from the previous response is reachable and disjoint from page 1', async () => {
+  const page1 = await fetchDetail({ timelinePageSize: '100' });
+  const page2 = await fetchDetail(nextPageQuery(page1));
+  assert.equal(page2.activity_timeline.length, 100);
+  assert.equal(page2.timeline_has_previous, true);
+  const page1Keys = new Set(page1.activity_timeline.map((e) => e.event_key));
+  assert.ok(page2.activity_timeline.every((e) => !page1Keys.has(e.event_key)), 'page 2 must share no events with page 1');
 });
 
-test('a page number past the last page returns an EMPTY activity_timeline but an ACCURATE timeline_total_count', async () => {
-  const body = await fetchDetail({ timelinePage: '999', timelinePageSize: '100' });
+test('a stale/bogus cursor past the last row returns an EMPTY activity_timeline but an ACCURATE timeline_total_count and timeline_has_next=false', async () => {
+  const body = await fetchDetail({
+    timelineCursorSortAt: '1999-01-01T00:00:00.000Z', // older than every real event
+    timelineCursorEventKey: 'payment_events:00000000-0000-0000-0000-000000000000',
+  });
   assert.equal(body.activity_timeline.length, 0);
   assert.equal(body.timeline_total_count, PAYMENT_EVENT_COUNT + 1);
   assert.equal(body.timeline_has_next, false);
-  assert.equal(body.timeline_has_previous, true);
+  assert.equal(body.timeline_has_previous, true, 'a request that DID carry a (valid-shaped) cursor is never "the first page"');
 });
 
-test('invalid timelinePage values (negative, zero, non-numeric) fall back to page 1, never a 500', async () => {
-  for (const timelinePage of ['-1', '0', 'not-a-number', '1.5', '']) {
-    const res = fakeRes();
-    await customerDetailHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` }, query: { id: customerId, timelinePage } }), res);
-    assert.equal(res.statusCode, 200, `timelinePage=${JSON.stringify(timelinePage)} must not 500`);
-    assert.equal(res._json.timeline_page, 1, `timelinePage=${JSON.stringify(timelinePage)} must clamp to page 1`);
-  }
+test('an invalid/partial cursor (malformed timestamp, or only one of the two fields) falls back to page 1, never a 500', async () => {
+  const first = await fetchDetail({});
+
+  const malformedTimestamp = await fetchDetail({ timelineCursorSortAt: 'not-a-date', timelineCursorEventKey: 'payment_events:x' });
+  assert.deepEqual(malformedTimestamp.activity_timeline.map((e) => e.event_key), first.activity_timeline.map((e) => e.event_key));
+  assert.equal(malformedTimestamp.timeline_has_previous, false, 'a cursor this handler rejected as invalid must be treated as no cursor at all');
+
+  const onlySortAt = await fetchDetail({ timelineCursorSortAt: new Date().toISOString() });
+  assert.equal(onlySortAt.timeline_has_previous, false);
+
+  const onlyEventKey = await fetchDetail({ timelineCursorEventKey: 'payment_events:x' });
+  assert.equal(onlyEventKey.timeline_has_previous, false);
 });
 
 test('invalid timelinePageSize values fall back to the default (50); only 25/50/100 are ever honored', async () => {
@@ -168,12 +211,13 @@ test('invalid timelinePageSize values fall back to the default (50); only 25/50/
   const twentyFive = await fetchDetail({ timelinePageSize: '25' });
   assert.equal(twentyFive.timeline_page_size, 25);
   assert.equal(twentyFive.activity_timeline.length, 25);
+
+  const hundred = await fetchDetail({ timelinePageSize: '100' });
+  assert.equal(hundred.timeline_page_size, 100);
+  assert.equal(hundred.activity_timeline.length, 100);
 });
 
-test('a customer with an empty timeline (impossible in practice — customer_created always exists — but the empty-page machinery itself is exercised by the past-the-end-page test above) never errors', async () => {
-  // Covered structurally by "a page number past the last page" above;
-  // this test documents that guarantee explicitly for a fresh customer
-  // with no payment history at all.
+test('a customer with an empty/near-empty history (only customer_created) never errors and reports has_next=false', async () => {
   const custRes = await pool.query(`INSERT INTO customers (stripe_customer_id) VALUES ($1) RETURNING id`, [`cus_${randomUUID()}`]);
   const freshId = custRes.rows[0].id;
   const res = fakeRes();
@@ -182,4 +226,12 @@ test('a customer with an empty timeline (impossible in practice — customer_cre
   assert.equal(res._json.activity_timeline.length, 1, 'just the customer_created entry');
   assert.equal(res._json.timeline_total_count, 1);
   assert.equal(res._json.timeline_has_next, false);
+  assert.equal(res._json.timeline_has_previous, false);
+  assert.equal(res._json.timeline_next_cursor, null);
+});
+
+test('a request for a customer id that does not exist still 404s before the timeline RPC is ever called', async () => {
+  const res = fakeRes();
+  await customerDetailHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` }, query: { id: randomUUID() } }), res);
+  assert.equal(res.statusCode, 404);
 });

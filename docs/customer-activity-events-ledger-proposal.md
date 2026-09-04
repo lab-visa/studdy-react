@@ -1,12 +1,20 @@
-# `customer_activity_events` audit ledger — proposed migration 0018 (NOT implemented)
+# `customer_activity_events` audit ledger — proposed migration 0019 (NOT implemented)
 
 CRM-3A Activity Timeline audit, ChatGPT review round 2, item 5. Per
 this round's explicit instruction ("do not silently create a large
 new scope or migration; report the exact migration plan before
 implementing it"), this is a **report only** — no migration file has
 been created, no table exists, and no application code writes to it.
-The plan below is what would ship as `0018_customer_activity_events.sql`
+The plan below is what would ship as `0019_customer_activity_events.sql`
 if and when the user approves it.
+
+**Renumbered in ChatGPT review round 3**: this was originally sketched
+as `0018_...` when this document was first written. Round 3 built a
+real, different migration (`0018_customer_activity_timeline.sql` — the
+server-side/cursor-paginated Activity Timeline query, a required fix,
+not this still-proposed-only audit ledger) that claimed the 0018 slot
+first, so this proposal moved to 0019 to keep the migration sequence
+gap-free. Nothing about the proposed schema itself changed.
 
 ## The gap this closes
 
@@ -46,7 +54,7 @@ backend-only, append-only ledger table.
 ## Proposed schema
 
 ```sql
--- 0018_customer_activity_events.sql (PROPOSED — not created this round)
+-- 0019_customer_activity_events.sql (PROPOSED — not created this round)
 
 create table if not exists customer_activity_events (
   id                uuid primary key default gen_random_uuid(),
@@ -147,5 +155,5 @@ to these three categories.
 
 **Proposed only — no migration file created, no code written.**
 Awaiting the user's decision on whether to approve this schema (as
-written, or amended) before `0018_customer_activity_events.sql` is
+written, or amended) before `0019_customer_activity_events.sql` is
 actually created.

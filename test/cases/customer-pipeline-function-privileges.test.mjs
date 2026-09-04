@@ -143,13 +143,25 @@ test('search_customer_pipeline: is declared SECURITY INVOKER, not SECURITY DEFIN
   assert.equal(rows[0].prosecdef, false, 'prosecdef=false means SECURITY INVOKER — this function must never silently become SECURITY DEFINER');
 });
 
-test('search_customer_pipeline: has a fixed search_path config (proconfig), so caller session state cannot redirect its table references', async () => {
+test('search_customer_pipeline: search_path is pinned to the exact empty string (ChatGPT review round 3), not merely "some value" and not public,pg_catalog', async () => {
   const { rows } = await pool.query(
     `SELECT proconfig FROM pg_proc WHERE proname = 'search_customer_pipeline'`
   );
   assert.equal(rows.length, 1);
+  assert.ok(rows[0].proconfig, 'search_customer_pipeline must pin its own search_path (proconfig), not inherit the caller session\'s');
+  // proconfig stores `set search_path = ''` as the literal text
+  // 'search_path=""' (empty-string-quoted, confirmed against a live
+  // catalog read) — asserting the EXACT entry, not merely that some
+  // search_path= prefix exists, is what actually catches a regression
+  // back to `public, pg_catalog` (which round 3 found still lists a
+  // caller-writable schema ahead of the always-implicitly-searched
+  // pg_catalog — see 0017's own header comment for the full rationale).
   assert.ok(
-    rows[0].proconfig && rows[0].proconfig.some((c) => c.startsWith('search_path=')),
-    'search_customer_pipeline must pin its own search_path (proconfig), not inherit the caller session\'s'
+    rows[0].proconfig.includes('search_path=""'),
+    `expected proconfig to contain the exact entry 'search_path=""' (empty), got: ${JSON.stringify(rows[0].proconfig)}`
+  );
+  assert.ok(
+    !rows[0].proconfig.some((c) => c === 'search_path=public, pg_catalog' || c === 'search_path=public,pg_catalog'),
+    'search_path must no longer list public ahead of (or alongside) pg_catalog'
   );
 });

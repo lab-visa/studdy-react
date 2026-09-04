@@ -1,18 +1,31 @@
 /**
- * CRM-3A Activity Timeline audit — fixes the specific reported bug (a
- * customer classified "Access removed" / subscription "cancelled" had
- * no timeline entry showing when cancellation happened) and adds
- * every OTHER timeline entry that has a real, authoritative,
- * database-backed source today: checkout started, access assigned/
- * released, campaign attribution recorded/updated, and friendly
- * labels for the existing payment_events entries.
+ * CRM-3A Activity Timeline — end-to-end coverage of the real HTTP
+ * handler (api/admin/customer-detail.js) wired to the real Postgres
+ * migration 0018 function (search_customer_activity_timeline), plus
+ * the duplicate-Stripe-webhook idempotency guarantees the timeline
+ * depends on.
  *
- * Deliberately NOT added (see api/admin/customer-detail.js's own
- * module comment and the CRM-3A Activity Timeline audit report): plan/
- * billing changes, cancellation approved/rejected/reversed, and Sales
- * Owner change history — none of these have any authoritative
- * timestamped source in the schema today; adding them would need new
- * columns/tables, which this round reports rather than silently builds.
+ * ChatGPT review round 3 note: the pure-JS buildActivityTimeline()/
+ * buildCancellationEntry() functions this file used to unit-test
+ * directly no longer exist — that in-memory merge/sort logic moved
+ * into migration 0018's search_customer_activity_timeline() SQL
+ * function (see that file's own header comment for why: the API layer
+ * must never fetch a whole source table into Node again). Every
+ * assertion those pure-function tests used to make is preserved, just
+ * relocated to where the logic actually lives now:
+ *   - the per-event-type/label/source matrix, sort order, stable
+ *     tie-break, and "exact date unavailable" honesty ->
+ *     test/cases/customer-activity-timeline-function.test.mjs
+ *     (SQL-level, direct RPC calls)
+ *   - reachability beyond the old TIMELINE_ROW_CAP=500, cursor
+ *     pagination, 1,200+ event volume ->
+ *     test/cases/customer-detail-timeline-pagination.test.mjs
+ *     (HTTP-level, the real handler)
+ * This file keeps only what genuinely needs the full HTTP-handler +
+ * real-Postgres-joins wiring (checkout_started/access_assigned via
+ * lead_attribution/account_assignments, which the handler resolves via
+ * customer.id/source_lead_id lookups before calling the RPC) and the
+ * duplicate-webhook-delivery idempotency guarantees.
  */
 import { test, before, beforeEach, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,17 +46,13 @@ const supabaseModUrl = pathToFileURL(join(repoRoot, 'api/_lib/supabase.js')).hre
 let pool;
 let supabase;
 let customerDetailHandler;
-let buildActivityTimeline;
-let buildCancellationEntry;
 let adminAuth;
 
 before(async () => {
   pool = await getTestPool();
   supabase = createTestSupabaseClient(pool);
   mock.module(supabaseModUrl, { namedExports: { getSupabase: () => supabase } });
-  ({ default: customerDetailHandler, buildActivityTimeline, buildCancellationEntry } = await import(
-    pathToFileURL(join(repoRoot, 'api/admin/customer-detail.js')).href
-  ));
+  ({ default: customerDetailHandler } = await import(pathToFileURL(join(repoRoot, 'api/admin/customer-detail.js')).href));
   adminAuth = await import(pathToFileURL(join(repoRoot, 'api/_lib/admin-auth.js')).href);
 });
 
@@ -57,154 +66,6 @@ beforeEach(async () => {
   );
 });
 
-/* ─────────────────────── buildCancellationEntry (pure function) ─────────────────────── */
-
-test('buildCancellationEntry: THE BUG FIX — status=cancelled with a real cancelled_at produces a dated "Subscription cancelled" entry', () => {
-  const entry = buildCancellationEntry({ status: 'cancelled', cancelled_at: '2026-08-15T10:00:00.000Z', ended_at: null });
-  assert.ok(entry);
-  assert.equal(entry.label, 'Subscription cancelled');
-  assert.equal(entry.occurred_at, '2026-08-15T10:00:00.000Z');
-  assert.equal(entry.source, 'subscriptions.cancelled_at');
-});
-
-test('buildCancellationEntry: falls back to ended_at only if cancelled_at is missing', () => {
-  const entry = buildCancellationEntry({ status: 'cancelled', cancelled_at: null, ended_at: '2026-08-16T00:00:00.000Z' });
-  assert.equal(entry.occurred_at, '2026-08-16T00:00:00.000Z');
-  assert.equal(entry.source, 'subscriptions.ended_at');
-});
-
-test('buildCancellationEntry: HISTORICAL CASE — status=cancelled but no timestamp anywhere shows "exact date unavailable", never a manufactured date', () => {
-  const entry = buildCancellationEntry({ status: 'cancelled', cancelled_at: null, ended_at: null, updated_at: '2026-08-20T00:00:00.000Z' });
-  assert.ok(entry);
-  assert.equal(entry.label, 'Cancelled — exact date unavailable');
-  assert.equal(entry.occurred_at, null, 'must never fabricate a date from updated_at — occurred_at stays null');
-  assert.equal(entry.source, null);
-});
-
-test('buildCancellationEntry: SCHEDULED cancellation (cancel_at_period_end=true, status still active) produces NO cancellation entry — nothing has actually happened yet', () => {
-  const entry = buildCancellationEntry({ status: 'active', cancel_at_period_end: true, cancel_at: '2026-09-30T00:00:00.000Z', cancelled_at: null, ended_at: null });
-  assert.equal(entry, null, 'a future-scheduled cancellation must never be shown as a completed "Subscription cancelled" event');
-});
-
-test('buildCancellationEntry: no subscription at all, or a non-cancelled status, produces no entry', () => {
-  assert.equal(buildCancellationEntry(null), null);
-  assert.equal(buildCancellationEntry({ status: 'active' }), null);
-  assert.equal(buildCancellationEntry({ status: 'trialing' }), null);
-  assert.equal(buildCancellationEntry({ status: 'past_due' }), null);
-});
-
-/* ─────────────────────── buildActivityTimeline (pure function) ─────────────────────── */
-
-test('buildActivityTimeline: a brand-new customer with no other activity has exactly one entry', () => {
-  const timeline = buildActivityTimeline({
-    customer: { created_at: '2026-08-01T00:00:00.000Z' },
-    subscription: null,
-    paymentEvents: [],
-    cancellationRequests: [],
-    leadAttribution: null,
-    accountAssignments: [],
-  });
-  assert.equal(timeline.length, 1);
-  assert.equal(timeline[0].type, 'customer_created');
-  assert.equal(timeline[0].occurred_at_ist, '1 Aug 2026, 5:30 am IST');
-});
-
-test('buildActivityTimeline: every supported event type appears with the right label and source', () => {
-  const timeline = buildActivityTimeline({
-    customer: {
-      created_at: '2026-08-01T10:00:00.000Z',
-      first_attribution_at: '2026-07-30T09:00:00.000Z',
-      first_utm_source: 'whatsapp',
-      first_utm_campaign: 'WA-01',
-      latest_attribution_at: '2026-08-05T09:00:00.000Z',
-      latest_utm_source: 'facebook',
-      latest_utm_campaign: 'FB-99',
-    },
-    subscription: { status: 'cancelled', cancelled_at: '2026-08-20T00:00:00.000Z' },
-    paymentEvents: [
-      { event_type: 'invoice.payment_succeeded', occurred_at: '2026-08-02T00:00:00.000Z', amount: 40.99, currency: 'usd', status: 'succeeded' },
-      { event_type: 'invoice.payment_failed', occurred_at: '2026-08-10T00:00:00.000Z', amount: 40.99, currency: 'usd', status: 'failed' },
-      { event_type: 'refund.created', occurred_at: '2026-08-12T00:00:00.000Z', amount: 40.99, currency: 'usd', status: 'refunded' },
-      { event_type: 'charge.dispute.created', occurred_at: '2026-08-13T00:00:00.000Z', amount: 40.99, currency: 'usd', status: 'needs_response' },
-      { event_type: 'charge.dispute.closed', occurred_at: '2026-08-14T00:00:00.000Z', amount: 40.99, currency: 'usd', status: 'won' },
-      { event_type: 'some.future.unmapped.event', occurred_at: '2026-08-15T00:00:00.000Z', amount: 1, currency: 'usd', status: 'x' },
-    ],
-    cancellationRequests: [{ status: 'pending_discussion', requested_at: '2026-08-16T00:00:00.000Z', reason: 'too expensive' }],
-    leadAttribution: { first_touched_at: '2026-07-29T08:00:00.000Z' },
-    accountAssignments: [{ group_name: 'Group-A', assigned_at: '2026-08-01T10:05:00.000Z', released_at: '2026-08-19T00:00:00.000Z' }],
-  });
-
-  const byType = Object.fromEntries(timeline.map((e) => [e.type + (e.source?.includes('(') ? e.source : ''), e]));
-  const labels = timeline.map((e) => e.label);
-
-  assert.ok(labels.includes('Checkout started'));
-  assert.ok(labels.includes('Trial started / customer created'));
-  assert.ok(labels.includes('Access assigned — Group-A'));
-  assert.ok(labels.includes('Access released — Group-A'));
-  assert.ok(labels.includes('Campaign attribution recorded (first touch)'));
-  assert.ok(labels.includes('Campaign attribution updated (latest touch)'));
-  assert.ok(labels.includes('Payment succeeded'));
-  assert.ok(labels.includes('Payment failed'));
-  assert.ok(labels.includes('Refund issued'));
-  assert.ok(labels.includes('Dispute opened'));
-  assert.ok(labels.includes('Dispute closed'));
-  assert.ok(labels.includes('some.future.unmapped.event'), 'an unmapped event_type must fall back to the raw string, never crash');
-  assert.ok(labels.includes('Cancellation request: pending_discussion'));
-  assert.ok(labels.includes('Subscription cancelled'));
-
-  void byType; // (kept for potential future per-entry field assertions)
-});
-
-test('buildActivityTimeline: sorted strictly newest-first', () => {
-  const timeline = buildActivityTimeline({
-    customer: { created_at: '2026-08-01T00:00:00.000Z' },
-    subscription: null,
-    paymentEvents: [
-      { event_type: 'invoice.payment_succeeded', occurred_at: '2026-08-10T00:00:00.000Z' },
-      { event_type: 'invoice.payment_succeeded', occurred_at: '2026-08-05T00:00:00.000Z' },
-    ],
-    cancellationRequests: [],
-    leadAttribution: null,
-    accountAssignments: [],
-  });
-  const times = timeline.map((e) => new Date(e.occurred_at).getTime());
-  for (let i = 1; i < times.length; i++) {
-    assert.ok(times[i - 1] >= times[i], 'each entry must be the same time or newer than the one after it');
-  }
-  assert.equal(timeline[0].occurred_at, '2026-08-10T00:00:00.000Z', 'newest entry first');
-});
-
-test('buildActivityTimeline: two entries sharing the exact same timestamp sort by the stable secondary key (type), same order every call', () => {
-  const build = () =>
-    buildActivityTimeline({
-      customer: { created_at: '2026-08-01T00:00:00.000Z' },
-      subscription: null,
-      paymentEvents: [{ event_type: 'invoice.payment_succeeded', occurred_at: '2026-08-01T00:00:00.000Z' }],
-      cancellationRequests: [{ status: 'pending_discussion', requested_at: '2026-08-01T00:00:00.000Z' }],
-      leadAttribution: null,
-      accountAssignments: [],
-    });
-  const first = build().map((e) => e.type);
-  const second = build().map((e) => e.type);
-  assert.deepEqual(first, second, 'identical input must always produce identical order — no nondeterministic tie-breaking');
-});
-
-test('buildActivityTimeline: a customer with only lead_attribution (no conversion yet — degenerate but must not crash) still orders correctly', () => {
-  const timeline = buildActivityTimeline({
-    customer: { created_at: '2026-08-01T00:00:00.000Z' },
-    subscription: null,
-    paymentEvents: [],
-    cancellationRequests: [],
-    leadAttribution: { first_touched_at: '2026-07-31T00:00:00.000Z' },
-    accountAssignments: [],
-  });
-  assert.equal(timeline.length, 2);
-  assert.equal(timeline[0].type, 'customer_created', 'created_at is after checkout_started, so it sorts first (newest-first)');
-  assert.equal(timeline[1].type, 'checkout_started');
-});
-
-/* ─────────────────────── end-to-end: real handler, real Postgres ─────────────────────── */
-
 async function seedAdminSession() {
   const salt = adminAuth.generateSalt();
   const hash = adminAuth.deriveHash('1234', salt);
@@ -215,6 +76,8 @@ async function seedAdminSession() {
   const { token } = await adminAuth.createSession(supabase, res.rows[0].id);
   return token;
 }
+
+/* ─────────────────────── end-to-end: real handler, real Postgres ─────────────────────── */
 
 test('end-to-end: a cancelled customer\'s timeline shows the real cancellation date from the actual handler + real Postgres', async () => {
   const token = await seedAdminSession();
@@ -239,6 +102,7 @@ test('end-to-end: a cancelled customer\'s timeline shows the real cancellation d
   assert.equal(cancelEntry.label, 'Subscription cancelled');
   assert.equal(cancelEntry.occurred_at, '2026-08-20T12:00:00.000Z');
   assert.ok(cancelEntry.occurred_at_ist, 'must carry a real IST-formatted date, not just the raw ISO string');
+  assert.ok(cancelEntry.event_key, 'every entry must carry a stable event_key for the React list key');
 });
 
 test('end-to-end: checkout_started and access_assigned/released entries are wired through the real handler and real Postgres joins', async () => {
@@ -275,6 +139,15 @@ test('end-to-end: checkout_started and access_assigned/released entries are wire
   assert.equal(assigned.label, 'Access assigned — Group-Z');
 });
 
+test('end-to-end: a customer with no source_lead_id/lead_attribution row never errors (checkout_started simply absent)', async () => {
+  const token = await seedAdminSession();
+  const custRes = await pool.query(`INSERT INTO customers (stripe_customer_id) VALUES ($1) RETURNING id`, [`cus_${randomUUID()}`]);
+  const res = fakeRes();
+  await customerDetailHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` }, query: { id: custRes.rows[0].id } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.ok(!res._json.activity_timeline.some((e) => e.type === 'checkout_started'));
+});
+
 /* ─────────────────────── duplicate Stripe webhook delivery ─────────────────────── */
 
 test('duplicate webhook delivery: redelivering customer.subscription.deleted for the same event never creates a second timeline-visible change, and is idempotent', async () => {
@@ -304,17 +177,13 @@ test('duplicate webhook delivery: redelivering customer.subscription.deleted for
   assert.equal(subRows2.length, 1, 'a redelivered event must never create a second subscriptions row');
   assert.equal(subRows2[0].cancelled_at.getTime(), subRows1[0].cancelled_at.getTime(), 'the timestamp is derived from the Stripe event itself, so a retry reproduces the exact same value, not a later wall-clock time');
 
-  // And the timeline built from this state still shows exactly ONE
-  // "Subscription cancelled" entry, not two.
-  const timeline = buildActivityTimeline({
-    customer: { created_at: '2026-08-01T00:00:00.000Z' },
-    subscription: subRows2[0],
-    paymentEvents: [],
-    cancellationRequests: [],
-    leadAttribution: null,
-    accountAssignments: [],
-  });
-  const cancelEntries = timeline.filter((e) => e.type === 'subscription_cancelled');
+  // The timeline the real RPC builds from this state still shows exactly
+  // ONE "subscription_cancelled" entry, not two — structurally
+  // guaranteed by search_customer_activity_timeline()'s
+  // latest_subscription CTE (at most one row per customer), not by any
+  // JS-side dedup logic.
+  const { data: timelineRows } = await supabase.rpc('search_customer_activity_timeline', { p_customer_id: customerId });
+  const cancelEntries = (timelineRows || []).filter((e) => e.event_type === 'subscription_cancelled');
   assert.equal(cancelEntries.length, 1);
 });
 
@@ -336,4 +205,8 @@ test('duplicate webhook delivery: a payment_events row can never be duplicated b
 
   const { rows } = await pool.query('SELECT count(*)::int AS c FROM payment_events WHERE stripe_event_id=$1', [eventId]);
   assert.equal(rows[0].c, 1);
+
+  const { data: timelineRows } = await supabase.rpc('search_customer_activity_timeline', { p_customer_id: customerId });
+  const paymentEntries = (timelineRows || []).filter((e) => e.event_type === 'payment_event');
+  assert.equal(paymentEntries.length, 1, 'the timeline must never show the same payment_events row twice');
 });
