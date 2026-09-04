@@ -155,7 +155,6 @@ export interface CustomerDetailResponse {
   };
   cancellation: {
     open_request: { id: string; status: string; reason: string | null; requested_at: string } | null;
-    history: Array<{ id: string; status: string; reason: string | null; requested_at: string }>;
   };
   lifecycle: LifecycleResult;
   activity_timeline: ActivityTimelineEntry[];

@@ -44,19 +44,77 @@
 --   payment_event           <- payment_events (dedup already guaranteed by its
 --                              stripe_event_id unique constraint — see
 --                              logPaymentEvent() in sync-customer.js)
---   cancellation_request    <- cancellation_requests.requested_at
---   subscription_cancelled  <- subscriptions.cancelled_at (fallback ended_at,
---                              honestly "exact date unavailable" if genuinely
---                              neither exists — same precedence this round's
---                              cancellation-timestamp fix already established
---                              in sync-customer.js, never re-derived here)
+--   cancellation_requested/
+--   cancellation_discussed/
+--   cancellation_resolved   <- cancellation_requests.requested_at/discussed_at/
+--                              resolved_at (ChatGPT review round 4 — these three
+--                              columns, plus status/resolution, ARE an
+--                              authoritative timestamped source and were
+--                              previously and incorrectly treated as absent;
+--                              see "HONESTLY, WHAT THIS DOES NOT COVER" below
+--                              for what is still genuinely missing)
+--   subscription_cancelled  <- EVERY genuinely cancelled subscription row for
+--                              this customer (not just the most recent one —
+--                              see "MULTIPLE SUBSCRIPTIONS PER CUSTOMER"
+--                              below), each labeled from its own
+--                              cancelled_at/ended_at using the same precedence
+--                              this round's cancellation-timestamp fix already
+--                              established in sync-customer.js, never
+--                              re-derived here
 --
--- STILL DELIBERATELY NOT INCLUDED (no authoritative timestamped source
--- exists anywhere in the schema today — see
--- docs/customer-activity-events-ledger-proposal.md for the proposed,
--- NOT YET BUILT, future fix): plan/billing changes, cancellation
--- approved/rejected/reversed transitions, and Sales Owner change
--- history.
+-- MULTIPLE SUBSCRIPTIONS PER CUSTOMER (ChatGPT review round 4 — a real
+-- correctness bug, not a style nit): the `subscriptions` table has no
+-- database constraint limiting a customer to one row — migration 0006
+-- only makes `stripe_subscription_id` globally unique, nothing enforces
+-- "at most one subscription per customer_id". A customer who cancels
+-- one subscription and later starts a second, separate one is entirely
+-- possible (and, per real Stripe usage, not even rare — a lapsed
+-- customer resubscribing is exactly this shape). The PREVIOUS version
+-- of this function picked only the most-recently-CREATED subscription
+-- via a `latest_subscription` CTE (`order by created_at desc limit 1`)
+-- and would therefore silently drop an earlier cancellation from the
+-- timeline the moment a newer subscription existed — a real information
+-- loss, not just an edge case. This function now emits ONE entry per
+-- QUALIFYING (status='cancelled') subscription row, keyed on that
+-- row's own `subscriptions.id` (not the customer's id), so every
+-- genuine past cancellation stays visible regardless of how many
+-- subscriptions came after it.
+--
+-- SUBSCRIPTION-CANCELLATION LABELS (ChatGPT review round 4 — now
+-- three-way, not a two-way coalesce): each qualifying row's label and
+-- `occurred_at` come from THAT row's own fields, not a blended
+-- coalesce(cancelled_at, ended_at) that obscured which field actually
+-- fired:
+--   cancelled_at present                      -> "Subscription cancelled"
+--   ended_at present, cancelled_at absent     -> "Subscription ended"
+--   status='cancelled', BOTH timestamps null  -> "Cancelled — exact date unavailable"
+-- A subscription with a FUTURE-scheduled cancellation (`cancel_at` set,
+-- `cancel_at_period_end=true`) is never shown as a completed
+-- cancellation — it is gated out entirely by the `status = 'cancelled'`
+-- filter below, since Stripe/sync-customer.js never flips `status` to
+-- 'cancelled' until the subscription has actually ended; a schedule is
+-- not a completed fact (same principle the predecessor JS
+-- buildCancellationEntry() already documented, preserved here).
+--
+-- HONESTLY, WHAT THIS DOES NOT COVER — this function paginates
+-- COMPLETELY over every event source actually IMPLEMENTED above; it is
+-- NOT a complete audit history of "every activity" and must never be
+-- described as one. Specifically still missing, because no
+-- authoritative source exists anywhere in the schema for them today
+-- (see docs/customer-activity-events-ledger-proposal.md, migration
+-- 0019, PROPOSED ONLY, not built): Sales Owner change history (only
+-- the current value is stored, with no log of who owned a customer
+-- before) and plan/billing changes (nothing in this codebase logs a
+-- plan_type/currency change as an event). Separately, and more subtly:
+-- the three cancellation_requests entries above surface the three
+-- TIMESTAMPS this table actually stores (requested_at/discussed_at/
+-- resolved_at) — they do NOT reconstruct every intermediate status
+-- transition a request may have gone through (e.g. if a request's
+-- `status` column were updated more than once before `resolved_at` was
+-- finally set, only the LAST value is visible — cancellation_requests
+-- itself is not an append-only ledger, it is a single mutable row per
+-- request). A genuine transition-by-transition history for this, like
+-- for Sales Owner/plan changes, would need the proposed 0019 ledger.
 --
 -- STABLE PAGINATION KEY — genuinely unique, not merely "usually
 -- unique": every event_key below is built from the real immutable
@@ -205,14 +263,7 @@ begin
   v_page_size := least(greatest(coalesce(p_page_size, 50), 1), 100);
 
   return query
-  with latest_subscription as (
-    select s.*
-    from public.subscriptions s
-    where s.customer_id = p_customer_id
-    order by s.created_at desc
-    limit 1
-  ),
-  events as (
+  with events as (
     select
       'lead_attribution:' || la.lead_id                       as event_key,
       'checkout_started'                                       as event_type,
@@ -327,9 +378,9 @@ begin
     union all
 
     select
-      'cancellation_requests:' || cr.id::text,
-      'cancellation_request',
-      'Cancellation request: ' || cr.status,
+      'cancellation_requests:' || cr.id::text || ':requested',
+      'cancellation_requested',
+      'Cancellation requested',
       null::text,
       'cancellation_requests.requested_at',
       cr.requested_at,
@@ -340,32 +391,72 @@ begin
 
     union all
 
-    -- Same precedence sync-customer.js's recordSubscriptionEnded()/
-    -- syncSubscriptionUpdated() now use when WRITING these columns
+    select
+      'cancellation_requests:' || cr.id::text || ':discussed',
+      'cancellation_discussed',
+      'Cancellation discussed',
+      null::text,
+      'cancellation_requests.discussed_at',
+      cr.discussed_at,
+      null::numeric, null::text, null::text, null::text,
+      cr.discussed_at
+    from public.cancellation_requests cr
+    where cr.customer_id = p_customer_id and cr.discussed_at is not null
+
+    union all
+
+    select
+      'cancellation_requests:' || cr.id::text || ':resolved',
+      'cancellation_resolved',
+      'Cancellation resolved: ' || cr.status,
+      cr.resolution,
+      'cancellation_requests.resolved_at',
+      cr.resolved_at,
+      null::numeric, null::text, null::text, null::text,
+      cr.resolved_at
+    from public.cancellation_requests cr
+    where cr.customer_id = p_customer_id and cr.resolved_at is not null
+
+    union all
+
+    -- ChatGPT review round 4: EVERY qualifying (status='cancelled')
+    -- subscription row for this customer, keyed on that row's OWN id —
+    -- not just the most-recently-created subscription — so an earlier
+    -- cancellation is never dropped just because the customer later
+    -- started a second subscription (see "MULTIPLE SUBSCRIPTIONS PER
+    -- CUSTOMER" in this file's header comment). Each row's label comes
+    -- from its OWN cancelled_at/ended_at, never blended with another
+    -- row's. Same precedence sync-customer.js's recordSubscriptionEnded()/
+    -- syncSubscriptionUpdated() use when WRITING these columns
     -- (cancelled_at, then ended_at) — never re-derived or guessed here,
     -- only displayed. cancel_at (a FUTURE schedule) is deliberately
     -- never used — see buildCancellationEntry()'s predecessor comment,
     -- preserved in this file's own header.
     select
-      'subscriptions:' || ls.id::text || ':cancelled',
+      'subscriptions:' || s.id::text || ':cancelled',
       'subscription_cancelled',
-      case when coalesce(ls.cancelled_at, ls.ended_at) is not null
-        then 'Subscription cancelled'
+      case
+        when s.cancelled_at is not null then 'Subscription cancelled'
+        when s.ended_at is not null then 'Subscription ended'
         else 'Cancelled — exact date unavailable'
       end,
       null::text,
       case
-        when ls.cancelled_at is not null then 'subscriptions.cancelled_at'
-        when ls.ended_at is not null then 'subscriptions.ended_at'
+        when s.cancelled_at is not null then 'subscriptions.cancelled_at'
+        when s.ended_at is not null then 'subscriptions.ended_at'
         else null
       end,
-      coalesce(ls.cancelled_at, ls.ended_at),
+      case
+        when s.cancelled_at is not null then s.cancelled_at
+        when s.ended_at is not null then s.ended_at
+        else null
+      end,
       null::numeric, null::text, null::text, null::text,
       -- Sort position for the "exact date unavailable" case only —
       -- never returned/displayed as the cancellation date itself.
-      coalesce(ls.cancelled_at, ls.ended_at, ls.updated_at, ls.created_at)
-    from latest_subscription ls
-    where ls.status = 'cancelled'
+      coalesce(s.cancelled_at, s.ended_at, s.updated_at, s.created_at)
+    from public.subscriptions s
+    where s.customer_id = p_customer_id and s.status = 'cancelled'
   ),
   candidate as (
     select *
@@ -399,7 +490,7 @@ end;
 $$;
 
 comment on function search_customer_activity_timeline is
-  'CRM-3A Activity Timeline: merges every authoritative, database-backed event source for ONE customer (checkout_started, customer_created, access_assigned/released, attribution_recorded/updated, payment_event, cancellation_request, subscription_cancelled) and paginates server-side via keyset/cursor (sort_at, event_key), not OFFSET. Returns an exact total_count and has_more on every call, including a cursor past the last row, via the same LEFT JOIN "marker row" technique search_customer_pipeline uses. Raises if the customer does not exist. SECURITY INVOKER; search_path pinned to empty (not merely public,pg_catalog); EXECUTE restricted to service_role only — see this migration''s own header comment and the REVOKE/GRANT statements immediately below.';
+  'CRM-3A Activity Timeline: paginates COMPLETELY, server-side, over every event source actually IMPLEMENTED for ONE customer (checkout_started, customer_created, access_assigned/released, attribution_recorded/updated, payment_event, cancellation_requested/discussed/resolved, subscription_cancelled — the last emitting one entry per qualifying subscription row, not just the latest) via keyset/cursor (sort_at, event_key), not OFFSET. This is NOT a complete "every activity" audit history: Sales Owner change history and plan/billing changes have no authoritative source in the schema yet, and the three cancellation_requests entries surface the timestamps that table actually stores, not every intermediate status transition — see docs/customer-activity-events-ledger-proposal.md (migration 0019, proposed only) and this migration''s own header comment. Returns an exact total_count and has_more on every call, including a cursor past the last row, via the same LEFT JOIN "marker row" technique search_customer_pipeline uses. Raises if the customer does not exist. SECURITY INVOKER; search_path pinned to empty (not merely public,pg_catalog); EXECUTE restricted to service_role only — see the REVOKE/GRANT statements immediately below.';
 
 -- ---- Least-privilege execution (same pattern as search_customer_pipeline) ----
 revoke all on function search_customer_activity_timeline(

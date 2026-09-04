@@ -148,6 +148,109 @@ test('end-to-end: a customer with no source_lead_id/lead_attribution row never e
   assert.ok(!res._json.activity_timeline.some((e) => e.type === 'checkout_started'));
 });
 
+/* ─────────────────────── cancellation_requests HTTP-level coverage (ChatGPT review round 4 blocker 2) ─────────────────────── */
+
+test('end-to-end: a resolved cancellation request produces requested/discussed/resolved entries through the real handler, with the reason and resolution attached to the right entry', async () => {
+  const token = await seedAdminSession();
+  const custRes = await pool.query(`INSERT INTO customers (stripe_customer_id) VALUES ($1) RETURNING id`, [`cus_${randomUUID()}`]);
+  const customerId = custRes.rows[0].id;
+  const requestId = randomUUID();
+  await pool.query(
+    `INSERT INTO cancellation_requests (id, customer_id, source, status, resolution, reason, requested_at, discussed_at, resolved_at)
+     VALUES ($1, $2, 'dashboard', 'resolved', 'cancelled', 'switching providers', '2026-05-01T09:00:00.000Z', '2026-05-02T10:00:00.000Z', '2026-05-03T11:00:00.000Z')`,
+    [requestId, customerId]
+  );
+
+  const res = fakeRes();
+  await customerDetailHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` }, query: { id: customerId } }), res);
+  assert.equal(res.statusCode, 200);
+
+  const entries = res._json.activity_timeline.filter((e) => e.type.startsWith('cancellation_'));
+  assert.equal(entries.length, 3, 'requested/discussed/resolved must all reach the HTTP response as separate entries');
+
+  const requested = entries.find((e) => e.type === 'cancellation_requested');
+  assert.equal(requested.label, 'Cancellation requested');
+  assert.equal(requested.reason, 'switching providers');
+  assert.equal(requested.event_key, `cancellation_requests:${requestId}:requested`);
+
+  const discussed = entries.find((e) => e.type === 'cancellation_discussed');
+  assert.equal(discussed.label, 'Cancellation discussed');
+  assert.equal(discussed.event_key, `cancellation_requests:${requestId}:discussed`);
+
+  const resolved = entries.find((e) => e.type === 'cancellation_resolved');
+  assert.equal(resolved.label, 'Cancellation resolved: resolved');
+  assert.equal(resolved.detail, 'cancelled', 'the stored resolution must reach the HTTP response as the entry detail');
+  assert.equal(resolved.event_key, `cancellation_requests:${requestId}:resolved`);
+
+  // Blocker 3: the unbounded cancellation_requests history fetch and its
+  // response field are gone — the response must not carry a `history`
+  // key under `cancellation` at all.
+  assert.equal(res._json.cancellation.history, undefined, 'cancellation.history must no longer be present in the response');
+  assert.ok('open_request' in res._json.cancellation, 'cancellation.open_request must still be present — it is independently, boundedly sourced');
+});
+
+test('end-to-end: a cancellation request that has only been requested (never discussed or resolved) produces exactly one entry through the real handler', async () => {
+  const token = await seedAdminSession();
+  const custRes = await pool.query(`INSERT INTO customers (stripe_customer_id) VALUES ($1) RETURNING id`, [`cus_${randomUUID()}`]);
+  const customerId = custRes.rows[0].id;
+  await pool.query(
+    `INSERT INTO cancellation_requests (customer_id, source, status, requested_at) VALUES ($1, 'dashboard', 'pending_discussion', '2026-05-01T09:00:00.000Z')`,
+    [customerId]
+  );
+
+  const res = fakeRes();
+  await customerDetailHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` }, query: { id: customerId } }), res);
+  assert.equal(res.statusCode, 200);
+
+  const entries = res._json.activity_timeline.filter((e) => e.type.startsWith('cancellation_'));
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].type, 'cancellation_requested');
+});
+
+test('end-to-end: two cancellation-related entries sharing the exact same timestamp still page deterministically with no duplicates or gaps through the real handler', async () => {
+  const token = await seedAdminSession();
+  const custRes = await pool.query(`INSERT INTO customers (stripe_customer_id) VALUES ($1) RETURNING id`, [`cus_${randomUUID()}`]);
+  const customerId = custRes.rows[0].id;
+  const tiedAt = '2026-05-01T09:00:00.000Z';
+  await pool.query(
+    `INSERT INTO cancellation_requests (customer_id, source, status, requested_at, discussed_at, resolved_at)
+     VALUES ($1, 'dashboard', 'resolved', $2, $2, $2), ($1, 'dashboard', 'resolved', $2, $2, $2)`,
+    [customerId, tiedAt]
+  );
+
+  const seenKeys = new Set();
+  let body = fakeRes();
+  await customerDetailHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` }, query: { id: customerId, timelinePageSize: '2' } }), body);
+  assert.equal(body.statusCode, 200);
+  let json = body._json;
+  for (;;) {
+    for (const e of json.activity_timeline) {
+      assert.ok(!seenKeys.has(e.event_key), `event_key ${e.event_key} appeared on more than one page`);
+      seenKeys.add(e.event_key);
+    }
+    if (!json.timeline_has_next) break;
+    const nextRes = fakeRes();
+    await customerDetailHandler(
+      fakeReq({
+        method: 'GET',
+        headers: { cookie: `sl_admin_session=${token}` },
+        query: {
+          id: customerId,
+          timelinePageSize: String(json.timeline_page_size),
+          timelineCursorSortAt: json.timeline_next_cursor.sort_at,
+          timelineCursorEventKey: json.timeline_next_cursor.event_key,
+        },
+      }),
+      nextRes
+    );
+    assert.equal(nextRes.statusCode, 200);
+    json = nextRes._json;
+  }
+
+  // customer_created + 2 requests * 3 entries each = 7 total events.
+  assert.equal(seenKeys.size, 7, 'every entry, including the full set of entries from both tied cancellation_requests rows, must be reached exactly once');
+});
+
 /* ─────────────────────── duplicate Stripe webhook delivery ─────────────────────── */
 
 test('duplicate webhook delivery: redelivering customer.subscription.deleted for the same event never creates a second timeline-visible change, and is idempotent', async () => {
@@ -178,10 +281,14 @@ test('duplicate webhook delivery: redelivering customer.subscription.deleted for
   assert.equal(subRows2[0].cancelled_at.getTime(), subRows1[0].cancelled_at.getTime(), 'the timestamp is derived from the Stripe event itself, so a retry reproduces the exact same value, not a later wall-clock time');
 
   // The timeline the real RPC builds from this state still shows exactly
-  // ONE "subscription_cancelled" entry, not two — structurally
-  // guaranteed by search_customer_activity_timeline()'s
-  // latest_subscription CTE (at most one row per customer), not by any
-  // JS-side dedup logic.
+  // ONE "subscription_cancelled" entry, not two — because the idempotent
+  // webhook handler above never created a second subscriptions row (see
+  // subRows1/subRows2 assertions above), not because of any per-customer
+  // row limit in search_customer_activity_timeline() itself. (ChatGPT
+  // review round 4: this function now emits one entry per QUALIFYING
+  // subscriptions row for the customer, with no LIMIT — see
+  // test/cases/customer-activity-timeline-function.test.mjs for coverage
+  // of the genuinely-multiple-subscriptions case.)
   const { data: timelineRows } = await supabase.rpc('search_customer_activity_timeline', { p_customer_id: customerId });
   const cancelEntries = (timelineRows || []).filter((e) => e.event_type === 'subscription_cancelled');
   assert.equal(cancelEntries.length, 1);

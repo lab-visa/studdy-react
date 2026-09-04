@@ -16,6 +16,18 @@
  * existing checkout/payment sync), exactly the same safe cross-read
  * pattern api/_lib/sync-customer.js's mirrorLegacyAllocation() already
  * uses for group_name. Never written back to `leads`.
+ *
+ * CHATGPT REVIEW FIX (round 4, blocker 3): this endpoint used to ALSO run
+ * a separate, unbounded `cancellation_requests` fetch (`select('*')...
+ * order('requested_at')`, no limit/range) just to populate a
+ * `cancellation.history` response field that the frontend
+ * (CustomerDetailDrawer.tsx) never actually rendered. That query is now
+ * removed along with the field — it was exactly the kind of uncapped
+ * plain PostgREST select this round's server-side-pagination work is
+ * meant to eliminate, and it had no consumer. `cancellation.open_request`
+ * is unaffected: it comes from withLifecycle()'s already-bounded,
+ * per-customer lookup (see api/_lib/customer-pipeline.js), not from this
+ * removed query.
  */
 import { getSupabase } from '../_lib/supabase.js';
 import { requireAdminSession } from '../_lib/admin-auth.js';
@@ -90,13 +102,8 @@ export default async function handler(req, res) {
     if (customerError) throw customerError;
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
-    const [joinedArr, allCancellationRequestsRes, legacyLeadRes] = await Promise.all([
+    const [joinedArr, legacyLeadRes] = await Promise.all([
       withLifecycle(supabase, [customer]),
-      supabase
-        .from('cancellation_requests')
-        .select('*')
-        .eq('customer_id', customer.id)
-        .order('requested_at', { ascending: false }),
       customer.stripe_customer_id
         ? supabase
             .from('leads')
@@ -106,7 +113,6 @@ export default async function handler(req, res) {
         : Promise.resolve({ data: null, error: null }),
     ]);
 
-    if (allCancellationRequestsRes.error) throw allCancellationRequestsRes.error;
     if (legacyLeadRes.error) throw legacyLeadRes.error;
 
     const { subscription, openCancellationRequest, groupName, lifecycle } = joinedArr[0];
@@ -231,7 +237,6 @@ export default async function handler(req, res) {
       },
       cancellation: {
         open_request: openCancellationRequest,
-        history: allCancellationRequestsRes.data || [],
       },
       lifecycle,
       activity_timeline: timeline,

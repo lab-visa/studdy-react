@@ -43,6 +43,29 @@ facts as they happened:
    inserted. The workflow those statuses imply (an admin reviewing and
    deciding on a cancellation request) has never been built.
 
+   **Corrected in ChatGPT review round 4 — be precise about what this
+   item actually means.** An earlier draft of migration
+   `0018_customer_activity_timeline.sql` incorrectly implied that
+   cancellation-request activity had *no* authoritative timestamped
+   source at all. That was wrong: `cancellation_requests.requested_at`,
+   `discussed_at`, and `resolved_at`, together with the final
+   `status`/`resolution` columns, ARE authoritative, already-stored
+   timestamps, and migration 0018 (as actually shipped) surfaces all
+   three as `cancellation_requested`/`cancellation_discussed`/
+   `cancellation_resolved` Activity Timeline entries. What THIS item
+   is actually about, and what genuinely remains missing, is narrower:
+   (a) the admin workflow that would ever WRITE
+   `approved_for_cancellation`/`retained`/`cancel_scheduled` into
+   `status` does not exist — today only `pending_discussion` is ever
+   inserted, so there is nothing for the Activity Timeline to surface
+   for those transitions because they never happen; and (b)
+   `cancellation_requests` is a single mutable row per request, not an
+   append-only ledger — if `status` were ever updated more than once
+   before `resolved_at` is finally set, only the LAST value would be
+   visible, so a genuine transition-by-transition history (as opposed
+   to the three fixed timestamps 0018 now shows) still needs this
+   proposed ledger.
+
 None of these can be reconstructed retroactively — by definition, a
 change that was never recorded cannot be recovered later (unlike the
 cancellation-timestamp case in the companion backfill-procedure

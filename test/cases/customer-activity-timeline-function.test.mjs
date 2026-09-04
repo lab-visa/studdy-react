@@ -295,6 +295,186 @@ test('search_customer_activity_timeline: a scheduled (not-yet-happened) cancella
   );
 });
 
+test('search_customer_activity_timeline: status=cancelled with ended_at but NO cancelled_at is labeled "Subscription ended", not "Subscription cancelled" (ChatGPT review round 4 three-way label)', async () => {
+  const customerId = await insertCustomer();
+  await pool.query(
+    `INSERT INTO subscriptions (customer_id, stripe_subscription_id, status, cancelled_at, ended_at)
+     VALUES ($1, $2, 'cancelled', null, '2026-08-18T00:00:00.000Z')`,
+    [customerId, `sub_${randomUUID()}`]
+  );
+  const { rows } = await pool.query(
+    `SELECT * FROM search_customer_activity_timeline(p_customer_id := $1) WHERE event_type = 'subscription_cancelled'`,
+    [customerId]
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].label, 'Subscription ended', 'ended_at without cancelled_at must be labeled "Subscription ended", never blended into "Subscription cancelled"');
+  assert.equal(rows[0].source, 'subscriptions.ended_at');
+  assert.equal(rows[0].occurred_at.toISOString(), '2026-08-18T00:00:00.000Z');
+});
+
+/* ─────────────────────── multiple subscriptions per customer (ChatGPT review round 4) ─────────────────────── */
+
+test('search_customer_activity_timeline: an OLDER cancelled subscription remains visible after the customer starts a NEWER active subscription (round 4 blocker 1 — the latest_subscription CTE bug)', async () => {
+  const customerId = await insertCustomer();
+  const olderSubId = randomUUID();
+  await pool.query(
+    `INSERT INTO subscriptions (id, customer_id, stripe_subscription_id, status, cancelled_at, created_at)
+     VALUES ($1, $2, $3, 'cancelled', '2026-06-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z')`,
+    [olderSubId, customerId, `sub_old_${randomUUID()}`]
+  );
+  // A newer subscription, created AFTER the cancelled one, and still
+  // active — this is exactly the shape that made the old
+  // `latest_subscription` CTE (order by created_at desc limit 1) drop
+  // the older cancellation entirely.
+  await pool.query(
+    `INSERT INTO subscriptions (customer_id, stripe_subscription_id, status, created_at)
+     VALUES ($1, $2, 'active', '2026-08-01T00:00:00.000Z')`,
+    [customerId, `sub_new_${randomUUID()}`]
+  );
+
+  const { rows } = await pool.query(
+    `SELECT * FROM search_customer_activity_timeline(p_customer_id := $1) WHERE event_type = 'subscription_cancelled'`,
+    [customerId]
+  );
+  assert.equal(rows.length, 1, 'the older cancellation must still be visible even though a newer, active subscription now exists');
+  assert.equal(rows[0].event_key, `subscriptions:${olderSubId}:cancelled`, 'event_key must be keyed on the specific subscriptions row, not the customer');
+  assert.equal(rows[0].label, 'Subscription cancelled');
+  assert.equal(rows[0].occurred_at.toISOString(), '2026-06-01T00:00:00.000Z');
+
+  // The still-active newer subscription must never itself produce a
+  // subscription_cancelled entry.
+  const { rows: allRows } = await pool.query(`SELECT * FROM search_customer_activity_timeline(p_customer_id := $1)`, [customerId]);
+  const cancelledEntries = allRows.filter((r) => r.event_type === 'subscription_cancelled');
+  assert.equal(cancelledEntries.length, 1, 'only the genuinely cancelled subscription produces an entry — the active one must not');
+});
+
+test('search_customer_activity_timeline: multiple HISTORICAL cancelled subscriptions for the same customer each produce their own entry, keyed on their own subscriptions.id', async () => {
+  const customerId = await insertCustomer();
+  const subA = randomUUID();
+  const subB = randomUUID();
+  const subC = randomUUID();
+  await pool.query(
+    `INSERT INTO subscriptions (id, customer_id, stripe_subscription_id, status, cancelled_at, created_at) VALUES
+       ($1, $2, $3, 'cancelled', '2026-01-15T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+       ($4, $2, $5, 'cancelled', '2026-04-15T00:00:00.000Z', '2026-04-01T00:00:00.000Z'),
+       ($6, $2, $7, 'cancelled', '2026-07-15T00:00:00.000Z', '2026-07-01T00:00:00.000Z')`,
+    [subA, customerId, `sub_a_${randomUUID()}`, subB, `sub_b_${randomUUID()}`, subC, `sub_c_${randomUUID()}`]
+  );
+
+  const { rows } = await pool.query(
+    `SELECT * FROM search_customer_activity_timeline(p_customer_id := $1, p_page_size := 100) WHERE event_type = 'subscription_cancelled' ORDER BY occurred_at`,
+    [customerId]
+  );
+  assert.equal(rows.length, 3, 'every genuinely cancelled historical subscription must produce its own entry — none may be dropped in favor of a "latest" one');
+  const keys = rows.map((r) => r.event_key);
+  assert.deepEqual(
+    new Set(keys),
+    new Set([`subscriptions:${subA}:cancelled`, `subscriptions:${subB}:cancelled`, `subscriptions:${subC}:cancelled`]),
+    'each entry must be keyed on its own subscriptions.id'
+  );
+  assert.equal(keys.length, new Set(keys).size, 'event_keys must all be distinct — no collisions');
+});
+
+/* ─────────────────────── cancellation_requests: requested/discussed/resolved (ChatGPT review round 4 blocker 2) ─────────────────────── */
+
+test('search_customer_activity_timeline: cancellation_requests surfaces requested_at, discussed_at, and resolved_at as three distinct, correctly-labeled entries', async () => {
+  const customerId = await insertCustomer();
+  const requestId = randomUUID();
+  await pool.query(
+    `INSERT INTO cancellation_requests (id, customer_id, source, status, resolution, reason, requested_at, discussed_at, resolved_at)
+     VALUES ($1, $2, 'dashboard', 'resolved', 'retained', 'too expensive', '2026-05-01T09:00:00.000Z', '2026-05-02T10:00:00.000Z', '2026-05-03T11:00:00.000Z')`,
+    [requestId, customerId]
+  );
+
+  const { rows } = await pool.query(
+    `SELECT * FROM search_customer_activity_timeline(p_customer_id := $1, p_page_size := 100) WHERE event_type LIKE 'cancellation_%' ORDER BY occurred_at`,
+    [customerId]
+  );
+  assert.equal(rows.length, 3, 'requested/discussed/resolved must each be their own entry');
+
+  const requested = rows.find((r) => r.event_type === 'cancellation_requested');
+  assert.ok(requested);
+  assert.equal(requested.event_key, `cancellation_requests:${requestId}:requested`);
+  assert.equal(requested.label, 'Cancellation requested');
+  assert.equal(requested.reason, 'too expensive', 'the reason must be attached to the :requested entry');
+  assert.equal(requested.occurred_at.toISOString(), '2026-05-01T09:00:00.000Z');
+
+  const discussed = rows.find((r) => r.event_type === 'cancellation_discussed');
+  assert.ok(discussed);
+  assert.equal(discussed.event_key, `cancellation_requests:${requestId}:discussed`);
+  assert.equal(discussed.label, 'Cancellation discussed');
+  assert.equal(discussed.occurred_at.toISOString(), '2026-05-02T10:00:00.000Z');
+
+  const resolved = rows.find((r) => r.event_type === 'cancellation_resolved');
+  assert.ok(resolved);
+  assert.equal(resolved.event_key, `cancellation_requests:${requestId}:resolved`);
+  assert.equal(resolved.label, 'Cancellation resolved: resolved', 'the label must carry the stored final status');
+  assert.equal(resolved.detail, 'retained', 'the stored resolution must be surfaced as the entry detail');
+  assert.equal(resolved.occurred_at.toISOString(), '2026-05-03T11:00:00.000Z');
+});
+
+test('search_customer_activity_timeline: a still-pending cancellation_requests row (discussed_at/resolved_at both null) produces ONLY the requested entry, never fabricated discussed/resolved entries', async () => {
+  const customerId = await insertCustomer();
+  const requestId = randomUUID();
+  await pool.query(
+    `INSERT INTO cancellation_requests (id, customer_id, source, status, requested_at)
+     VALUES ($1, $2, 'dashboard', 'pending_discussion', '2026-05-01T09:00:00.000Z')`,
+    [requestId, customerId]
+  );
+
+  const { rows } = await pool.query(
+    `SELECT * FROM search_customer_activity_timeline(p_customer_id := $1) WHERE event_type LIKE 'cancellation_%'`,
+    [customerId]
+  );
+  assert.equal(rows.length, 1, 'only the requested entry may exist while discussed_at/resolved_at are still null');
+  assert.equal(rows[0].event_type, 'cancellation_requested');
+});
+
+test('search_customer_activity_timeline: cancellation_requests requested/discussed/resolved keyset cursor never skips or repeats across a page boundary, including ties with other cancellation_requests rows', async () => {
+  const customerId = await insertCustomer();
+  const requestId1 = randomUUID();
+  const requestId2 = randomUUID();
+  const tiedAt = '2026-05-01T09:00:00.000Z';
+  // Two separate cancellation_requests rows whose requested_at ties
+  // exactly — proves the (sort_at, event_key) tie-break also holds for
+  // this event source, not just payment_events.
+  await pool.query(
+    `INSERT INTO cancellation_requests (id, customer_id, source, status, requested_at, discussed_at, resolved_at) VALUES
+       ($1, $3, 'dashboard', 'resolved', $4, $4, $4),
+       ($2, $3, 'dashboard', 'resolved', $4, $4, $4)`,
+    [requestId1, requestId2, customerId, tiedAt]
+  );
+
+  const page1 = await pool.query(
+    `SELECT event_key, sort_at FROM search_customer_activity_timeline(p_customer_id := $1, p_page_size := 3) WHERE event_type LIKE 'cancellation_%' OR event_type = 'customer_created'`,
+    [customerId]
+  );
+  // Walk the full timeline via cursor and confirm every cancellation_*
+  // event_key is seen exactly once.
+  let cursor = null;
+  const seen = new Set();
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { rows } = await pool.query(
+      `SELECT * FROM search_customer_activity_timeline(p_customer_id := $1, p_page_size := 2, p_cursor_sort_at := $2, p_cursor_event_key := $3)`,
+      [customerId, cursor?.sort_at ?? null, cursor?.event_key ?? null]
+    );
+    const real = rows.filter((r) => r.event_key !== null);
+    if (real.length === 0) break;
+    for (const r of real) {
+      assert.ok(!seen.has(r.event_key), `event_key ${r.event_key} must never be seen twice across the cursor walk`);
+      seen.add(r.event_key);
+    }
+    const last = real[real.length - 1];
+    if (!rows[0].has_more) break;
+    cursor = { sort_at: last.sort_at, event_key: last.event_key };
+  }
+
+  const cancellationKeysSeen = [...seen].filter((k) => k.startsWith('cancellation_requests:'));
+  assert.equal(cancellationKeysSeen.length, 6, 'both cancellation_requests rows must each contribute all 3 entries (requested/discussed/resolved), none skipped or duplicated across the cursor walk');
+  assert.ok(page1.rows.length > 0);
+});
+
 /* ─────────────────────── a brand-new customer ─────────────────────── */
 
 test('search_customer_activity_timeline: a brand-new customer with no other activity has exactly one entry (customer_created)', async () => {
