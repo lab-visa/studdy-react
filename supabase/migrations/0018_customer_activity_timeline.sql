@@ -12,7 +12,9 @@
 -- That table has NOT been built — this file is a different, real
 -- migration that claims the 0018 slot instead, so the migration
 -- sequence stays gap-free. The proposal doc has been updated to say
--- 0019 for if/when it is ever approved and built.
+-- 0020 for if/when it is ever approved and built (moved again from its
+-- first renumbering to 0019 once migration 0019_restrict_rls_auto_enable.sql
+-- — an unrelated Round-5 security fix — claimed that slot in turn).
 -- ============================================================
 --
 -- 0018_customer_activity_timeline.sql
@@ -102,7 +104,7 @@
 -- described as one. Specifically still missing, because no
 -- authoritative source exists anywhere in the schema for them today
 -- (see docs/customer-activity-events-ledger-proposal.md, migration
--- 0019, PROPOSED ONLY, not built): Sales Owner change history (only
+-- 0020, PROPOSED ONLY, not built): Sales Owner change history (only
 -- the current value is stored, with no log of who owned a customer
 -- before) and plan/billing changes (nothing in this codebase logs a
 -- plan_type/currency change as an event). Separately, and more subtly:
@@ -114,7 +116,7 @@
 -- finally set, only the LAST value is visible — cancellation_requests
 -- itself is not an append-only ledger, it is a single mutable row per
 -- request). A genuine transition-by-transition history for this, like
--- for Sales Owner/plan changes, would need the proposed 0019 ledger.
+-- for Sales Owner/plan changes, would need the proposed 0020 ledger.
 --
 -- STABLE PAGINATION KEY — genuinely unique, not merely "usually
 -- unique": every event_key below is built from the real immutable
@@ -490,7 +492,7 @@ end;
 $$;
 
 comment on function search_customer_activity_timeline is
-  'CRM-3A Activity Timeline: paginates COMPLETELY, server-side, over every event source actually IMPLEMENTED for ONE customer (checkout_started, customer_created, access_assigned/released, attribution_recorded/updated, payment_event, cancellation_requested/discussed/resolved, subscription_cancelled — the last emitting one entry per qualifying subscription row, not just the latest) via keyset/cursor (sort_at, event_key), not OFFSET. This is NOT a complete "every activity" audit history: Sales Owner change history and plan/billing changes have no authoritative source in the schema yet, and the three cancellation_requests entries surface the timestamps that table actually stores, not every intermediate status transition — see docs/customer-activity-events-ledger-proposal.md (migration 0019, proposed only) and this migration''s own header comment. Returns an exact total_count and has_more on every call, including a cursor past the last row, via the same LEFT JOIN "marker row" technique search_customer_pipeline uses. Raises if the customer does not exist. SECURITY INVOKER; search_path pinned to empty (not merely public,pg_catalog); EXECUTE restricted to service_role only — see the REVOKE/GRANT statements immediately below.';
+  'CRM-3A Activity Timeline: paginates COMPLETELY, server-side, over every event source actually IMPLEMENTED for ONE customer (checkout_started, customer_created, access_assigned/released, attribution_recorded/updated, payment_event, cancellation_requested/discussed/resolved, subscription_cancelled — the last emitting one entry per qualifying subscription row, not just the latest) via keyset/cursor (sort_at, event_key), not OFFSET. This is NOT a complete "every activity" audit history: Sales Owner change history and plan/billing changes have no authoritative source in the schema yet, and the three cancellation_requests entries surface the timestamps that table actually stores, not every intermediate status transition — see docs/customer-activity-events-ledger-proposal.md (migration 0020, proposed only) and this migration''s own header comment. Returns an exact total_count and has_more on every call, including a cursor past the last row, via the same LEFT JOIN "marker row" technique search_customer_pipeline uses. Raises if the customer does not exist. SECURITY INVOKER; search_path pinned to empty (not merely public,pg_catalog); EXECUTE restricted to service_role only — see the REVOKE/GRANT statements immediately below.';
 
 -- ---- Least-privilege execution (same pattern as search_customer_pipeline) ----
 revoke all on function search_customer_activity_timeline(
