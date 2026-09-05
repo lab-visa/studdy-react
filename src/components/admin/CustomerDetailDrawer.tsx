@@ -187,7 +187,7 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
               <Field label="Subscription status" value={data.subscription?.status} />
               <Field label="Trial start (IST)" value={data.subscription?.trial_start_ist} />
               <Field label="Trial end (IST)" value={data.subscription?.trial_end_ist} />
-              <Field label="Next expected payment (IST)" value={data.billing.next_expected_payment_date_ist} />
+              <Field label={`${data.billing.next_expected_payment_label} (IST)`} value={data.billing.next_expected_payment_date_ist} />
               <Field
                 label="Expected amount"
                 value={data.billing.expected_amount != null ? `${data.billing.expected_currency ?? ''} ${data.billing.expected_amount}` : null}

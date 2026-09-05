@@ -147,6 +147,14 @@ export interface CustomerDetailResponse {
     expected_currency: string | null;
     next_expected_payment_date: string | null;
     next_expected_payment_date_ist: string | null;
+    /** "Final billing period end" once the subscription is actually
+     *  cancelled, "Next expected payment" otherwise — render this label,
+     *  never a hardcoded one, since the same date field stops being
+     *  forward-looking once cancelled (see customer-detail.js). Neutral
+     *  wording ("end", not "ended") deliberately says nothing about
+     *  whether that stored timestamp is in the past or future. */
+    next_expected_payment_label: string;
+    is_historical: boolean;
     source: string;
   };
   access: {
