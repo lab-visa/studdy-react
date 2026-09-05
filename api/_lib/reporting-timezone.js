@@ -60,4 +60,29 @@ export function reportingDayBoundsUtc(day) {
   return { startUtc, endUtc };
 }
 
+/**
+ * CRM-3A — formats a timestamp for display in Asia/Kolkata, e.g.
+ * "2 Sep 2026, 6:45 pm IST". Used anywhere a customer's activity
+ * timeline/date is shown to Vish (Customer & Subscription pipeline,
+ * Today's Actions) — per the explicit requirement that all dates and
+ * operational timing display in IST. Returns null for a null/invalid
+ * input rather than throwing or showing "Invalid Date".
+ */
+export function formatIstDateTime(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const formatter = new Intl.DateTimeFormat('en-IN', {
+    timeZone: REPORTING_TIME_ZONE,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  return `${formatter.format(date)} IST`;
+}
+
 export const REPORTING_TIMEZONE = REPORTING_TIME_ZONE;

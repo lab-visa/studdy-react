@@ -16,6 +16,7 @@ import { detectRegion } from '../utils/geo';
 import { track } from '../utils/analytics';
 import { trackEvent, getLeadId, getCampaignCode } from '../utils/tracking';
 import { buildPaymentLinkUrl } from '../utils/checkoutLink';
+import { getAttributionSnapshot } from '../utils/attribution';
 import RegionPicker from '../components/RegionPicker';
 
 type Plan = 'monthly' | 'yearly';
@@ -95,6 +96,25 @@ export default function Checkout() {
       const utmSource = getUtmSource();
       const utmCampaign = getCampaignCode() ?? 'none';
       const leadId = getLeadId();
+
+      /* CRM-3A — persist this lead's full first/latest-touch attribution
+       * snapshot (all UTM fields + any GHL identifiers), if any was ever
+       * captured (src/utils/attribution.ts). Fire-and-forget: this must
+       * never delay or block the Stripe redirect below. Only sent when
+       * there's actually something to record — a visitor who never
+       * arrived via a tagged link sends nothing, same "don't fabricate"
+       * rule as utm_campaign's own ?? 'none' fallback above. */
+      const { first, latest } = getAttributionSnapshot();
+      if (leadId && (first || latest)) {
+        fetch('/api/track-attribution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadId, first, latest }),
+        }).catch(() => {
+          /* attribution capture must never break checkout */
+        });
+      }
+
       window.location.href = buildPaymentLinkUrl(link, { utmSource, utmCampaign, leadId });
     }
   }, [hasStripe, plan, region]);

@@ -2,6 +2,7 @@ import { lazy, Suspense, Component, type ReactNode, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Home from './pages/Home';
 import { trackEvent } from './utils/tracking';
+import { captureAttributionTouch } from './utils/attribution';
 
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
 const Checkout       = lazy(() => import('./pages/Checkout'));
@@ -14,6 +15,7 @@ const CancelPage     = lazy(() => import('./pages/Legal').then(m => ({ default: 
 const ContactPage    = lazy(() => import('./pages/Legal').then(m => ({ default: m.ContactPage })));
 const AdminLogin      = lazy(() => import('./pages/admin/AdminLogin'));
 const AdminHome       = lazy(() => import('./pages/admin/AdminHome'));
+const CustomerSubscription = lazy(() => import('./pages/admin/CustomerSubscription'));
 
 function LoadingFallback() {
   return (
@@ -129,6 +131,9 @@ function AppRoutes() {
   useEffect(() => {
     if (!window.location.pathname.startsWith('/admin')) {
       trackEvent('opened');
+      /* CRM-3A — purely local (localStorage) first/latest-touch capture,
+       * never a network call by itself. See src/utils/attribution.ts. */
+      captureAttributionTouch();
     }
   }, []);
 
@@ -149,6 +154,7 @@ function AppRoutes() {
           <Route path="/contact"         element={<ContactPage />} />
           <Route path="/admin/login"     element={<AdminLogin />} />
           <Route path="/admin"           element={<AdminHome />} />
+          <Route path="/admin/subscriptions" element={<CustomerSubscription />} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>

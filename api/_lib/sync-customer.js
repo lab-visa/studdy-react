@@ -17,6 +17,7 @@
  * Worst case, a customer's new-CRM row is a few seconds late instead of
  * something breaking for a real paying customer.
  */
+import { findLeadAttribution } from './attribution.js';
 
 /** Looks up an existing customer by Stripe's customer id, if any. */
 async function findCustomerByStripeCustomerId(supabase, stripeCustomerId) {
@@ -179,6 +180,15 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
   const billingAddress = session.customer_details?.address;
   const trackingId = session.client_reference_id || null;
 
+  /* CRM-3A — campaign attribution. Looks up the lead_attribution row the
+   * browser wrote at the "Start Free Trial" click (api/track-attribution.js),
+   * keyed by the SAME trackingId already used for source_lead_id above.
+   * No matching row (e.g. a pre-CRM-3A link, or a link with no UTM tag
+   * ever seen) is a normal, expected case — every attribution field below
+   * simply stays null, exactly like source_lead_id/attribution_method
+   * already degrade to 'none' when there's no tracking id at all. */
+  const attribution = trackingId ? await findLeadAttribution(supabase, trackingId) : null;
+
   const customerFields = {
     name: customerObj?.name || session.customer_details?.name || existing?.name || null,
     email: customerObj?.email || session.customer_details?.email || existing?.email || null,
@@ -190,6 +200,30 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
     source_lead_id: existing?.source_lead_id || trackingId,
     attribution_method: existing?.attribution_method || (trackingId ? 'tracking_id' : 'none'),
     attribution_confidence: existing?.attribution_confidence || (trackingId ? 'exact' : 'none'),
+    /* First-touch: existing?.field || value — set once, on this
+     * customer's very first sync, and never overwritten by a later
+     * resync (identical pattern to attribution_method/source_lead_id
+     * immediately above). */
+    first_utm_source: existing?.first_utm_source || attribution?.first_utm_source || null,
+    first_utm_medium: existing?.first_utm_medium || attribution?.first_utm_medium || null,
+    first_utm_campaign: existing?.first_utm_campaign || attribution?.first_utm_campaign || null,
+    first_utm_content: existing?.first_utm_content || attribution?.first_utm_content || null,
+    first_utm_term: existing?.first_utm_term || attribution?.first_utm_term || null,
+    first_ghl_contact_id: existing?.first_ghl_contact_id || attribution?.first_ghl_contact_id || null,
+    first_ghl_campaign_id: existing?.first_ghl_campaign_id || attribution?.first_ghl_campaign_id || null,
+    first_attribution_at: existing?.first_attribution_at || attribution?.first_touched_at || null,
+    /* Latest-touch: free to move forward on a later resync — prefers the
+     * freshest lead_attribution row, falling back to whatever this
+     * customer already had if the ledger has nothing (e.g. a resync via
+     * api/refresh-lead.js after the ledger row was never written). */
+    latest_utm_source: attribution?.latest_utm_source ?? existing?.latest_utm_source ?? null,
+    latest_utm_medium: attribution?.latest_utm_medium ?? existing?.latest_utm_medium ?? null,
+    latest_utm_campaign: attribution?.latest_utm_campaign ?? existing?.latest_utm_campaign ?? null,
+    latest_utm_content: attribution?.latest_utm_content ?? existing?.latest_utm_content ?? null,
+    latest_utm_term: attribution?.latest_utm_term ?? existing?.latest_utm_term ?? null,
+    latest_ghl_contact_id: attribution?.latest_ghl_contact_id ?? existing?.latest_ghl_contact_id ?? null,
+    latest_ghl_campaign_id: attribution?.latest_ghl_campaign_id ?? existing?.latest_ghl_campaign_id ?? null,
+    latest_attribution_at: attribution?.latest_touched_at ?? existing?.latest_attribution_at ?? null,
     updated_at: new Date().toISOString(),
   };
 
@@ -200,6 +234,11 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
   } else {
     const { data: inserted, error } = await supabase
       .from('customers')
+      /* sales_owner is deliberately NOT set here — it defaults to NULL
+       * ("Unassigned"/"Self-service", per CRM-3A's Sales Owner
+       * foundation) for every self-service WhatsApp/website customer.
+       * Only a future manual admin action (api/admin/customer-sales-owner.js)
+       * ever sets it — never inferred from checkout data. */
       .insert({ ...customerFields, lifecycle: 'trial', access_status: 'active' })
       .select('id')
       .single();
@@ -344,7 +383,63 @@ export async function recordPaymentFailed(supabase, event) {
   });
 }
 
-/** customer.subscription.deleted — subscription actually ended. */
+/**
+ * CHATGPT REVIEW FIX (round 2, "cancellation timestamp precedence"):
+ * converts a Stripe unix-seconds timestamp field to ISO, or null if
+ * the field is missing/not a valid positive number. Shared by
+ * subscriptionCancelledAt()/subscriptionEndedAt() below.
+ */
+function stripeTimestampToIso(unixSeconds) {
+  return typeof unixSeconds === 'number' && Number.isFinite(unixSeconds) && unixSeconds > 0
+    ? new Date(unixSeconds * 1000).toISOString()
+    : null;
+}
+
+/**
+ * The authoritative "when was this subscription cancelled" instant,
+ * for the subscriptions.cancelled_at column. Stripe's Subscription
+ * object carries its OWN `canceled_at` (when cancellation was decided/
+ * requested — Stripe's own US spelling) and `ended_at` (when access
+ * actually stopped) fields — both far more precise than event.created
+ * (merely when Stripe happened to emit THIS webhook, which can lag the
+ * real moment on a delayed or redelivered event). Precedence: Stripe's
+ * own canceled_at first, then its own ended_at, and only if the
+ * Subscription object genuinely carries neither does this fall back to
+ * event.created — never to wall-clock "now", and never to updated_at.
+ */
+function subscriptionCancelledAt(sub, event) {
+  return stripeTimestampToIso(sub?.canceled_at) || stripeTimestampToIso(sub?.ended_at) || eventOccurredAt(event);
+}
+
+/**
+ * The authoritative "when did access actually stop" instant, for the
+ * subscriptions.ended_at column. Mirrors subscriptionCancelledAt()'s
+ * precedence but with ended_at/canceled_at swapped — Stripe's own
+ * ended_at is the truest source for THIS column specifically, falling
+ * back to canceled_at (the two are often the same instant, but not
+ * always — e.g. a subscription cancelled well before its scheduled
+ * period end) and only then to event.created.
+ */
+function subscriptionEndedAt(sub, event) {
+  return stripeTimestampToIso(sub?.ended_at) || stripeTimestampToIso(sub?.canceled_at) || eventOccurredAt(event);
+}
+
+/**
+ * customer.subscription.deleted — subscription actually ended.
+ *
+ * cancelled_at/ended_at each prefer Stripe's OWN Subscription-object
+ * fields (subscriptionCancelledAt()/subscriptionEndedAt() above) over
+ * event.created, which is used only as a last-resort fallback if the
+ * Subscription object genuinely carries neither — this is the
+ * authoritative "when did this actually happen" timestamp the Activity
+ * Timeline's cancellation entry displays (the subscription_cancelled
+ * branch of search_customer_activity_timeline(), migration 0018 —
+ * never re-derived there, only read). Idempotent under Stripe's occasional
+ * duplicate webhook delivery: the SAME event object always yields the
+ * SAME computed timestamps on a retry (Stripe's own fields are
+ * deterministic, no wall-clock involved), so a redelivery can never
+ * shift a previously-recorded cancellation date forward.
+ */
 export async function recordSubscriptionEnded(supabase, event) {
   const sub = event.data.object;
   const { data: subscription } = await supabase
@@ -355,8 +450,13 @@ export async function recordSubscriptionEnded(supabase, event) {
 
   if (!subscription) return;
 
+  const cancelledAt = subscriptionCancelledAt(sub, event);
+  const endedAt = subscriptionEndedAt(sub, event);
   const now = new Date().toISOString();
-  await supabase.from('subscriptions').update({ status: 'cancelled', cancelled_at: now, ended_at: now, updated_at: now }).eq('id', subscription.id);
+  await supabase
+    .from('subscriptions')
+    .update({ status: 'cancelled', cancelled_at: cancelledAt, ended_at: endedAt, updated_at: now })
+    .eq('id', subscription.id);
   await supabase.from('customers').update({ lifecycle: 'churned', access_status: 'ended', updated_at: now }).eq('id', subscription.customer_id);
 
   /* Free their seat in the new ledger so allocate_studdy_seat can hand it
@@ -364,6 +464,105 @@ export async function recordSubscriptionEnded(supabase, event) {
    * credentials" boundary as the allocation call above. */
   const { error: releaseError } = await supabase.rpc('release_studdy_seat', { p_customer_id: subscription.customer_id });
   if (releaseError) console.error('release_studdy_seat error:', releaseError);
+}
+
+/**
+ * CRM-3A — customer.subscription.updated -> the new subscriptions table.
+ *
+ * Genuine gap this closes: before this function existed, NOTHING synced
+ * customer.subscription.updated into the new subscriptions table at
+ * all — the legacy leads-table handler in stripe-webhook.js only ever
+ * reacted to a pause (sub.status === 'paused'), so subscriptions.status
+ * (for anything other than trial-start/payment-succeeded/payment-failed/
+ * deleted), cancel_at_period_end, cancel_at, current_period_start, and
+ * current_period_end — all real columns since migration 0006 — were
+ * never once written by any code path. Without this, "Cancelling at
+ * period end" and "Payment due today" can never be proven from real data
+ * (see CRM-3A pre-coding report, point 3).
+ *
+ * Deliberately does NOT create a subscriptions row if one doesn't already
+ * exist — that would invent a subscription this codebase has no other
+ * evidence for. A brand-new subscriptions row is created in exactly one
+ * place: syncCustomerFromCheckoutSession() above, at
+ * checkout.session.completed, which always fires before Stripe can ever
+ * send a subscription.updated for the same subscription.
+ *
+ * Does NOT touch customers.lifecycle/access_status or free/release any
+ * Studdy seat — that side-effect logic stays solely with
+ * recordSubscriptionEnded() (customer.subscription.deleted), which is its
+ * own distinct Stripe event and already handles it. A subscription.updated
+ * that happens to carry status:'canceled' (edge case — Stripe usually
+ * also sends a matching .deleted) only updates this table's own status
+ * column (plus cancelled_at/ended_at — see below) here; it can never
+ * re-trigger churn/seat-release logic that belongs to .deleted alone.
+ *
+ * CHATGPT REVIEW FIX (round 2, "cancellation timestamp precedence"):
+ * if this .updated event happens to carry status:'canceled', its
+ * cancelled_at/ended_at are ALSO persisted here now — but ONLY from
+ * Stripe's own genuine sub.canceled_at/sub.ended_at fields (same
+ * precedence as recordSubscriptionEnded()'s subscriptionCancelledAt()/
+ * subscriptionEndedAt()). Deliberately NO event.created fallback on
+ * THIS path, unlike .deleted: if the Subscription object genuinely
+ * carries neither field here, the columns are left untouched rather
+ * than inventing an approximate date from an event that isn't itself
+ * the authoritative cancellation event — recordSubscriptionEnded()
+ * (.deleted) remains the primary source; this is a defensive
+ * completeness improvement for the rarer case .deleted is delayed,
+ * missed, or arrives after this .updated already ran, never a
+ * replacement for it.
+ *
+ * Status vocabulary: Stripe's own words (trialing/active/past_due/unpaid/
+ * incomplete/incomplete_expired) are stored as-is, except 'canceled'
+ * (Stripe's US spelling) -> 'cancelled', matching this codebase's existing
+ * spelling convention everywhere else (see api/_lib/status.js's mapStatus()
+ * and recordSubscriptionEnded() above).
+ */
+const STRIPE_STATUS_MAP = { canceled: 'cancelled' };
+
+function mapSubscriptionStatus(stripeStatus) {
+  return STRIPE_STATUS_MAP[stripeStatus] || stripeStatus;
+}
+
+export async function syncSubscriptionUpdated(supabase, event) {
+  const sub = event.data.object;
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('id')
+    .eq('stripe_subscription_id', sub.id)
+    .maybeSingle();
+
+  if (!subscription) return; // no subscriptions row yet — nothing to update, never invent one here
+
+  /* Stripe API versions from 2025 onward moved current_period_start/end
+   * off the Subscription object onto each subscription item — same
+   * fallback order as api/_lib/status.js's resolveNextBilling(). */
+  const item = sub?.items?.data?.[0];
+  const currentPeriodStart = item?.current_period_start ?? sub?.current_period_start;
+  const currentPeriodEnd = item?.current_period_end ?? sub?.current_period_end;
+  const toIso = (unixSeconds) => (unixSeconds ? new Date(unixSeconds * 1000).toISOString() : null);
+
+  const mappedStatus = mapSubscriptionStatus(sub.status);
+  const updateFields = {
+    status: mappedStatus,
+    trial_start: toIso(sub.trial_start),
+    trial_end: toIso(sub.trial_end),
+    current_period_start: toIso(currentPeriodStart),
+    current_period_end: toIso(currentPeriodEnd),
+    cancel_at: toIso(sub.cancel_at),
+    cancel_at_period_end: Boolean(sub.cancel_at_period_end),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (mappedStatus === 'cancelled') {
+    // See this function's own header comment: genuine Stripe fields
+    // only, no event.created/wall-clock fallback on this secondary path.
+    const cancelledAt = stripeTimestampToIso(sub.canceled_at) || stripeTimestampToIso(sub.ended_at);
+    const endedAt = stripeTimestampToIso(sub.ended_at) || stripeTimestampToIso(sub.canceled_at);
+    if (cancelledAt) updateFields.cancelled_at = cancelledAt;
+    if (endedAt) updateFields.ended_at = endedAt;
+  }
+
+  await supabase.from('subscriptions').update(updateFields).eq('id', subscription.id);
 }
 
 /**

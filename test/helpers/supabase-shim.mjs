@@ -137,7 +137,17 @@ class QueryBuilder {
         params.push(f.val);
         idx++;
       } else if (f.type === 'in') {
-        clauses.push(`"${f.col}" = ANY($${idx}::text[])`);
+        /* CRM-3A: real supabase-js/PostgREST casts an .in() array to match
+         * the target column's actual type — a uuid column compared
+         * against a ::text[] array fails in real Postgres ("operator does
+         * not exist: uuid = text", no implicit cast). This shim now
+         * detects a UUID-shaped array (every value matches the standard
+         * 8-4-4-4-12 hex form) and casts ::uuid[] instead, so tests that
+         * .in() on a foreign-key column (e.g. customer_id) behave like
+         * production rather than erroring only in this test harness. */
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const isUuidArray = Array.isArray(f.val) && f.val.length > 0 && f.val.every((v) => typeof v === 'string' && uuidPattern.test(v));
+        clauses.push(`"${f.col}" = ANY($${idx}::${isUuidArray ? 'uuid' : 'text'}[])`);
         params.push(f.val);
         idx++;
       } else if (f.type === 'not') {
@@ -241,17 +251,24 @@ export function createTestSupabaseClient(pool) {
       return new QueryBuilder(pool, table);
     },
     /** Minimal stand-in for supabase-js's .rpc(name, namedParams) — used
-     * by api/track-event.js to call increment_site_traffic(...). Uses
-     * Postgres named-argument call notation so param order doesn't
-     * matter, matching supabase-js's own object-based calling
-     * convention. */
+     * by api/track-event.js (increment_site_traffic), api/_lib/sync-customer.js
+     * (release_studdy_seat), and api/admin/customers.js
+     * (search_customer_pipeline). Uses Postgres named-argument call
+     * notation so param order doesn't matter, matching supabase-js's own
+     * object-based calling convention. Always calls via `SELECT * FROM
+     * fn(...)` rather than plain `SELECT fn(...)` — confirmed this works
+     * identically for a void-returning function (returns one row with no
+     * columns, harmless — the two existing void callers only ever check
+     * `error`, never `data`) as for a table-returning one like
+     * search_customer_pipeline, so one code path serves both without the
+     * caller needing to say which kind of function it's calling. */
     async rpc(fnName, params = {}) {
       try {
         const keys = Object.keys(params);
         const argSql = keys.map((k, i) => `${k} := $${i + 1}`).join(', ');
         const values = keys.map((k) => params[k]);
-        await pool.query(`SELECT ${fnName}(${argSql})`, values);
-        return { data: null, error: null };
+        const res = await pool.query(`SELECT * FROM ${fnName}(${argSql})`, values);
+        return { data: res.rows, error: null };
       } catch (err) {
         return { data: null, error: { message: err.message, code: err.code } };
       }
