@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import Home from './pages/Home';
 import { trackEvent } from './utils/tracking';
 import { captureAttributionTouch } from './utils/attribution';
+import ScrollDebugOverlay from './components/ScrollDebugOverlay';
 
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
 const Checkout       = lazy(() => import('./pages/Checkout'));
@@ -140,6 +141,10 @@ function AppRoutes() {
   return (
     <>
       <ScrollRestoration />
+      {/* Renders nothing unless the URL has ?debug_scroll=1 — see
+       * src/components/ScrollDebugOverlay.tsx. Purely diagnostic for
+       * the WhatsApp in-app-browser scroll-jump investigation. */}
+      <ScrollDebugOverlay />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/"                element={<Home />} />
