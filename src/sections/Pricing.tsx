@@ -153,7 +153,7 @@ export default function Pricing() {
         </div>
 
         <p className="text-center text-[13px] mt-6 font-semibold" style={{ color: 'var(--soft)' }}>
-          🛡️ {rd.symbol}0 due today · Reminder before billing · Cancel anytime · No calls or forms
+          🛡️ {rd.symbol}0 due today · Reminder before billing · Cancel anytime · Unlimited access
         </p>
       </div>
     </section>

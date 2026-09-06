@@ -237,7 +237,7 @@ export default function Checkout() {
 
                 {/* Trust signals */}
                 <div className="flex justify-center gap-4 flex-wrap">
-                  {['No charge for 7 days', 'Cancel anytime', 'Secure checkout'].map(t => (
+                  {['No charge for 7 days', 'Cancel anytime', 'Secure checkout', 'Unlimited access'].map(t => (
                     <div key={t} className="flex items-center gap-1 text-[11.5px] font-semibold"
                       style={{ color: 'var(--soft)' }}>
                       <span style={{ color: 'var(--g4)' }}>✓</span> {t}
