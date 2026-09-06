@@ -118,6 +118,15 @@ export default async function handler(req, res) {
     const { subscription, openCancellationRequest, groupName, lifecycle } = joinedArr[0];
     const legacyLead = legacyLeadRes.data;
 
+    // See the billing.next_expected_payment_label comment below: whether
+    // this date is actually forward-looking depends on WHICH source it
+    // came from, not merely "does a date exist" — subscription.current_period_end
+    // stops being forward-looking the moment the subscription is cancelled,
+    // while the legacy-lead fallback (used only when there's no synced
+    // subscription at all yet) is never historical by definition.
+    const nextPaymentDate = subscription?.current_period_end || legacyLead?.next_billing_date || null;
+    const isHistoricalPayment = Boolean(subscription?.current_period_end) && subscription?.status === 'cancelled';
+
     // Genuine server-side, cursor-paginated Activity Timeline — see
     // migration 0018_customer_activity_timeline.sql's own header
     // comment. This call never fetches more than timelinePageSize rows;
@@ -227,8 +236,24 @@ export default async function handler(req, res) {
          * module comment. Never written back. */
         expected_amount: legacyLead?.amount ?? null,
         expected_currency: legacyLead?.currency ?? subscription?.currency ?? null,
-        next_expected_payment_date: subscription?.current_period_end || legacyLead?.next_billing_date || null,
-        next_expected_payment_date_ist: formatIstDateTime(subscription?.current_period_end || legacyLead?.next_billing_date || null),
+        next_expected_payment_date: nextPaymentDate,
+        next_expected_payment_date_ist: formatIstDateTime(nextPaymentDate),
+        /* PRODUCTION BUG FIX (Sep 2026): this date used to always be
+         * labeled "Next expected payment" in the UI, even for a cancelled
+         * subscription — where subscription.current_period_end is a real,
+         * correctly-stored Stripe field, but is the END OF THE LAST PERIOD
+         * THE CUSTOMER ACTUALLY PAID FOR, not a forward-looking date;
+         * there is no next payment coming. The date itself is genuinely
+         * useful (kept, never hidden or blanked to "—" — this codebase's
+         * stored/calculated/manual discipline argues against throwing
+         * away a real fact), so only the LABEL changes: historical once
+         * the subscription is actually cancelled, forward-looking
+         * otherwise (including the legacy-lead-only fallback path below,
+         * which by definition never reflects a cancelled subscription).
+         * CustomerDetailDrawer.tsx renders whichever label this sends,
+         * rather than a hardcoded string. */
+        next_expected_payment_label: isHistoricalPayment ? 'Final billing period end' : 'Next expected payment',
+        is_historical: isHistoricalPayment,
         source: legacyLead ? 'legacy_leads_record' : 'none',
       },
       access: {

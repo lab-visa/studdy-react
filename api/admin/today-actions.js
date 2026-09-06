@@ -10,10 +10,17 @@
  *   payments_expected_today    — CALCULATED (current_period_end vs today, IST)
  *   failed_payments            — STORED (subscriptions.status='past_due')
  *   cancellation_requests      — STORED (open cancellation_requests rows)
- *   access_removal_pending     — MANUAL task flag, not a completion status
- *                                 (see api/_lib/lifecycle.js's own comment
- *                                 for why this can never be a stored
- *                                 completion field)
+ *   access_removal_pending     — MANUAL task flag: true when access has
+ *                                 ended and an active/reserved
+ *                                 account_assignments seat still requires
+ *                                 release, clears once none remains (see
+ *                                 api/_lib/lifecycle.js's own comment).
+ *                                 The assignment ledger confirms the
+ *                                 operational seat-release record, not
+ *                                 the customer's real-world ability to
+ *                                 log into the shared external Studdy
+ *                                 account — still a review flag, never a
+ *                                 fabricated completion status.
  *   password_change_tasks      — FOUNDATION ONLY. There is no automatic
  *                                 password-changing integration (explicitly
  *                                 out of this round's scope) and no field
@@ -164,7 +171,7 @@ export default async function handler(req, res) {
       cancellation_requests: cancellationRequests,
       access_removal_pending: {
         items: accessRemovalPending,
-        note: 'Manual task flag, not an automated completion status — Studdy access is a shared per-group login, not a per-customer credential, so no field anywhere confirms it was actually revoked.',
+        note: 'Appears only when access has ended and an active/reserved account_assignments seat still requires release; clears once no unreleased assignment remains. The assignment ledger confirms the operational seat-release record, though it cannot independently verify the customer\'s real-world ability to log into the shared external Studdy account.',
       },
       password_change_tasks: {
         items: [],

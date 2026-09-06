@@ -166,18 +166,60 @@ test('flags are independent of stage — an active paid customer can simultaneou
   assert.equal(result.flags.refunded, true);
 });
 
-test('access_removal_pending flag is set purely from access_status=ended — a MANUAL task flag, not a stored completion field', () => {
-  const ended = deriveCustomerLifecycle({
-    customer: { access_status: 'ended', lifecycle: 'churned' },
-    subscription: { status: 'cancelled' },
-    openCancellationRequest: null,
-  });
-  assert.equal(ended.flags.access_removal_pending, true);
-
+test('access_removal_pending: access_status must be "ended" at all — an active customer is never pending regardless of hasUnreleasedAssignment', () => {
   const active = deriveCustomerLifecycle({
     customer: { access_status: 'active', lifecycle: 'converted' },
     subscription: { status: 'active' },
     openCancellationRequest: null,
+    hasUnreleasedAssignment: true,
   });
   assert.equal(active.flags.access_removal_pending, false);
+});
+
+/* PRODUCTION BUG FIX (Sep 2026) — this flag used to be set purely from
+ * access_status='ended', which never clears once access ends (a real
+ * customer, Puneet Sharma, stayed flagged in Today's Actions forever
+ * even after account_assignments.released_at confirmed the removal
+ * actually happened). It now also requires hasUnreleasedAssignment —
+ * see api/_lib/lifecycle.js's own comment and
+ * api/_lib/customer-pipeline.js's fetchLifecycleInputs() for where that
+ * signal comes from (an `active`/`reserved` account_assignments row). */
+test('access_removal_pending: ended access + an unreleased (active/reserved) seat assignment -> still pending', () => {
+  const result = deriveCustomerLifecycle({
+    customer: { access_status: 'ended', lifecycle: 'churned' },
+    subscription: { status: 'cancelled' },
+    openCancellationRequest: null,
+    hasUnreleasedAssignment: true,
+  });
+  assert.equal(result.flags.access_removal_pending, true);
+});
+
+test('access_removal_pending: ended access + the seat assignment already released -> no longer pending (the Puneet Sharma case)', () => {
+  const result = deriveCustomerLifecycle({
+    customer: { access_status: 'ended', lifecycle: 'churned' },
+    subscription: { status: 'cancelled' },
+    openCancellationRequest: null,
+    hasUnreleasedAssignment: false,
+  });
+  assert.equal(result.flags.access_removal_pending, false, 'must clear once account_assignments shows the seat was actually released, not stay flagged forever');
+});
+
+test('access_removal_pending: ended access, never assigned a seat at all -> not pending (nothing to remove)', () => {
+  const result = deriveCustomerLifecycle({
+    customer: { access_status: 'ended', lifecycle: 'churned' },
+    subscription: { status: 'cancelled' },
+    openCancellationRequest: null,
+    hasUnreleasedAssignment: false, // no account_assignments row ever existed for this customer either
+  });
+  assert.equal(result.flags.access_removal_pending, false);
+});
+
+test('access_removal_pending: hasUnreleasedAssignment defaults to true (fail-safe) when a caller omits it entirely', () => {
+  const result = deriveCustomerLifecycle({
+    customer: { access_status: 'ended', lifecycle: 'churned' },
+    subscription: { status: 'cancelled' },
+    openCancellationRequest: null,
+    // hasUnreleasedAssignment intentionally omitted
+  });
+  assert.equal(result.flags.access_removal_pending, true, 'with no signal at all, must assume the task is still open, never silently assume it is done');
 });

@@ -55,7 +55,7 @@ after(async () => {
 });
 
 beforeEach(async () => {
-  await pool.query('TRUNCATE customers, subscriptions, lead_attribution RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE customers, subscriptions, lead_attribution, account_assignments, studdy_accounts RESTART IDENTITY CASCADE');
 });
 
 async function seedAdminSession() {
@@ -209,6 +209,47 @@ test('admin/customer-detail: 404 for an unknown id, 200 with full shape for a kn
   assert.ok(found._json.activity_timeline.length >= 1, 'must include at least the customer-created entry');
 });
 
+/* PRODUCTION BUG FIX (Sep 2026): billing.next_expected_payment_date used
+ * to always be labeled "Next expected payment" even for a cancelled
+ * subscription, where subscription.current_period_end is really the end
+ * of the LAST period the customer paid for — a past, historical date,
+ * not a forward-looking one. The date itself must still be shown (real
+ * stored fact, never hidden), just labeled honestly. */
+test('admin/customer-detail: billing label is historical for a cancelled subscription, forward-looking otherwise', async () => {
+  const token = await seedAdminSession();
+  const headers = { cookie: `sl_admin_session=${token}` };
+
+  const { customerId: cancelledId } = await seedCustomer({ access_status: 'ended' });
+  const pastPeriodEnd = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  await pool.query(
+    `INSERT INTO subscriptions (customer_id, stripe_subscription_id, status, current_period_end) VALUES ($1, $2, 'cancelled', $3)`,
+    [cancelledId, `sub_${randomUUID()}`, pastPeriodEnd]
+  );
+  const cancelledRes = fakeRes();
+  await customerDetailHandler(fakeReq({ method: 'GET', headers, query: { id: cancelledId } }), cancelledRes);
+  assert.equal(cancelledRes.statusCode, 200);
+  assert.equal(cancelledRes._json.billing.next_expected_payment_label, 'Final billing period end');
+  assert.equal(cancelledRes._json.billing.is_historical, true);
+  assert.ok(cancelledRes._json.billing.next_expected_payment_date, 'the historical date itself must still be present, never hidden or blanked');
+  assert.equal(
+    new Date(cancelledRes._json.billing.next_expected_payment_date).getTime(),
+    new Date(pastPeriodEnd).getTime(),
+    'the real stored date must be unchanged — only its label changes'
+  );
+
+  const { customerId: activeId } = await seedCustomer({ access_status: 'active' });
+  const futurePeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await pool.query(
+    `INSERT INTO subscriptions (customer_id, stripe_subscription_id, status, current_period_end) VALUES ($1, $2, 'active', $3)`,
+    [activeId, `sub_${randomUUID()}`, futurePeriodEnd]
+  );
+  const activeRes = fakeRes();
+  await customerDetailHandler(fakeReq({ method: 'GET', headers, query: { id: activeId } }), activeRes);
+  assert.equal(activeRes.statusCode, 200);
+  assert.equal(activeRes._json.billing.next_expected_payment_label, 'Next expected payment');
+  assert.equal(activeRes._json.billing.is_historical, false);
+});
+
 /* ───────────────────────────── today's actions ───────────────────────────── */
 
 test('admin/today-actions: 200, reports today_ist and every required section', async () => {
@@ -221,6 +262,76 @@ test('admin/today-actions: 200, reports today_ist and every required section', a
     assert.ok(key in res._json, `expected section ${key}`);
   }
   assert.deepEqual(res._json.password_change_tasks.items, [], 'foundation-only section must always be empty, never fabricated');
+});
+
+/* PRODUCTION BUG FIX (Sep 2026, "Today's Actions still reports 1 Access
+ * removal pending" for a customer already fully offboarded — the Puneet
+ * Sharma case): access_removal_pending used to be driven purely by
+ * customers.access_status='ended', which never clears. It must now also
+ * check account_assignments — released for this customer clears it,
+ * still active/reserved keeps it flagged. */
+test('admin/today-actions: access_removal_pending clears once the account_assignments seat is actually released', async () => {
+  const token = await seedAdminSession();
+
+  // Puneet-like customer: access ended, subscription cancelled, and the
+  // seat assignment already shows released_at set — must NOT be pending.
+  const { customerId: releasedCustomerId } = await seedCustomer({ access_status: 'ended', name: 'Puneet Sharma' });
+  await pool.query(
+    `INSERT INTO subscriptions (customer_id, stripe_subscription_id, status) VALUES ($1, $2, 'cancelled')`,
+    [releasedCustomerId, `sub_${randomUUID()}`]
+  );
+  const {
+    rows: [account1],
+  } = await pool.query(`INSERT INTO studdy_accounts (group_name) VALUES ($1) RETURNING id`, [`Group_${randomUUID()}`]);
+  await pool.query(
+    `INSERT INTO account_assignments (studdy_account_id, customer_id, status, released_at) VALUES ($1, $2, 'released', now())`,
+    [account1.id, releasedCustomerId]
+  );
+
+  // A second customer: access also ended, but the seat is still active —
+  // the removal genuinely hasn't been done yet, so this one must still
+  // show up as pending.
+  const { customerId: pendingCustomerId } = await seedCustomer({ access_status: 'ended', name: 'Still Pending' });
+  await pool.query(
+    `INSERT INTO subscriptions (customer_id, stripe_subscription_id, status) VALUES ($1, $2, 'cancelled')`,
+    [pendingCustomerId, `sub_${randomUUID()}`]
+  );
+  const {
+    rows: [account2],
+  } = await pool.query(`INSERT INTO studdy_accounts (group_name) VALUES ($1) RETURNING id`, [`Group_${randomUUID()}`]);
+  await pool.query(`INSERT INTO account_assignments (studdy_account_id, customer_id, status) VALUES ($1, $2, 'active')`, [
+    account2.id,
+    pendingCustomerId,
+  ]);
+
+  const res = fakeRes();
+  await todayActionsHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` } }), res);
+  assert.equal(res.statusCode, 200);
+
+  const pendingIds = res._json.access_removal_pending.items.map((i) => i.customer_id);
+  assert.ok(!pendingIds.includes(releasedCustomerId), 'a customer whose seat assignment was actually released must not remain pending forever');
+  assert.ok(pendingIds.includes(pendingCustomerId), 'a customer whose seat is still active/reserved must still be flagged pending');
+});
+
+/* Codex review correction: the response's own access_removal_pending.note
+ * used to say "no field anywhere confirms it was actually revoked" —
+ * directly contradicting the fix above, which DOES use
+ * account_assignments as that confirmation. Pinned here as an exact
+ * string so the note can never silently drift back out of sync with the
+ * actual logic again. */
+test('admin/today-actions: access_removal_pending.note accurately describes the account_assignments-based logic, not the old "no field anywhere" claim', async () => {
+  const token = await seedAdminSession();
+  const res = fakeRes();
+  await todayActionsHandler(fakeReq({ method: 'GET', headers: { cookie: `sl_admin_session=${token}` } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(
+    res._json.access_removal_pending.note,
+    'Appears only when access has ended and an active/reserved account_assignments seat still requires release; clears once no unreleased assignment remains. The assignment ledger confirms the operational seat-release record, though it cannot independently verify the customer\'s real-world ability to log into the shared external Studdy account.'
+  );
+  assert.ok(
+    !res._json.access_removal_pending.note.includes('no field anywhere confirms'),
+    'must never regress to the pre-fix claim that no field confirms the removal'
+  );
 });
 
 /* ───────────────────────────── track-attribution ───────────────────────────── */
