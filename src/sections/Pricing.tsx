@@ -4,12 +4,22 @@ import RegionPicker from '../components/RegionPicker';
 import { REGION_DATA, TRIAL_DAYS, type Region } from '../data/config';
 import { detectRegion } from '../utils/geo';
 import { track } from '../utils/analytics';
-import { useNavigate } from 'react-router-dom';
+import { trackEvent, getLeadId, getCampaignCode } from '../utils/tracking';
+import { buildPaymentLinkUrl } from '../utils/checkoutLink';
+import { getAttributionSnapshot } from '../utils/attribution';
 
 type Plan = 'monthly' | 'yearly';
 
+/* Read utm_source directly off THIS page's own URL — for a homepage
+ * pricing-section click this is exactly correct (the visitor's landing
+ * URL), unlike Checkout.tsx's own copy of this helper which has to read
+ * it off /checkout's URL instead, several navigations later. */
+function getUtmSource() {
+  const p = new URLSearchParams(window.location.search);
+  return p.get('utm_source') ?? 'direct';
+}
+
 export default function Pricing() {
-  const navigate = useNavigate();
   const [region, setRegion] = useState<Region>('us');
   const [detectedRegion, setDetectedRegion] = useState<Region | null>(null);
   /* Which plan box is "selected" (gets the live gradient border) — you
@@ -41,12 +51,43 @@ export default function Pricing() {
   const rd = REGION_DATA[region];
   const hasStripe = Boolean(rd.monthly.stripeId) && Boolean(rd.yearly.stripeId);
 
+  /* FIX (Sep 2026, Vish): these two buttons are the only entry point that
+   * skips /checkout entirely and goes straight to Stripe — every other
+   * "Start Free Trial"/CTA button on the site still goes through
+   * /checkout unchanged. This is safe specifically here because, by the
+   * time either button is clickable, this section has already done
+   * everything /checkout would otherwise do for a first-time visitor:
+   * region is detected (or user-picked) above, hasStripe already disables
+   * the button for an unsupported region (no risk of sending someone to a
+   * missing payment link), and the exact post-trial price/trial length is
+   * already printed right above this button. Logic mirrors Checkout.tsx's
+   * own handleStart() exactly (same attribution capture, same Stripe
+   * Payment Link URL builder) — kept in sync with it deliberately, not
+   * copy-pasted by accident. */
   const handlePlan = (chosenPlan: Plan, event: string) => {
     track(event as Parameters<typeof track>[0]);
-    /* Carry the region + plan the visitor already picked here straight
-     * through to Checkout, instead of making it re-detect and possibly
-     * switch on them. */
-    navigate('/checkout', { state: { region, plan: chosenPlan } });
+    const planData = chosenPlan === 'monthly' ? rd.monthly : rd.yearly;
+    const link = planData.paymentLink;
+    if (!link) return; // hasStripe already keeps this button disabled in that case
+
+    trackEvent('trial_clicked');
+
+    const utmSource = getUtmSource();
+    const utmCampaign = getCampaignCode() ?? 'none';
+    const leadId = getLeadId();
+
+    const { first, latest } = getAttributionSnapshot();
+    if (leadId && (first || latest)) {
+      fetch('/api/track-attribution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId, first, latest }),
+      }).catch(() => {
+        /* attribution capture must never break checkout */
+      });
+    }
+
+    window.location.href = buildPaymentLinkUrl(link, { utmSource, utmCampaign, leadId });
   };
 
   return (
@@ -92,7 +133,14 @@ export default function Pricing() {
                 </li>
               ))}
             </ul>
-            <button className="gost w-full justify-center" disabled={!hasStripe}
+            {/* FIX (Sep 2026): this button was hardcoded to className="gost"
+             * (the permanently-white/outlined "ghost" style) regardless of
+             * whether Monthly was the selected plan — it never once
+             * highlighted, unlike Yearly's button below which was hardcoded
+             * to the opposite ("gbtn", filled gradient) class. Both buttons
+             * now switch style based on selectedPlan, same as the card
+             * border above them already correctly does. */}
+            <button className={`${selectedPlan === 'monthly' ? 'gbtn' : 'gost'} w-full justify-center`} disabled={!hasStripe}
               style={{ opacity: hasStripe ? 1 : 0.5 }}
               onClick={() => handlePlan('monthly', 'monthly_plan_click')}>
               Start Free Trial
@@ -125,7 +173,7 @@ export default function Pricing() {
                 </li>
               ))}
             </ul>
-            <button className="gbtn w-full justify-center" disabled={!hasStripe}
+            <button className={`${selectedPlan === 'yearly' ? 'gbtn' : 'gost'} w-full justify-center`} disabled={!hasStripe}
               style={{ opacity: hasStripe ? 1 : 0.5 }}
               onClick={() => handlePlan('yearly', 'annual_plan_click')}>
               Start Free Trial
@@ -153,7 +201,7 @@ export default function Pricing() {
         </div>
 
         <p className="text-center text-[13px] mt-6 font-semibold" style={{ color: 'var(--soft)' }}>
-          🛡️ {rd.symbol}0 due today · Reminder before billing · Cancel anytime · No calls or forms
+          🛡️ {rd.symbol}0 due today · Reminder before billing · Cancel anytime · Unlimited access
         </p>
       </div>
     </section>

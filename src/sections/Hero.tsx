@@ -119,9 +119,26 @@ function LaptopStage() {
         {muted ? 'Click to unmute' : 'Click to mute'}
       </button>
 
-      <img src="/images/Laptop.png" alt="Studdy running on a laptop"
-        style={{ position: 'relative', zIndex: 1, width: '100%', display: 'block', pointerEvents: 'none' }}
-        draggable={false} />
+      {/* FIX (Sep 2026): this was a raw 5.24MB PNG at 4477x2712px — displayed
+       * nowhere near that size, and downloaded in full on every first visit
+       * (no cache). Replaced with a 1800px-wide WebP (~69KB, ~98.7% smaller,
+       * visually checked for artifacts before shipping) with the original
+       * PNG kept as a <picture> fallback for browsers that somehow don't
+       * support WebP. width/height are the WebP's real intrinsic pixel
+       * dimensions (not the rendered size — the CSS below still scales it
+       * to 100% of its container) so the browser can reserve the correct
+       * aspect ratio before the image loads, instead of shifting layout
+       * once it arrives. fetchPriority="high" because this is the single
+       * largest above-the-fold visual — almost certainly the page's LCP
+       * element — so it should not compete with lower-priority requests. */}
+      <picture>
+        <source srcSet="/images/Laptop.webp" type="image/webp" />
+        <img src="/images/Laptop.png" alt="Studdy running on a laptop"
+          width={1800} height={1090}
+          fetchPriority="high"
+          style={{ position: 'relative', zIndex: 1, width: '100%', height: 'auto', display: 'block', pointerEvents: 'none' }}
+          draggable={false} />
+      </picture>
     </div>
   );
 }
@@ -382,7 +399,7 @@ export default function Hero() {
             <div ref={cardsRef} style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
               {CARDS.map(({ Icon, title, sub }) => (
                 <div key={title} style={{
-                  background: 'rgba(255,255,255,.82)', backdropFilter: 'blur(14px)',
+                  background: 'rgba(255,255,255,.82)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
                   border: '1px solid rgba(255,255,255,.65)', borderRadius: '16px',
                   padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px',
                   boxShadow: '0 4px 20px rgba(140,121,224,.12)', minWidth: '180px', flex: '0 1 auto',

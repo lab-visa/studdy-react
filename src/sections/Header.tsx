@@ -34,7 +34,7 @@ export default function Header() {
         style={{
           height: scrolled ? '60px' : '70px',
           background: scrolled ? 'rgba(255,255,255,.97)' : 'rgba(255,255,255,.9)',
-          backdropFilter: 'blur(18px)',
+          backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
           borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent',
           boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,.05)' : 'none',
         }}
@@ -102,10 +102,21 @@ export default function Header() {
         )}
       </nav>
 
-      {/* Mobile sticky bottom CTA */}
+      {/* Mobile sticky bottom CTA
+       * FIX (Sep 2026): two real bugs found in an actual mobile audit —
+       * (1) nothing on the page reserved space for this bar, so whatever
+       * content happened to scroll to the very bottom (confirmed: the
+       * Pricing section's own Yearly-plan button) rendered partially
+       * hidden behind it — see the matching paddingBottom added to
+       * Home.tsx's <main> and to Footer.tsx below; (2) it sat flush
+       * against the bottom edge with no iPhone safe-area allowance, so on
+       * every iPhone with a Home indicator (X and later — effectively all
+       * current iPhones) it rendered under/into that gesture area. Both
+       * fixed here; env(safe-area-inset-bottom) is 0 on every device
+       * without a safe area, so this is a no-op everywhere else. */}
       <div
-        className="md:hidden fixed bottom-0 left-0 right-0 z-[100] px-4 py-3 bg-white/96 backdrop-blur-md"
-        style={{ borderTop: '1px solid var(--border)' }}
+        className="md:hidden fixed bottom-0 left-0 right-0 z-[100] px-4 pt-3 bg-white/96 backdrop-blur-md"
+        style={{ borderTop: '1px solid var(--border)', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}
       >
         <button className="gbtn w-full text-[15px] py-4" onClick={() => navigate('/checkout')}>
           Start Free Trial
