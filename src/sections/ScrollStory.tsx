@@ -211,7 +211,7 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
    ══════════════════════════════════════════════════════════════ */
 /* ══════════════════════════════════════════════════════════════
    MOBILE STORY — native <video> implementation
-   
+
    Uses direct Bunny MP4 URLs instead of iframes.
    This gives us:
    - object-fit: cover  → perfect full-screen fill, no letterbox
@@ -219,14 +219,35 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
    - full play/pause/currentTime control → no cross-origin issues
    - no Bunny player chrome → no orange button, no controls
    - works perfectly on iOS Safari, Chrome Android
-   
+
    Architecture:
    - 10 real <article> slides, min-height:100svh, normal flow
    - Native <video> autoplay muted loop playsInline
    - Only active + next video mounted (max 2 at steady state)
    - IntersectionObserver (threshold 0.6) drives active index
-   - scrollend / 300ms debounce snap — behavior:'auto'
-   - scroll-snap-type:'y proximity' scoped to section wrapper
+   -
+   - FIX (Sep 2026): this section used to ALSO force-snap the scroll
+   - position to the nearest slide — CSS scroll-snap-type on the
+   - wrapper plus a JS scrollend/300ms-debounce handler that measured
+   - each slide's distance from the top of the screen and called
+   - scrollIntoView() to correct it. That distance calculation reads
+   - window.innerHeight, which is NOT stable inside in-app browsers
+   - such as WhatsApp's — their own chrome (a mini address bar) grows
+   - and shrinks as you scroll, exactly like mobile Safari's dynamic
+   - toolbar. Every time that chrome finished animating, the snap
+   - logic recomputed against a new innerHeight and yanked the page
+   - to a different slide, which itself fired another scroll event —
+   - a feedback loop, confirmed via screen recording: smooth while
+   - actively scrolling, jumping the instant you stopped or reversed
+   - direction (exactly when that chrome resizes). Real Safari/Chrome
+   - don't have this animating-chrome behavior, so the bug never
+   - showed there — only through the WhatsApp in-app browser.
+   - Fix: removed all forced snapping (both the CSS scroll-snap-type
+   - and the JS scrollIntoView correction) and left scrolling
+   - completely natural. The IntersectionObserver below still drives
+   - which slide is "active" (for video play/pause and text opacity)
+   - purely from what's actually visible — it needs no snapping to
+   - work correctly.
    ══════════════════════════════════════════════════════════════ */
 
 const CDN = 'https://vz-b523719a-f10.b-cdn.net';
@@ -289,8 +310,6 @@ const MobileSlide = forwardRef<HTMLElement, {
         overflow: 'hidden',
         background: '#0d0b15',
         contain: 'layout paint',
-        scrollSnapAlign: 'start',
-        scrollSnapStop: 'always',
       }}
     >
       {/* Native video — object-fit:cover fills screen perfectly */}
@@ -384,8 +403,6 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
   const slideRefs    = useRef<(HTMLElement|null)[]>(Array(N).fill(null));
   const mountedRef   = useRef(true);
   const activeRef    = useRef(0);
-  const inViewRef    = useRef(false);
-  const snapTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   const [active,     setActive]     = useState(0);
   /* Only active + next mounted — max 2 videos decoding at once */
@@ -395,10 +412,7 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
   const goTo = useCallback((idx: number) => {
@@ -455,56 +469,8 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
     };
   }, [goTo]);
 
-  /* Section visibility guard */
-  useEffect(() => {
-    const s = sectionRef.current;
-    if (!s) return;
-    const obs = new IntersectionObserver(entries => {
-      entries.forEach(e => { inViewRef.current = e.isIntersecting; });
-    }, { threshold: 0 });
-    obs.observe(s);
-    return () => obs.disconnect();
-  }, []);
-
-  /* Snap: scrollend preferred, 300ms debounce fallback
-     behavior:'auto' = instant correction, no second animation */
-  useEffect(() => {
-    const doSnap = () => {
-      if (!mountedRef.current || !inViewRef.current) return;
-      const vh = window.innerHeight;
-      let bestEl: HTMLElement|null = null;
-      let bestDist = Infinity;
-      slideRefs.current.forEach(el => {
-        if (!el) return;
-        const d = Math.abs((el as HTMLElement).getBoundingClientRect().top);
-        if (d < bestDist) { bestDist = d; bestEl = el as HTMLElement; }
-      });
-      if (!bestEl || bestDist > vh * 0.45 || bestDist < 6) return;
-      (bestEl as HTMLElement).scrollIntoView({ behavior: 'auto', block: 'start' });
-    };
-
-    const w = window as unknown as Record<string, unknown>;
-    if ('onscrollend' in w) {
-      const we = window as unknown as { addEventListener: (e: string, h: () => void, o?: object) => void; removeEventListener: (e: string, h: () => void) => void };
-      we.addEventListener('scrollend', doSnap, { passive: true });
-      return () => we.removeEventListener('scrollend', doSnap);
-    }
-    const onScroll = () => {
-      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-      snapTimerRef.current = setTimeout(doSnap, 300);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
-    };
-  }, []);
-
   return (
-    <div
-      ref={sectionRef}
-      style={{ scrollSnapType: reduced ? 'none' : 'y proximity' }}
-    >
+    <div ref={sectionRef}>
       {SLIDES.map((slide, i) => (
         <MobileSlide
           key={slide.id}
