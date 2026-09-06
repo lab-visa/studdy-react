@@ -7,7 +7,7 @@ const LEGAL_LINKS = [['Privacy Policy','/privacy'],['Terms of Service','/terms']
 
 export default function Footer() {
   return (
-    <footer className="bg-white px-6 py-10" style={{ borderTop: '1px solid var(--border)' }}>
+    <footer className="bg-white px-6 py-10 pb-24 md:pb-10" style={{ borderTop: '1px solid var(--border)' }}>
       <div className="max-w-[1200px] mx-auto">
         <div className="flex flex-wrap justify-between gap-10 mb-8">
           <div>

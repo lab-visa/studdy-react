@@ -152,7 +152,16 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
 
   return (
     <>
-      <div style={{ position:'sticky', top:0, height:'100vh', overflow:'hidden', background:'#0d0b15', zIndex:5 }}
+      {/* FIX (Sep 2026): 100vh is unreliable on mobile Safari specifically —
+       * it's sized against a viewport state that doesn't match what's
+       * actually visible while the address bar is showing/hiding, so this
+       * pinned section could render taller than the real visible screen on
+       * first load. 100dvh ("dynamic viewport height") tracks the actual
+       * current viewport instead and is what this needs — supported by
+       * every browser this site otherwise already assumes (same modern-
+       * browser-only bar as WebP with no fallback, used elsewhere in this
+       * codebase). */}
+      <div style={{ position:'sticky', top:0, height:'100dvh', overflow:'hidden', background:'#0d0b15', zIndex:5 }}
         role="region" aria-label="Cinematic story">
         <div aria-hidden="true" style={{ position:'absolute', inset:0 }}>
           {SLIDES.map((slide,i) => (

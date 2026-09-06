@@ -16,7 +16,15 @@ export default function Home() {
   return (
     <>
       <Header />
-      <main style={{ paddingTop: '72px' }}>
+      {/* FIX (Sep 2026): pb-24 (mobile only — matches Header's own md:hidden
+       * breakpoint for the sticky bottom CTA bar) reserves the ~96px that
+       * bar actually occupies (measured 75.5px + breathing room), so
+       * content scrolled to the bottom of the page — confirmed via mobile
+       * audit: the Pricing section's own Yearly-plan button — never
+       * renders partially hidden behind it. Matching padding added to
+       * Footer.tsx too, since Footer is the page's real final scroll
+       * destination, outside this <main>. */}
+      <main className="pb-24 md:pb-0" style={{ paddingTop: '72px' }}>
         <Hero />
         <EmotionalHook />
         <ProductProof />
