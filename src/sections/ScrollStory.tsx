@@ -8,7 +8,6 @@
 import { useEffect, useRef, useState, useCallback, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { track } from '../utils/analytics';
-import { shouldUseStableStoryHeight } from '../utils/scrollDiagnosticMode';
 
 /* ── Slide data ─────────────────────────────────────────────── */
 interface Slide {
@@ -275,8 +274,7 @@ const MobileSlide = forwardRef<HTMLElement, {
   isActive: boolean;
   shouldMount: boolean;
   onTrial: () => void;
-  stableHeight: number | null;
-}>(function MobileSlide({ slide, idx, isActive, shouldMount, onTrial, stableHeight }, ref) {
+}>(function MobileSlide({ slide, idx, isActive, shouldMount, onTrial }, ref) {
   const reduced = typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion:reduce)').matches;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -305,11 +303,10 @@ const MobileSlide = forwardRef<HTMLElement, {
     <article
       ref={ref}
       data-slide-idx={idx}
-      data-st-mobile-slide
       style={{
         position: 'relative',
         width: '100%',
-        minHeight: stableHeight === null ? '100svh' : `${stableHeight}px`,
+        minHeight: '100svh',
         overflow: 'hidden',
         background: '#0d0b15',
         contain: 'layout paint',
@@ -406,10 +403,6 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
   const slideRefs    = useRef<(HTMLElement|null)[]>(Array(N).fill(null));
   const mountedRef   = useRef(true);
   const activeRef    = useRef(0);
-  const [stableHeight] = useState<number | null>(() => {
-    if (!shouldUseStableStoryHeight() || typeof window === 'undefined') return null;
-    return Math.round(window.visualViewport?.height ?? window.innerHeight);
-  });
 
   const [active,     setActive]     = useState(0);
   /* Only active + next mounted — max 2 videos decoding at once */
@@ -477,7 +470,7 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
   }, [goTo]);
 
   return (
-    <div ref={sectionRef} data-st-mobile-story>
+    <div ref={sectionRef}>
       {SLIDES.map((slide, i) => (
         <MobileSlide
           key={slide.id}
@@ -487,7 +480,6 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
           isActive={active === i}
           shouldMount={mountedSet.has(i)}
           onTrial={onTrial}
-          stableHeight={stableHeight}
         />
       ))}
 
