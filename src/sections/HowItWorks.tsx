@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { shouldDisableScrollScrub } from '../utils/scrollDiagnosticMode';
 gsap.registerPlugin(ScrollTrigger);
 
 const STEPS = [
@@ -42,17 +41,16 @@ const STEPS = [
 const N = STEPS.length;
 
 export default function HowItWorks() {
-  const disableScrollScrub = shouldDisableScrollScrub();
   const sectionRef  = useRef<HTMLDivElement>(null);
   const tokenRef    = useRef<HTMLDivElement>(null);
   const lineRef     = useRef<HTMLDivElement>(null);
-  const [activeStep, setActiveStep] = useState(() => disableScrollScrub ? N - 1 : -1);
+  const [activeStep, setActiveStep] = useState(-1);
 
   useEffect(() => {
     if (!sectionRef.current) return;
     const ctx = gsap.context(() => {
       // The connecting line grows
-      if (!disableScrollScrub && lineRef.current) {
+      if (lineRef.current) {
         gsap.fromTo(
           lineRef.current,
           { scaleX: 0 },
@@ -72,7 +70,7 @@ export default function HowItWorks() {
       // Token slides along the line, activating each step
       const stepEls = sectionRef.current!.querySelectorAll<HTMLElement>('.hiw-step-card');
 
-      if (!disableScrollScrub && tokenRef.current && stepEls.length === N) {
+      if (tokenRef.current && stepEls.length === N) {
         ScrollTrigger.create({
           trigger: sectionRef.current,
           start: 'top 55%',
@@ -112,7 +110,7 @@ export default function HowItWorks() {
     }, sectionRef);
 
     return () => ctx.revert();
-  }, [disableScrollScrub]);
+  }, []);
 
   return (
     <section
@@ -148,7 +146,7 @@ export default function HowItWorks() {
             <div
               ref={lineRef}
               className="absolute inset-0 rounded-full"
-              style={{ background:'var(--grad)', transformOrigin:'left center', transform: disableScrollScrub ? 'scaleX(1)' : 'scaleX(0)' }}
+              style={{ background:'var(--grad)', transformOrigin:'left center', transform: "scaleX(0)" }}
             />
             {/* Glowing token */}
             <div
@@ -162,7 +160,6 @@ export default function HowItWorks() {
                 boxShadow: '0 0 0 4px rgba(239,85,182,.2), 0 0 16px rgba(239,85,182,.4)',
                 border: '2px solid #fff',
                 willChange: 'transform',
-                display: disableScrollScrub ? 'none' : undefined,
               }}
               aria-hidden="true"
             />
@@ -189,7 +186,7 @@ export default function HowItWorks() {
               <div
                 key={s.id}
                 className="hiw-step-card"
-                style={{ opacity: disableScrollScrub ? 1 : 0.35 }} // GSAP controls this
+                style={{ opacity: 0.35 }} // GSAP controls this
               >
                 {/* Stage label */}
                 <div
@@ -231,12 +228,12 @@ export default function HowItWorks() {
               style={{ background:'rgba(255,255,255,.08)' }} aria-hidden="true" />
             <div
               className="absolute left-[19px] top-0 w-px origin-top"
-              style={{ background:'var(--grad)', height:'100%', transform: disableScrollScrub ? 'scaleY(1)' : 'scaleY(0)' }}
+              style={{ background:'var(--grad)', height:'100%', transform:'scaleY(0)' }}
               id="hiw-mobile-line"
               aria-hidden="true"
             />
             {STEPS.map((s, idx) => (
-              <MobileStep key={s.id} s={s} idx={idx} lineId="hiw-mobile-line" disableScrollScrub={disableScrollScrub} />
+              <MobileStep key={s.id} s={s} idx={idx} lineId="hiw-mobile-line" />
             ))}
           </div>
         </div>
@@ -246,12 +243,11 @@ export default function HowItWorks() {
 }
 
 function MobileStep({
-  s, idx, lineId, disableScrollScrub,
+  s, idx, lineId,
 }: {
   s: typeof STEPS[0];
   idx: number;
   lineId: string;
-  disableScrollScrub: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -263,7 +259,7 @@ function MobileStep({
         scrollTrigger: { trigger: ref.current, start: 'top 82%', once: true },
       });
       /* Grow the gradient line proportionally as each step enters */
-      const lineEl = disableScrollScrub ? null : document.getElementById(lineId);
+      const lineEl = document.getElementById(lineId);
       if (lineEl) {
         const fraction = (idx + 1) / STEPS.length;
         gsap.to(lineEl, {
@@ -279,7 +275,7 @@ function MobileStep({
       }
     });
     return () => ctx.revert();
-  }, [disableScrollScrub, idx, lineId]);
+  }, [idx, lineId]);
 
   return (
     <div ref={ref} className="flex gap-4 pb-8 relative" style={{ paddingLeft: '0' }}>

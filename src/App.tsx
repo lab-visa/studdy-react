@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import Home from './pages/Home';
 import { trackEvent } from './utils/tracking';
 import { captureAttributionTouch } from './utils/attribution';
-import ScrollDiagnosticOverlay from './components/ScrollDiagnosticOverlay';
 
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
 const Checkout       = lazy(() => import('./pages/Checkout'));
@@ -141,7 +140,6 @@ function AppRoutes() {
   return (
     <>
       <ScrollRestoration />
-      <ScrollDiagnosticOverlay />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/"                element={<Home />} />
