@@ -13,6 +13,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Play, BookOpen, Zap, MessageSquare, X } from 'lucide-react';
 import { track } from '../utils/analytics';
+import { shouldDisableScrollScrub } from '../utils/scrollDiagnosticMode';
 gsap.registerPlugin(ScrollTrigger);
 
 /* ── Hero laptop loop — direct Bunny MP4 ───────────────────────── */
@@ -295,6 +296,7 @@ export default function Hero() {
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (!sectionRef.current) return;
+    if (shouldDisableScrollScrub()) return;
     const ctx = gsap.context(() => {
       ScrollTrigger.create({
         trigger: sectionRef.current, start: 'top top', end: 'bottom top', scrub: 0.5,
