@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { SUPPORT_WHATSAPP, SUPPORT_EMAIL } from '../data/config';
+import { SUPPORT_WHATSAPP, SUPPORT_EMAIL, LEGAL_ENTITY } from '../data/config';
 import { track } from '../utils/analytics';
 
 const PRODUCT_LINKS = [['Experience','#demo'],['Pricing','#pricing'],['Reviews','#reviews'],['FAQs','#faq']];
@@ -43,7 +43,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="flex flex-wrap justify-between items-center gap-3 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
-          <span className="text-[12px]" style={{ color: 'var(--soft)' }}>© 2026 Studdy Lab. All rights reserved.</span>
+          <span className="text-[12px]" style={{ color: 'var(--soft)' }}>© 2026 {LEGAL_ENTITY}. Studdy Lab is a brand of {LEGAL_ENTITY}. All rights reserved.</span>
           <span className="text-[12px]" style={{ color: 'var(--soft)' }}>Built with ❤️ for learners everywhere.</span>
         </div>
       </div>

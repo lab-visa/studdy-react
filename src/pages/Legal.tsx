@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { SUPPORT_WHATSAPP, SUPPORT_EMAIL } from '../data/config';
+import { SUPPORT_WHATSAPP, SUPPORT_EMAIL, LEGAL_ENTITY } from '../data/config';
 
 interface Props {
   title: string;
@@ -12,6 +12,9 @@ function LegalPage({ title, sections }: Props) {
       <Link to="/" className="text-[14px] font-bold mb-8 block" style={{ color: 'var(--soft)' }}>← Back to Studdy Lab</Link>
       <h1 className="font-black mb-8" style={{ fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-1px' }}>{title}</h1>
       <p className="text-[13px] mb-8" style={{ color: 'var(--soft)' }}>Last updated: 14 October 2026</p>
+      <p className="text-[15px] leading-relaxed mb-8" style={{ color: 'var(--soft)' }}>
+        Studdy Lab (studdylab.com) is owned and operated by <b style={{ color: 'var(--ink)' }}>{LEGAL_ENTITY}</b>. In this policy, “we”, “us” and “Studdy Lab” mean {LEGAL_ENTITY}.
+      </p>
       {sections.map((s, i) => (
         <div key={i} className="mb-8">
           <h2 className="font-black text-[18px] mb-3">{s.heading}</h2>
@@ -76,7 +79,8 @@ export function ContactPage() {
     <div className="min-h-screen px-6 py-16 max-w-[640px] mx-auto">
       <Link to="/" className="text-[14px] font-bold mb-8 block" style={{ color: 'var(--soft)' }}>← Back to Studdy Lab</Link>
       <h1 className="font-black mb-4" style={{ fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-1px' }}>Contact & Support</h1>
-      <p className="text-[16px] mb-10" style={{ color: 'var(--soft)' }}>The fastest way to reach us is WhatsApp. We reply within minutes during business hours.</p>
+      <p className="text-[16px] mb-4" style={{ color: 'var(--soft)' }}>The fastest way to reach us is WhatsApp. We reply within minutes during business hours.</p>
+      <p className="text-[15px] mb-10" style={{ color: 'var(--soft)' }}>Studdy Lab is owned and operated by <b style={{ color: 'var(--ink)' }}>{LEGAL_ENTITY}</b>.</p>
       <div className="space-y-4">
         <a href={SUPPORT_WHATSAPP} target="_blank" rel="noreferrer" className="flex items-center gap-4 p-5 rounded-2xl bg-white font-bold" style={{ border: '1.5px solid var(--border)' }}>
           <span className="text-[28px]">💬</span>
