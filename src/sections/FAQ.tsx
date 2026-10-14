@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import FAQItem from '../components/FAQItem';
 import SectionHeading from '../components/SectionHeading';
+import { useMarket } from '../context/MarketContext';
 
 /* 12 questions grouped into 3 tabs, shown one tab at a time — like
  * unischooly.com's FAQ section — instead of one long stacked list that
@@ -35,8 +36,42 @@ const FAQ_GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
   },
 ];
 
+/* India (Oct 2026): pay first, Quarterly/Yearly, 7-day full refund —
+ * no free trial. Shown instead of FAQ_GROUPS when the visitor is in India. */
+const INDIA_FAQ_GROUPS: typeof FAQ_GROUPS = [
+  {
+    heading: "Who it's for",
+    items: [
+      { q:'Which boards does Studdy Lab support?', a:'All of them: CBSE, ICSE/ISC, IB, IGCSE and every State Board, from Class 1 to Class 12. Ask any question from your textbook, NCERT exercise, worksheet or past paper.' },
+      { q:'Does it help with JEE, NEET and other entrance exams?', a:'Yes. Studdy explains concepts and solves tough problems step by step for JEE Main & Advanced, NEET, CUET, BITSAT, state CETs, CLAT, NDA, Olympiads and more, and re-explains as many times as you need.' },
+      { q:'Is it useful after school?', a:'Very. College and PG students use it for semester subjects and assignments (B.Tech, MBBS, B.Com, MBA and more), and working professionals use it to learn Excel, coding, data and new skills.' },
+      { q:'Does it replace tuition?', a:"It covers what tuition can't: the doubt at 11 pm, the step you missed in class, the question you were too shy to ask. Many families use it alongside school and tuition." },
+    ],
+  },
+  {
+    heading: 'How it works',
+    items: [
+      { q:'How do I ask a question?', a:'Type it, speak it, or upload a photo of the question from your book or notebook. Studdy explains it on a live whiteboard, and you can interrupt anytime with a follow-up.' },
+      { q:'Which device do I need?', a:'Studdy works best on a laptop or a tablet (11-inch screen or larger). This website works on any phone, but the full whiteboard tutor needs a bigger screen.' },
+      { q:'How do I get my login after paying?', a:'Right after payment you get your personal dashboard link with your login details and simple steps to start. We also send it to you on WhatsApp and email.' },
+      { q:'Can the whole family use it?', a:"Your plan is for one learner. Need it for more than one child? Message us on WhatsApp and we'll help." },
+    ],
+  },
+  {
+    heading: 'Payment & refund',
+    items: [
+      { q:'How much does it cost?', a:'₹7,999 for 3 months, or ₹14,999 for a full year (just ₹1,250 a month). Prices include GST. No hidden charges, no auto-debit.' },
+      { q:"What if I don't like it?", a:"Ask for a refund within 7 days of paying and we'll refund you in full. Just message us on WhatsApp or email support@studdyai.org." },
+      { q:'Is there a free trial?', a:'Instead of a trial, we give you a 7-day full refund, so you get the complete product from day one with no risk.' },
+      { q:'What happens when my plan ends?', a:"Nothing is charged automatically. We'll remind you before your plan ends, and you decide whether to renew." },
+    ],
+  },
+];
+
 export default function FAQ() {
   const [tab, setTab] = useState(0);
+  const { isIndia } = useMarket();
+  const groups = isIndia ? INDIA_FAQ_GROUPS : FAQ_GROUPS;
 
   return (
     <section id="faq" className="py-24 px-6" style={{ background: 'var(--dim)' }}>
@@ -45,7 +80,7 @@ export default function FAQ() {
 
         {/* Tabs */}
         <div className="flex gap-2 justify-center flex-wrap mb-8">
-          {FAQ_GROUPS.map((group, i) => (
+          {groups.map((group, i) => (
             <button
               key={group.heading}
               onClick={() => setTab(i)}
@@ -64,7 +99,7 @@ export default function FAQ() {
         {/* Only the active group's questions are rendered — no giant
          * stacked list, no extra page scroll. */}
         <div className="bg-white rounded-3xl px-6 sm:px-8" style={{ border: '1.5px solid var(--border)' }}>
-          {FAQ_GROUPS[tab].items.map((f, i) => <FAQItem key={f.q} {...f} last={i === FAQ_GROUPS[tab].items.length - 1} />)}
+          {groups[tab].items.map((f, i) => <FAQItem key={f.q} {...f} last={i === groups[tab].items.length - 1} />)}
         </div>
       </div>
     </section>

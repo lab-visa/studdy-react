@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import { useCtaLabel } from '../hooks/useCtaLabel';
 
 const NAV_LINKS = [
   { label: 'Experience', href: '#demo' },
@@ -13,6 +14,7 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const ctaLabel = useCtaLabel();
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
@@ -65,7 +67,7 @@ export default function Header() {
               className="gbtn text-[13.5px] px-5 py-2.5"
               onClick={() => navigate('/checkout')}
             >
-              Start Free Trial
+              {ctaLabel}
             </button>
           </div>
 
@@ -96,7 +98,7 @@ export default function Header() {
               </a>
             ))}
             <div className="py-3 flex gap-3">
-              <button className="gbtn flex-1 text-[14px] py-3" onClick={() => { navigate('/checkout'); setMenuOpen(false); }}>Start Free Trial</button>
+              <button className="gbtn flex-1 text-[14px] py-3" onClick={() => { navigate('/checkout'); setMenuOpen(false); }}>{ctaLabel}</button>
             </div>
           </div>
         )}
@@ -119,7 +121,7 @@ export default function Header() {
         style={{ borderTop: '1px solid var(--border)', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}
       >
         <button className="gbtn w-full text-[15px] py-4" onClick={() => navigate('/checkout')}>
-          Start Free Trial
+          {ctaLabel}
         </button>
       </div>
     </>

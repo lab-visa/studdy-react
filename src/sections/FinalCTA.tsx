@@ -4,11 +4,13 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useNavigate } from 'react-router-dom';
 import { SUPPORT_WHATSAPP } from '../data/config';
 import { track } from '../utils/analytics';
+import { useCtaLabel } from '../hooks/useCtaLabel';
 gsap.registerPlugin(ScrollTrigger);
 
 export default function FinalCTA() {
   const boardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const ctaLabel = useCtaLabel();
 
   useEffect(() => {
     if (!boardRef.current) return;
@@ -65,7 +67,7 @@ export default function FinalCTA() {
             className="gbtn text-[16px] px-9 py-4"
             onClick={() => { track('checkout_started'); navigate('/checkout'); }}
           >
-            Start Free Trial
+            {ctaLabel}
           </button>
           <a
             href={SUPPORT_WHATSAPP}

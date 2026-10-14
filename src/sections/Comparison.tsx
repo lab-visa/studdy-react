@@ -1,4 +1,5 @@
 import SectionHeading from '../components/SectionHeading';
+import { useMarket } from '../context/MarketContext';
 
 const rows = [
   { topic: 'Availability',       bad: 'Fixed times only',             good: 'Available instantly, 24/7'       },
@@ -9,21 +10,35 @@ const rows = [
   { topic: 'Follow-up questions',bad: 'Wait for next session',         good: 'Ask immediately, unlimited'      },
 ];
 
+/* India version: compares against home tuition / coaching, with ₹ prices. */
+const INDIA_ROWS: typeof rows = [
+  { topic: 'Availability',     bad: 'Fixed tuition timings',              good: 'Any time, even at 11 pm, 24×7' },
+  { topic: 'Cost',             bad: '₹3,000–10,000+ a month per subject', good: 'From ₹1,250/month for every subject' },
+  { topic: 'Doubts',           bad: 'Shy to ask in a batch of 30',        good: 'Ask anything, as many times as you like' },
+  { topic: 'Explanations',     bad: 'Explained once, then move on',       good: 'Re-explained until it clicks' },
+  { topic: 'Visual learning',  bad: 'Board and textbook',                 good: 'Step by step on a live whiteboard' },
+  { topic: 'Coverage',         bad: 'One subject per tutor',              good: 'School, entrance, college & skills' },
+];
+
 export default function Comparison() {
+  const { isIndia } = useMarket();
+  const list = isIndia ? INDIA_ROWS : rows;
   return (
     <section id="compare" className="py-24 px-4 md:px-6">
       <div className="max-w-[1000px] mx-auto">
         <SectionHeading
           eyebrow="Why learners switch"
-          heading="Studdy vs waiting for support."
-          sub="Studdy is not designed to replace every teacher. It helps during the moments when support is needed immediately."
+          heading={isIndia ? 'Studdy vs waiting for tuition.' : 'Studdy vs waiting for support.'}
+          sub={isIndia
+            ? "Studdy doesn't replace your teachers. It's there for every doubt that comes up between classes, the moment it comes up."
+            : 'Studdy is not designed to replace every teacher. It helps during the moments when support is needed immediately.'}
         />
 
         {/* ── Desktop table ── */}
         <div className="hidden md:block rounded-3xl overflow-hidden"
           style={{ border: '1.5px solid var(--border)' }}>
           <div className="grid grid-cols-3">
-            {['What matters', 'Traditional support', 'Studdy Lab'].map((h, i) => (
+            {['What matters', isIndia ? 'Tuition & coaching' : 'Traditional support', 'Studdy Lab'].map((h, i) => (
               <div key={i} className="px-6 py-4 text-[12px] font-black uppercase tracking-wide"
                 style={{
                   color: i === 2 ? 'var(--g3)' : 'var(--soft)',
@@ -34,7 +49,7 @@ export default function Comparison() {
                 {h}
               </div>
             ))}
-            {rows.map((r, i) => (
+            {list.map((r, i) => (
               <>
                 <div key={`t${i}`} className="px-6 py-4 font-bold text-[14px]"
                   style={{ borderTop: '1px solid var(--border)', background: 'var(--dim)' }}>
@@ -55,7 +70,7 @@ export default function Comparison() {
 
         {/* ── Mobile cards ── */}
         <div className="md:hidden flex flex-col gap-4">
-          {rows.map((r, i) => (
+          {list.map((r, i) => (
             <div key={i} className="rounded-2xl overflow-hidden"
               style={{ border: '1.5px solid var(--border)' }}>
               {/* Topic header */}
@@ -70,7 +85,7 @@ export default function Comparison() {
                   style={{ borderRight: '1px solid var(--border)', background: '#fff' }}>
                   <div className="text-[10px] font-black uppercase tracking-wide mb-1.5"
                     style={{ color: 'var(--soft)' }}>
-                    Traditional
+                    {isIndia ? 'Tuition' : 'Traditional'}
                   </div>
                   <div className="flex items-start gap-1.5 text-[13px]"
                     style={{ color: 'var(--soft)', lineHeight: 1.4 }}>

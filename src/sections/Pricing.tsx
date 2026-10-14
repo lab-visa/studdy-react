@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import SectionHeading from '../components/SectionHeading';
 import RegionPicker from '../components/RegionPicker';
-import { REGION_DATA, TRIAL_DAYS, type Region } from '../data/config';
-import { detectRegion } from '../utils/geo';
+import { REGION_DATA, TRIAL_DAYS } from '../data/config';
+import { useMarket } from '../context/MarketContext';
+import IndiaPricing from './IndiaPricing';
 import { track } from '../utils/analytics';
 import { trackEvent, getLeadId, getCampaignCode } from '../utils/tracking';
 import { buildPaymentLinkUrl } from '../utils/checkoutLink';
@@ -20,23 +21,15 @@ function getUtmSource() {
 }
 
 export default function Pricing() {
-  const [region, setRegion] = useState<Region>('us');
-  const [detectedRegion, setDetectedRegion] = useState<Region | null>(null);
+  /* Country now comes from the shared MarketContext (Oct 2026) so that
+   * switching the dropdown here also switches every other section/button
+   * on the page — India gets its own pay-first offer (IndiaPricing). */
+  const { region, setRegion, detectedRegion, isIndia } = useMarket();
   /* Which plan box is "selected" (gets the live gradient border) — you
    * can click either card to switch it, independent of which one you
    * actually start a trial on. Yearly is highlighted by default since
    * it's the recommended plan everywhere else on the site. */
   const [selectedPlan, setSelectedPlan] = useState<Plan>('yearly');
-
-  /* Detect country on mount — defaults to United States / USD if the
-   * lookup fails or the visitor is somewhere we don't have a mapping
-   * for (locked decision, Vish Aug 2026). */
-  useEffect(() => {
-    detectRegion().then(r => {
-      setRegion(r);
-      setDetectedRegion(r);
-    });
-  }, []);
 
   useEffect(() => {
     const obs = new IntersectionObserver(
@@ -90,6 +83,8 @@ export default function Pricing() {
     window.location.href = buildPaymentLinkUrl(link, { utmSource, utmCampaign, leadId });
   };
 
+  if (isIndia) return <IndiaPricing />;
+
   return (
     <section id="pricing" className="py-24 px-6">
       <div className="max-w-[1000px] mx-auto">
@@ -107,7 +102,7 @@ export default function Pricing() {
 
         {!hasStripe && (
           <p className="text-center text-[13px] mb-8 font-semibold" style={{ color: 'var(--g1)' }}>
-            {rd.flag} {rd.label} pricing is coming soon — email hello@studdylab.com to join the waitlist.
+            {rd.flag} {rd.label} pricing is coming soon — email hello@studdyai.org to join the waitlist.
           </p>
         )}
 
