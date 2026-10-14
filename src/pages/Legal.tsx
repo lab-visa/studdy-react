@@ -11,7 +11,7 @@ function LegalPage({ title, sections }: Props) {
     <div className="min-h-screen px-6 py-16 max-w-[760px] mx-auto">
       <Link to="/" className="text-[14px] font-bold mb-8 block" style={{ color: 'var(--soft)' }}>← Back to Studdy Lab</Link>
       <h1 className="font-black mb-8" style={{ fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-1px' }}>{title}</h1>
-      <p className="text-[13px] mb-8" style={{ color: 'var(--soft)' }}>Last updated: 27 August 2026</p>
+      <p className="text-[13px] mb-8" style={{ color: 'var(--soft)' }}>Last updated: 14 October 2026</p>
       {sections.map((s, i) => (
         <div key={i} className="mb-8">
           <h2 className="font-black text-[18px] mb-3">{s.heading}</h2>
@@ -32,7 +32,7 @@ export function PrivacyPolicy() {
     { heading: '6. Age requirement', body: 'Studdy Lab is intended for users aged 13 and older, consistent with the underlying tutoring platform’s own requirement. If you are under 18, a parent or guardian should review and agree to these terms on your behalf before you subscribe.' },
     { heading: '7. Your rights', body: 'You can request a copy of your data, ask us to delete it, or correct inaccuracies by contacting us on WhatsApp or by email at any time.' },
     { heading: '8. Changes to this policy', body: 'We may update this policy as the service evolves. Material changes will be reflected by an updated "last updated" date on this page.' },
-    { heading: '9. Contact', body: 'For privacy questions: hello@studdylab.com or WhatsApp support.' },
+    { heading: '9. Contact', body: 'For privacy questions: hello@studdyai.org or WhatsApp support.' },
   ]} />;
 }
 
@@ -48,15 +48,16 @@ export function TermsOfService() {
     { heading: '8. Liability', body: 'To the extent permitted by law, Studdy Lab is not liable for outcomes resulting from reliance on the service. Content is provided for educational purposes only.' },
     { heading: '9. Governing law', body: 'These terms are governed by the laws of India. This does not remove any non-waivable consumer-protection rights you may have under the law of your own country.' },
     { heading: '10. Changes to these terms', body: 'We may update these terms as the service evolves. Continued use of Studdy Lab after an update means you accept the revised terms.' },
-    { heading: '11. Contact', body: 'Questions about these terms: hello@studdylab.com or WhatsApp support.' },
+    { heading: '11. Contact', body: 'Questions about these terms: hello@studdyai.org or WhatsApp support.' },
   ]} />;
 }
 
 export function RefundPolicy() {
   return <LegalPage title="Refund Policy" sections={[
-    { heading: '7-day free trial', body: 'Nothing is charged during the 7-day trial. You can cancel before the trial ends with no charge.' },
+    { heading: 'Customers in India', body: 'Plans in India are paid upfront (Quarterly or Yearly) with no free trial and no auto-debit. If you are not happy, ask for a refund within 7 days of your payment and we will refund the full amount to your original payment method. To request it, message us on WhatsApp or email support@studdyai.org.' },
+    { heading: '7-day free trial (outside India)', body: 'Nothing is charged during the 7-day trial. You can cancel before the trial ends with no charge.' },
     { heading: 'Refund eligibility', body: 'If you are charged and have not used the service in that billing period, contact us within 7 days for a refund review.' },
-    { heading: 'How to request a refund', body: 'Message us on WhatsApp or email hello@studdylab.com. We aim to respond to all refund requests within 48 hours. Contacting us directly is always faster than disputing the charge with your bank.' },
+    { heading: 'How to request a refund', body: 'Message us on WhatsApp or email support@studdyai.org. We aim to respond to all refund requests within 48 hours. Contacting us directly is always faster than disputing the charge with your bank.' },
     { heading: 'Annual plans', body: 'Annual plan refunds are available within 14 days of payment if the service has not been substantially used.' },
   ]} />;
 }

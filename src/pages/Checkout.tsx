@@ -12,7 +12,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { REGION_DATA, type Region } from '../data/config';
-import { detectRegion } from '../utils/geo';
+import { useMarket } from '../context/MarketContext';
+import IndiaCheckout from './IndiaCheckout';
+import type { IndiaPlan } from '../data/india';
 import { track } from '../utils/analytics';
 import { trackEvent, getLeadId, getCampaignCode } from '../utils/tracking';
 import { buildPaymentLinkUrl } from '../utils/checkoutLink';
@@ -45,17 +47,15 @@ export default function Checkout() {
   const passedRegion = passedState?.region ?? null;
   const passedPlan: Plan = passedState?.plan === 'monthly' ? 'monthly' : 'yearly';
 
-  const [region,  setRegion]  = useState<Region>(passedRegion ?? 'us');
-  const [detectedRegion, setDetectedRegion] = useState<Region | null>(passedRegion);
+  /* Country comes from the shared MarketContext (Oct 2026) — detected once
+   * for the whole site, and changed by the same dropdown everywhere. */
+  const { region, setRegion, detectedRegion, isIndia, ready } = useMarket();
   const [plan,    setPlan]    = useState<Plan>(passedPlan);
+  const indiaPlan: IndiaPlan = (location.state as { plan?: string } | null)?.plan === 'quarterly' ? 'quarterly' : 'yearly';
 
-  /* Detect country on mount — but don't override an explicit choice
-   * carried over from the Pricing section. */
+  /* An explicit region carried over from the Pricing section wins. */
   useEffect(() => {
-    detectRegion().then(r => {
-      setDetectedRegion(prev => prev ?? r);
-      if (!passedRegion) setRegion(r);
-    });
+    if (passedRegion && passedRegion !== region) setRegion(passedRegion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -118,6 +118,14 @@ export default function Checkout() {
       window.location.href = buildPaymentLinkUrl(link, { utmSource, utmCampaign, leadId });
     }
   }, [hasStripe, plan, region]);
+
+  /* Don't flash the international free-trial page to an Indian visitor
+   * while the country lookup is still in flight. */
+  if (!ready && !passedRegion) {
+    return <div className="min-h-screen" style={{ background: 'var(--dim)' }} />;
+  }
+
+  if (isIndia) return <IndiaCheckout initialPlan={indiaPlan} />;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12"
@@ -219,7 +227,7 @@ export default function Checkout() {
                       {rd.flag} {rd.label} payments coming soon
                     </div>
                     <div className="text-[12px] mt-1" style={{ color: 'var(--soft)' }}>
-                      Email hello@studdylab.com to join the waitlist.
+                      Email hello@studdyai.org to join the waitlist.
                     </div>
                   </div>
                 )}

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import Home from './pages/Home';
 import { trackEvent } from './utils/tracking';
 import { captureAttributionTouch } from './utils/attribution';
+import { MarketProvider } from './context/MarketContext';
 
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
 const Checkout       = lazy(() => import('./pages/Checkout'));
@@ -166,7 +167,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <ErrorBoundary>
-        <AppRoutes />
+        <MarketProvider>
+          <AppRoutes />
+        </MarketProvider>
       </ErrorBoundary>
     </BrowserRouter>
   );

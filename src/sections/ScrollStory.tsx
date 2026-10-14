@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState, useCallback, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { track } from '../utils/analytics';
+import { useCtaLabel } from '../hooks/useCtaLabel';
 
 /* ── Slide data ─────────────────────────────────────────────── */
 interface Slide {
@@ -43,6 +44,7 @@ const N = SLIDES.length;
 function Overlay({ slide, opacity, onTrial, mobile = false }: {
   slide: Slide; opacity: number; onTrial: () => void; mobile?: boolean;
 }) {
+  const ctaLabel = useCtaLabel();
   const reduced = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
   return (
     <div aria-hidden={opacity < 0.02} style={{
@@ -74,8 +76,8 @@ function Overlay({ slide, opacity, onTrial, mobile = false }: {
         {slide.description}
       </p>
       {slide.isFinal && (
-        <button className="gbtn" style={{ width: mobile ? '100%' : undefined, fontSize:'14px', padding:'11px 28px' }} onClick={onTrial} aria-label="Start free trial">
-          Start Free Trial
+        <button className="gbtn" style={{ width: mobile ? '100%' : undefined, fontSize:'14px', padding:'11px 28px' }} onClick={onTrial} aria-label={ctaLabel}>
+          {ctaLabel}
         </button>
       )}
     </div>
@@ -275,6 +277,7 @@ const MobileSlide = forwardRef<HTMLElement, {
   shouldMount: boolean;
   onTrial: () => void;
 }>(function MobileSlide({ slide, idx, isActive, shouldMount, onTrial }, ref) {
+  const ctaLabel = useCtaLabel();
   const reduced = typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion:reduce)').matches;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -376,8 +379,8 @@ const MobileSlide = forwardRef<HTMLElement, {
         {slide.isFinal && (
           <button className="gbtn"
             style={{ width: '100%', fontSize: '15px', padding: '14px' }}
-            onClick={onTrial} aria-label="Start free trial">
-            Start Free Trial
+            onClick={onTrial} aria-label={ctaLabel}>
+            {ctaLabel}
           </button>
         )}
       </div>

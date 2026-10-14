@@ -13,6 +13,9 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Play, BookOpen, Zap, MessageSquare, X } from 'lucide-react';
 import { track } from '../utils/analytics';
+import { useCtaLabel } from '../hooks/useCtaLabel';
+import { useMarket } from '../context/MarketContext';
+import { INDIA_REFUND_DAYS } from '../data/india';
 gsap.registerPlugin(ScrollTrigger);
 
 /* ── Hero laptop loop — direct Bunny MP4 ───────────────────────── */
@@ -324,6 +327,8 @@ export default function Hero() {
     return () => window.removeEventListener('mousemove', h);
   }, []);
 
+  const ctaLabel = useCtaLabel();
+  const { isIndia } = useMarket();
   const handleTrial = useCallback(() => { track('checkout_started'); navigate('/checkout'); }, [navigate]);
   const handleDemo  = useCallback(() => { track('full_demo_open');   setDemoOpen(true);    }, []);
   const closeDemo   = useCallback(() => setDemoOpen(false), []);
@@ -361,21 +366,28 @@ export default function Hero() {
 
           <div ref={copyRef} style={{ maxWidth: '760px', marginBottom: '26px' }}>
             <div className="eyebrow mb-5" style={{ display: 'inline-flex' }}>
-              Learning that finally clicks.
+              {isIndia ? 'School · Entrance exams · College · Career' : 'Learning that finally clicks.'}
             </div>
             <h1 className="font-black leading-[1.06]"
               style={{ fontSize: 'clamp(34px,5.5vw,62px)', letterSpacing: '-2px', color: 'var(--ink)', marginBottom: '18px' }}>
-              Stop memorising.{' '}
-              <span className="grad-text">Start understanding.</span>
+              {isIndia ? (
+                <>Every doubt, every subject.{' '}
+                <span className="grad-text">Explained till it clicks.</span></>
+              ) : (
+                <>Stop memorising.{' '}
+                <span className="grad-text">Start understanding.</span></>
+              )}
             </h1>
-            <p style={{ fontSize: 'clamp(15px,1.6vw,18px)', color: 'var(--soft)', lineHeight: 1.65, maxWidth: '560px', margin: '0 auto' }}>
-              Ask anything. Learn through live visual explanations. Interrupt anytime to ask follow-up questions until it finally makes sense.
+            <p style={{ fontSize: 'clamp(15px,1.6vw,18px)', color: 'var(--soft)', lineHeight: 1.65, maxWidth: isIndia ? '640px' : '560px', margin: '0 auto' }}>
+              {isIndia
+                ? 'Your personal AI tutor, awake at 11 pm when nobody else is. Ask by voice, text or a photo of the question — from Class 1 homework to JEE, NEET and CUET prep, college semesters and new skills — and watch Studdy solve it step by step on a live whiteboard. CBSE, ICSE, IB and every State Board.'
+                : 'Ask anything. Learn through live visual explanations. Interrupt anytime to ask follow-up questions until it finally makes sense.'}
             </p>
           </div>
 
           <div ref={ctaRef} className="flex flex-col sm:flex-row gap-3 items-center justify-center" style={{ marginBottom: '36px' }}>
-            <button className="gbtn text-[15px] px-8 py-4" onClick={handleTrial} aria-label="Start free trial">
-              Start Free Trial
+            <button className="gbtn text-[15px] px-8 py-4" onClick={handleTrial} aria-label={ctaLabel}>
+              {ctaLabel}
             </button>
             <button className="gost text-[15px] px-7 py-4" onClick={handleDemo} aria-label="Watch full demo"
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -420,7 +432,9 @@ export default function Hero() {
 
         <div className="relative z-10 border-t px-6 py-3 flex flex-wrap justify-center gap-6"
           style={{ borderColor: 'var(--border)', color: 'var(--soft)', fontSize: '12.5px', fontWeight: 600 }}>
-          {['$0 due today', 'Reminder before renewal', 'Cancel anytime'].map(t => (
+          {(isIndia
+            ? [`${INDIA_REFUND_DAYS}-day full refund`, 'Unlimited doubts, 24×7', 'All boards & entrance exams']
+            : ['$0 due today', 'Reminder before renewal', 'Cancel anytime']).map(t => (
             <span key={t} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ color: 'var(--g4)' }}>✓</span> {t}
             </span>

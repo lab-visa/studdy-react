@@ -11,8 +11,11 @@ import Pricing from '../sections/Pricing';
 import FAQ from '../sections/FAQ';
 import FinalCTA from '../sections/FinalCTA';
 import Footer from '../sections/Footer';
+import IndiaCoverage from '../sections/IndiaCoverage';
+import { useMarket } from '../context/MarketContext';
 
 export default function Home() {
+  const { isIndia } = useMarket();
   return (
     <>
       <Header />
@@ -26,6 +29,7 @@ export default function Home() {
        * destination, outside this <main>. */}
       <main className="pb-24 md:pb-0" style={{ paddingTop: '72px' }}>
         <Hero />
+        {isIndia && <IndiaCoverage />}
         <EmotionalHook />
         <ProductProof />
         <AskStuddy />

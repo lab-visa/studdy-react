@@ -26,6 +26,9 @@ import {
   type FollowUp,
 } from '../data/lessonData';
 import { track } from '../utils/analytics';
+import { useCtaLabel } from '../hooks/useCtaLabel';
+import { useMarket } from '../context/MarketContext';
+import { INDIA_REFUND_DAYS } from '../data/india';
 
 /* ── FIX 6: Category-based icon gradients ───────────────────────── */
 const CAT_GRADIENTS: Record<string, string> = {
@@ -96,9 +99,12 @@ function ContextPanel({ cat, topic, onCta }: {
   cat: LessonCategory; topic: LessonTopic | null; onCta: () => void;
 }) {
   const ctx = cat.context;
+  const ctaLabel = useCtaLabel();
+  const { isIndia } = useMarket();
   const heading = topic ? topic.question : ctx.heading;
   const bullets: [string, string, string] = topic
-    ? ['Visual whiteboard explanation', 'Ask follow-up questions', 'Start free — no card needed']
+    ? ['Visual whiteboard explanation', 'Ask follow-up questions',
+       isIndia ? `${INDIA_REFUND_DAYS}-day full refund` : 'Start free — no card needed']
     : ctx.bullets;
 
   return (
@@ -127,8 +133,8 @@ function ContextPanel({ cat, topic, onCta }: {
         ))}
       </ul>
       <button className="gbtn" style={{ fontSize: '13.5px', padding: '10px 20px' }}
-        onClick={onCta} aria-label={`Start free trial — ${ctx.cta}`}>
-        {topic ? 'Start Free Trial' : ctx.cta}
+        onClick={onCta} aria-label={`${ctaLabel} — ${ctx.cta}`}>
+        {topic ? ctaLabel : ctx.cta}
       </button>
     </div>
   );
@@ -437,6 +443,7 @@ function LessonStage({
   handleReset: () => void;
   navigate: (path: string) => void;
 }) {
+  const ctaLabel = useCtaLabel();
   const showIdle  = lessonState === 'idle';
   const showStage = lessonState !== 'idle';
 
@@ -634,8 +641,8 @@ function LessonStage({
                   </button>
                   <button className="gbtn" style={{ fontSize: '13px', padding: '9px 16px' }}
                     onClick={() => { track('checkout_started'); navigate('/checkout'); }}
-                    aria-label="Start free trial">
-                    Start Free Trial
+                    aria-label={ctaLabel}>
+                    {ctaLabel}
                   </button>
                 </div>
               </div>
