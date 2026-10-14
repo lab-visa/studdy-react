@@ -53,7 +53,7 @@ const INDIA_FAQ_GROUPS: typeof FAQ_GROUPS = [
     items: [
       { q:'How do I ask a question?', a:'Type it, speak it, or upload a photo of the question from your book or notebook. Studdy explains it on a live whiteboard, and you can interrupt anytime with a follow-up.' },
       { q:'Which device do I need?', a:'Studdy works best on a laptop or a tablet (11-inch screen or larger). This website works on any phone, but the full whiteboard tutor needs a bigger screen.' },
-      { q:'How do I get my login after paying?', a:'Right after payment you get your personal dashboard link with your login details and simple steps to start. We also send it to you on WhatsApp and email.' },
+      { q:'How do I get my login after paying?', a:'Right after payment you land on your personal dashboard with your login details and simple steps to start. Bookmark that page or save it on WhatsApp: it is your permanent link. Lost it? Message us and we will resend it.' },
       { q:'Can the whole family use it?', a:"Your plan is for one learner. Need it for more than one child? Message us on WhatsApp and we'll help." },
     ],
   },

@@ -55,7 +55,7 @@ const MAX_ALLOCATION_ATTEMPTS = 5;
  * finds the next eligible account (or discovers none are left). A
  * customer only ever receives an account object here if the conditional
  * update actually affected a row — never assumed. */
-async function assignStuddyAccount(supabase) {
+export async function assignStuddyAccount(supabase) {
   for (let attempt = 0; attempt < MAX_ALLOCATION_ATTEMPTS; attempt++) {
     const { data: groups, error } = await supabase
       .from('studdy_accounts')

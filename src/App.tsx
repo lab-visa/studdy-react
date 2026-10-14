@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import Home from './pages/Home';
 import { trackEvent } from './utils/tracking';
 import { captureAttributionTouch } from './utils/attribution';
+import { captureRefCode } from './utils/ref';
 import { MarketProvider } from './context/MarketContext';
 
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
@@ -135,6 +136,7 @@ function AppRoutes() {
       /* CRM-3A — purely local (localStorage) first/latest-touch capture,
        * never a network call by itself. See src/utils/attribution.ts. */
       captureAttributionTouch();
+      captureRefCode();
     }
   }, []);
 

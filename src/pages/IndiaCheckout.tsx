@@ -3,19 +3,20 @@
  *
  * Pay first, Quarterly or Yearly, 7-day full refund, no free trial.
  *
- * INTERIM (Oct 2026): online payment via Cashfree is the next build step.
- * Until it is live, "Continue" opens WhatsApp with the chosen plan already
- * typed in, and the team replies with a Cashfree payment link. When the
- * Cashfree checkout ships, only handleContinue() below changes — the page,
- * plans and wording stay the same.
+ * Flow: the buyer enters name, email and mobile → /api/cashfree/create-order
+ * saves the order and creates it at Cashfree → Cashfree's own payment page
+ * opens (UPI, cards, netbanking) → after paying, Cashfree sends them to
+ * /dashboard?order_id=..., which confirms the payment with Cashfree and
+ * shows their login.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RegionPicker from '../components/RegionPicker';
 import { useMarket } from '../context/MarketContext';
 import { track } from '../utils/analytics';
-import { trackEvent } from '../utils/tracking';
-import { SUPPORT_WHATSAPP_NUMBER } from '../data/config';
+import { trackEvent, getLeadId, getCampaignCode } from '../utils/tracking';
+import { getRefCode } from '../utils/ref';
+import { openCashfreeCheckout } from '../utils/cashfree';
 import {
   INDIA_PLANS, INDIA_REFUND_DAYS, INDIA_YEARLY_SAVING, INDIA_YEARLY_SAVING_PCT, type IndiaPlan,
 } from '../data/india';
@@ -24,14 +25,49 @@ export default function IndiaCheckout({ initialPlan }: { initialPlan: IndiaPlan 
   const navigate = useNavigate();
   const { region, setRegion, detectedRegion } = useMarket();
   const [plan, setPlan] = useState<IndiaPlan>(initialPlan);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const p = INDIA_PLANS[plan];
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    setError('');
+    if (name.trim().length < 2) return setError('Please enter your name.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) return setError('Please enter a valid email address.');
+    const digits = phone.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
+    if (!/^[6-9]\d{9}$/.test(digits)) return setError('Please enter a valid 10-digit mobile number.');
+
+    setBusy(true);
     track('checkout_started', { region: 'in', plan });
     trackEvent('trial_clicked');
-    const msg = `Hi! I'd like to get started with Studdy Lab — ${p.label} plan (${p.display} ${p.period}). Please send me the payment link.`;
-    window.open(`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+    try {
+      const res = await fetch('/api/cashfree/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan, name: name.trim(), email: email.trim(), phone: digits,
+          leadId: getLeadId(), campaign: getCampaignCode(), ref: getRefCode(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.paymentSessionId) throw new Error(data.error || 'Could not start payment. Please try again.');
+      await openCashfreeCheckout(data.paymentSessionId, data.mode === 'production' ? 'production' : 'sandbox');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start payment. Please try again.');
+      setBusy(false);
+    }
   };
+
+  const field = (label: string, value: string, set: (v: string) => void, props: Record<string, string>) => (
+    <label className="block mb-3">
+      <span className="block text-[11px] font-black uppercase tracking-wide mb-1.5" style={{ color: 'var(--soft)' }}>{label}</span>
+      <input value={value} onChange={e => set(e.target.value)} {...props}
+        className="w-full rounded-xl px-4 py-3 text-[15px] outline-none"
+        style={{ border: '1.5px solid var(--border)', background: '#fff', color: 'var(--ink)' }} />
+    </label>
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: 'var(--dim)' }}>
@@ -101,11 +137,25 @@ export default function IndiaCheckout({ initialPlan }: { initialPlan: IndiaPlan 
               </div>
             </div>
 
-            <button className="gbtn w-full text-[15px] py-4 mb-3" onClick={handleContinue}>
-              Get Started · {p.display}
+            {/* Buyer details — Cashfree needs them, and the mobile number is how
+              * we reach the family for onboarding and the 7-day refund. */}
+            {field('Parent / student name', name, setName, { autoComplete: 'name', placeholder: 'Your full name' })}
+            {field('Email', email, setEmail, { type: 'email', autoComplete: 'email', placeholder: 'you@example.com' })}
+            {field('Mobile (WhatsApp)', phone, setPhone, { type: 'tel', autoComplete: 'tel', inputMode: 'numeric', placeholder: '98765 43210' })}
+
+            {error && (
+              <div className="rounded-xl p-3 mb-3 text-[13px]"
+                style={{ background: 'rgba(239,68,68,.06)', color: '#dc2626', border: '1px solid rgba(239,68,68,.2)' }}>
+                {error}
+              </div>
+            )}
+
+            <button className="gbtn w-full text-[15px] py-4 mb-3 mt-2" onClick={handleContinue} disabled={busy}
+              style={{ opacity: busy ? 0.6 : 1 }}>
+              {busy ? 'Opening secure payment…' : `Pay ${p.display} & get started`}
             </button>
             <p className="text-center text-[12px] mb-4" style={{ color: 'var(--soft)' }}>
-              We'll send your secure payment link on WhatsApp right away. Your login arrives as soon as you pay.
+              Secure payment by Cashfree. Your login appears on screen the moment you pay.
             </p>
 
             <div className="flex justify-center gap-4 flex-wrap">
