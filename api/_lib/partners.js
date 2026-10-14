@@ -115,3 +115,60 @@ export function makePartnerCode(name) {
 export function newDashboardToken() {
   return randomBytes(24).toString('hex'); // 48 hex chars
 }
+
+
+/* ---------- PIN, bank details, payouts (Oct 2026, round 2) ---------- */
+
+export const PIN_RE = /^[0-9]{6}$/;
+export const PIN_LOCK_THRESHOLD = 5;
+export const PIN_LOCK_MINUTES = 15;
+export const DEFAULT_TDS_PERCENT = 10;
+
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const ACCOUNT_RE = /^[0-9]{9,18}$/;
+const UPI_RE = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/;
+const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+
+/**
+ * Validates the bank form. Returns { error } or { value } with cleaned
+ * fields ready to save. Account number + IFSC + holder name + bank name
+ * are required; UPI is optional; PAN is required (needed for TDS).
+ */
+export function cleanBankDetails(b = {}) {
+  const str = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const holder = str(b.accountName, 100);
+  const number = str(b.accountNumber, 30).replace(/\s/g, '');
+  const ifsc = str(b.ifsc, 20).toUpperCase();
+  const bank = str(b.bankName, 100);
+  const upi = str(b.upi, 100);
+  const pan = str(b.pan, 10).toUpperCase();
+  if (holder.length < 2) return { error: 'Enter the account holder name as it appears in the bank.' };
+  if (!ACCOUNT_RE.test(number)) return { error: 'Account number should be 9 to 18 digits.' };
+  if (b.accountNumberConfirm !== undefined && str(b.accountNumberConfirm, 30).replace(/\s/g, '') !== number) {
+    return { error: 'The two account numbers do not match.' };
+  }
+  if (!IFSC_RE.test(ifsc)) return { error: 'IFSC code looks wrong (11 characters, e.g. SBIN0001234).' };
+  if (bank.length < 2) return { error: 'Enter your bank name.' };
+  if (upi && !UPI_RE.test(upi)) return { error: 'UPI ID looks wrong (e.g. name@okaxis).' };
+  if (!PAN_RE.test(pan)) return { error: 'PAN looks wrong (e.g. ABCDE1234F). It is needed for TDS.' };
+  return { value: { bank_account_name: holder, bank_account_number: number, bank_ifsc: ifsc, bank_name: bank, payout_upi: upi || null, pan } };
+}
+
+export const maskAccount = (n) => (n ? `••••${String(n).slice(-4)}` : null);
+
+/** Gross → TDS (rounded to the rupee) → net. */
+export function tdsSplit(gross, tdsPercent = DEFAULT_TDS_PERCENT) {
+  const g = Math.max(0, Math.round(Number(gross) || 0));
+  const pct = Number(tdsPercent);
+  const tds = Math.round((g * pct) / 100);
+  return { gross: g, tds_percent: pct, tds, net: g - tds };
+}
+
+/** Attach payout rows to the months list (by sales month). */
+export function withPayouts(months, payouts = []) {
+  const byMonth = new Map(payouts.map((p) => [p.month, p]));
+  return months.map((m) => {
+    const p = byMonth.get(m.month);
+    return p ? { ...m, payout: { gross: p.gross, tds_percent: Number(p.tds_percent), tds: p.tds, net: p.net, paid_on: p.paid_on, reference: p.reference } } : { ...m, payout: null };
+  });
+}
