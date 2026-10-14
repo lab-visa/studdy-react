@@ -2,17 +2,20 @@
  * Sales partner programme — commission rules and calculations.
  *
  * Rules (Oct 2026, Vish):
- *   - Commission per sale: Yearly ₹2,500, Quarterly ₹1,500.
+ *   - Commission per sale: Yearly ₹2,500, Quarterly ₹700.
  *   - Monthly bonus (per calendar month, India time, by payment date):
  *       10+ sales → +₹5,000;  20+ sales → +₹10,000 more (₹15,000 total).
  *   - A sale becomes PAYABLE once its 7-day refund window has passed.
  *     A refunded sale earns nothing.
- *   - Payouts weekly; TDS deducted as per law (handled when paying).
+ *   - Payouts on the 10th of every month, for the previous month's
+ *     sales (all of which are past the refund window by then). TDS is
+ *     deducted as per law when paying.
  * Change the numbers here and every page and statement follows.
  */
 import { randomBytes } from 'node:crypto';
 
-export const COMMISSION = { yearly: 2500, quarterly: 1500 };
+export const COMMISSION = { yearly: 2500, quarterly: 700 };
+export const PAYOUT_DAY = 10;
 export const MONTHLY_BONUS = [
   { sales: 10, amount: 5000 },
   { sales: 20, amount: 10000 },
@@ -52,6 +55,7 @@ export function computeEarnings(orders, now = new Date()) {
         commission: refunded ? 0 : COMMISSION[o.plan] ?? 0,
         state,
         clears_at: clearsAt.toISOString(),
+        payout_on: payoutDate(o.paid_at),
       };
     });
 
@@ -82,6 +86,14 @@ export function computeEarnings(orders, now = new Date()) {
     { sales: 0, earned: 0, payable: 0, pending: 0, bonus: 0 }
   );
   return { sales, months, totals };
+}
+
+/** Sales of month M are paid on the 10th of month M+1 (India dates). */
+export function payoutDate(paidAt) {
+  const [y, m] = istMonth(paidAt).split('-').map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  return `${ny}-${String(nm).padStart(2, '0')}-${String(PAYOUT_DAY).padStart(2, '0')}`;
 }
 
 /** Partners see who bought, but not full personal details: "Asha P. · ••••3210". */

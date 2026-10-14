@@ -1,41 +1,45 @@
 /**
  * /partners — public page for the India sales partner programme:
- * what the role is, how much you earn, and the application form.
+ * what the role is, how much you earn, and instant registration (name,
+ * WhatsApp, email → personal link straight away).
  * Commission numbers must match api/_lib/partners.js.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { IndianRupee, Clock, Users, Smartphone, type LucideIcon } from 'lucide-react';
+import { IndianRupee, Clock, Users, Smartphone, Copy, Check, type LucideIcon } from 'lucide-react';
 import { SUPPORT_WHATSAPP, HR_EMAIL } from '../data/config';
 
 const PERKS: { Icon: LucideIcon; title: string; line: string }[] = [
-  { Icon: IndianRupee, title: '₹2,500 per yearly sale', line: '₹1,500 per quarterly sale. Paid on every sale, from your very first.' },
+  { Icon: IndianRupee, title: '₹2,500 per yearly sale', line: '₹700 per quarterly sale. Paid on every sale, from your very first.' },
   { Icon: Users, title: 'Monthly bonus', line: '+₹5,000 when you make 10 sales in a month, +₹10,000 more at 20.' },
-  { Icon: Clock, title: 'Paid every week', line: 'Commission is paid weekly once the customer’s 7-day refund window has passed.' },
+  { Icon: Clock, title: 'Paid on the 10th', line: 'On the 10th of every month we pay you for all of last month’s sales.' },
   { Icon: Smartphone, title: 'Work from your phone', line: 'Part-time, any city. You get your own link, and a page to track every sale and rupee.' },
 ];
 
 const STEPS = [
-  'Apply below. We’ll call you on WhatsApp within 2 working days.',
-  'A short call: we show you the product and how to explain it to parents.',
-  'You get your personal link and earnings page.',
+  'Register below with your name, WhatsApp number and email.',
+  'You instantly get your personal link and your private earnings page.',
   'Share your link with parents and students. Every purchase through it is credited to you automatically.',
+  'On the 10th of every month, we pay you for last month’s sales.',
 ];
 
 const FAQ = [
   { q: 'Is there any fee to join?', a: 'No. Joining is completely free, and we will never ask you for money.' },
   { q: 'Who do I sell to?', a: 'Parents of school students, and students preparing for board exams, JEE, NEET or college. Tutors and teachers do especially well.' },
   { q: 'How do you know a sale is mine?', a: 'Every parent who buys through your personal link is credited to you automatically. You can see each sale on your earnings page.' },
-  { q: 'What if a customer asks for a refund?', a: 'Customers can ask for a full refund within 7 days. Commission for a refunded sale is not paid, which is why payouts happen after the 7 days.' },
-  { q: 'Is TDS deducted?', a: 'Yes, as required by Indian tax law. We will ask for your PAN when you are approved, and send you a statement.' },
-  { q: 'Do I have to meet a target?', a: 'To stay active, make your first 2 sales within your first week. After that, earn as much as you like, at your own pace.' },
+  { q: 'What if a customer asks for a refund?', a: 'Customers can ask for a full refund within 7 days. Commission is not paid on a refunded sale. Because payouts happen on the 10th of the next month, every sale is already past its refund window by then.' },
+  { q: 'Is TDS deducted?', a: 'Yes, as required by Indian tax law. We will ask for your PAN and UPI ID before your first payout, and send you a statement.' },
+  { q: 'Do I have to meet a target?', a: 'No. Earn as much as you like, at your own pace.' },
+  { q: 'I lost my links. What do I do?', a: 'Message us on WhatsApp from your registered number and we will resend them.' },
 ];
 
 export default function Partners() {
-  const [form, setForm] = useState({ name: '', phone: '', email: '', city: '', occupation: 'tutor', experience: '', whyJoin: '', consent: false });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', consent: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<{ code: string; salesLink: string; earningsLink: string } | null>(null);
+  const [copied, setCopied] = useState('');
+  const copy = (k: string, v: string) => { navigator.clipboard.writeText(v); setCopied(k); setTimeout(() => setCopied(''), 2000); };
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
 
@@ -50,10 +54,10 @@ export default function Partners() {
         body: JSON.stringify(form),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not submit. Please try again.');
-      setDone(true);
+      if (!res.ok) throw new Error(data.error || 'Could not register. Please try again.');
+      setDone(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not submit. Please try again.');
+      setError(err instanceof Error ? err.message : 'Could not register. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -67,7 +71,7 @@ export default function Partners() {
     <div style={{ background: 'var(--dim)' }} className="min-h-screen">
       <header className="bg-white h-16 flex items-center justify-between px-6" style={{ borderBottom: '1px solid var(--border)' }}>
         <Link to="/" className="font-black text-[20px]"><span className="grad-text">studdy</span></Link>
-        <a href="#apply" className="gbtn text-[13.5px] px-5 py-2.5">Apply now</a>
+        <a href="#apply" className="gbtn text-[13.5px] px-5 py-2.5">Join now</a>
       </header>
 
       <section className="px-6 pt-14 pb-10 text-center" style={{ background: 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)' }}>
@@ -124,46 +128,46 @@ export default function Partners() {
 
         <div id="apply" className="bg-white rounded-3xl p-7 sm:p-9 mb-14" style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.06)' }}>
           {done ? (
-            <div className="text-center py-6">
+            <div className="py-2">
               <div className="w-14 h-14 rounded-full flex items-center justify-center text-white text-[24px] mx-auto mb-4" style={{ background: 'var(--grad)' }}>✓</div>
-              <h2 className="font-black text-[22px] mb-2">Application received</h2>
-              <p className="text-[14.5px]" style={{ color: 'var(--soft)' }}>We’ll contact you on WhatsApp within 2 working days. Questions meanwhile? <a className="underline" href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer">Message us</a>.</p>
+              <h2 className="font-black text-[22px] mb-1 text-center">You’re in, {form.name.split(' ')[0]}!</h2>
+              <p className="text-[14px] mb-6 text-center" style={{ color: 'var(--soft)' }}>Save both links now. Take a screenshot or bookmark this page.</p>
+              {[
+                ['sales', 'Your personal link: share this', done.salesLink],
+                ['earn', 'Your earnings page: keep this private', done.earningsLink],
+              ].map(([k, l, v]) => (
+                <div key={k} className="rounded-xl p-4 mb-3" style={{ background: 'var(--dim)', border: '1px solid var(--border)' }}>
+                  <div className="text-[11px] font-black uppercase tracking-wide mb-1.5" style={{ color: 'var(--soft)' }}>{l}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <code className="text-[14px] font-bold break-all flex-1">{v}</code>
+                    <button type="button" className="gbtn text-[13px] px-4 py-2 flex items-center gap-1" onClick={() => copy(k, v)}>
+                      {copied === k ? <Check size={13} /> : <Copy size={13} />} {copied === k ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <a href={done.earningsLink} className="gbtn w-full text-[15px] py-4 mt-2 flex justify-center">Open my earnings page</a>
+              <p className="text-[12.5px] mt-3 text-center" style={{ color: 'var(--soft)' }}>Lost them later? <a className="underline" href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer">WhatsApp us</a> from this number.</p>
             </div>
           ) : (
             <form onSubmit={submit}>
-              <h2 className="font-black text-[22px] mb-1">Apply to become a partner</h2>
-              <p className="text-[13.5px] mb-6" style={{ color: 'var(--soft)' }}>Takes 2 minutes. Free to join.</p>
+              <h2 className="font-black text-[22px] mb-1">Become a partner</h2>
+              <p className="text-[13.5px] mb-6" style={{ color: 'var(--soft)' }}>Takes 30 seconds. Free to join. Your link appears straight away.</p>
               <div className="grid sm:grid-cols-2 gap-4">
-                <label><span className={label} style={{ color: 'var(--soft)' }}>Full name *</span>
+                <label className="sm:col-span-2"><span className={label} style={{ color: 'var(--soft)' }}>Full name *</span>
                   <input className={input} style={inputStyle} value={form.name} onChange={set('name')} autoComplete="name" required /></label>
                 <label><span className={label} style={{ color: 'var(--soft)' }}>WhatsApp number *</span>
                   <input className={input} style={inputStyle} value={form.phone} onChange={set('phone')} type="tel" inputMode="numeric" autoComplete="tel" placeholder="98765 43210" required /></label>
                 <label><span className={label} style={{ color: 'var(--soft)' }}>Email *</span>
                   <input className={input} style={inputStyle} value={form.email} onChange={set('email')} type="email" autoComplete="email" required /></label>
-                <label><span className={label} style={{ color: 'var(--soft)' }}>City</span>
-                  <input className={input} style={inputStyle} value={form.city} onChange={set('city')} autoComplete="address-level2" /></label>
-                <label className="sm:col-span-2"><span className={label} style={{ color: 'var(--soft)' }}>What do you do now?</span>
-                  <select className={input} style={inputStyle} value={form.occupation} onChange={set('occupation')}>
-                    <option value="tutor">Tutor / coaching</option>
-                    <option value="teacher">School teacher</option>
-                    <option value="student">College student</option>
-                    <option value="homemaker">Homemaker</option>
-                    <option value="sales">Sales / edtech sales</option>
-                    <option value="working">Working professional</option>
-                    <option value="other">Other</option>
-                  </select></label>
-                <label className="sm:col-span-2"><span className={label} style={{ color: 'var(--soft)' }}>Any sales or teaching experience?</span>
-                  <textarea className={input} style={inputStyle} rows={3} value={form.experience} onChange={set('experience')} /></label>
-                <label className="sm:col-span-2"><span className={label} style={{ color: 'var(--soft)' }}>Who could you share Studdy Lab with?</span>
-                  <textarea className={input} style={inputStyle} rows={3} value={form.whyJoin} onChange={set('whyJoin')} placeholder="e.g. parents of my tuition students, my school's parent group…" /></label>
               </div>
               <label className="flex gap-2 items-start mt-4 text-[13px]" style={{ color: 'var(--soft)' }}>
                 <input type="checkbox" checked={form.consent} onChange={set('consent')} className="mt-1" />
-                <span>I agree to be contacted by Studdy Lab on WhatsApp, phone and email about my application.</span>
+                <span>I agree to the partner terms on this page and to be contacted by Studdy Lab on WhatsApp, phone and email.</span>
               </label>
               {error && <div className="rounded-xl p-3 mt-4 text-[13px]" style={{ background: 'rgba(239,68,68,.06)', color: '#dc2626', border: '1px solid rgba(239,68,68,.2)' }}>{error}</div>}
               <button className="gbtn w-full text-[15px] py-4 mt-5" disabled={busy} style={{ opacity: busy ? 0.6 : 1 }}>
-                {busy ? 'Submitting…' : 'Submit application'}
+                {busy ? 'Creating your link…' : 'Get my partner link'}
               </button>
             </form>
           )}

@@ -16,7 +16,7 @@ import apply from '../../api/partners/apply.js';
 import me from '../../api/partners/me.js';
 import adminPartners from '../../api/admin/partners.js';
 import * as adminAuth from '../../api/_lib/admin-auth.js';
-import { computeEarnings, bonusFor, maskCustomer, makePartnerCode, istMonth } from '../../api/_lib/partners.js';
+import { computeEarnings, bonusFor, maskCustomer, makePartnerCode, istMonth, payoutDate } from '../../api/_lib/partners.js';
 
 let pool;
 let supabase;
@@ -42,7 +42,7 @@ test('bonus: 0 below 10, ₹5,000 at 10, ₹15,000 at 20', () => {
   assert.equal(bonusFor(20), 15000);
 });
 
-test('commission: yearly 2,500, quarterly 1,500, refunded 0; 7-day window decides payable vs pending', () => {
+test('commission: yearly 2,500, quarterly 700, refunded 0; 7-day window decides payable vs pending', () => {
   const e = computeEarnings([
     order({ paid_at: new Date(NOW - 10 * DAY).toISOString() }),                       // payable
     order({ plan: 'quarterly', amount: 7999, paid_at: new Date(NOW - 2 * DAY).toISOString() }), // in window
@@ -50,8 +50,8 @@ test('commission: yearly 2,500, quarterly 1,500, refunded 0; 7-day window decide
   ], NOW);
   assert.equal(e.totals.sales, 2);
   assert.equal(e.totals.payable, 2500);
-  assert.equal(e.totals.pending, 1500);
-  assert.equal(e.totals.earned, 4000);
+  assert.equal(e.totals.pending, 700);
+  assert.equal(e.totals.earned, 3200);
   assert.deepEqual(e.sales.map(s => s.state).sort(), ['in_refund_window', 'payable', 'refunded']);
 });
 
@@ -68,6 +68,12 @@ test('month is decided in India time (31 Oct 23:00 IST counts as October)', () =
   assert.equal(istMonth('2026-10-31T18:45:00Z'), '2026-11'); // 00:15 IST, 1 Nov
 });
 
+test('payout is the 10th of the following month (India dates, Dec → Jan)', () => {
+  assert.equal(payoutDate('2026-10-05T06:00:00Z'), '2026-11-10');
+  assert.equal(payoutDate('2026-10-31T17:30:00Z'), '2026-11-10'); // 23:00 IST 31 Oct
+  assert.equal(payoutDate('2026-12-20T06:00:00Z'), '2027-01-10');
+});
+
 test('partners only ever see masked customer details', () => {
   assert.equal(maskCustomer('Asha Patil', '9876543210'), 'Asha P. · ••••3210');
   assert.equal(maskCustomer('', ''), 'Customer');
@@ -80,7 +86,7 @@ test('partner codes are first name + 3 digits', () => {
 
 /* ---------- application form ---------- */
 
-const validApp = { name: 'Priya Nair', phone: '+91 91234 56789', email: 'priya@example.com', city: 'Pune', occupation: 'tutor', consent: true };
+const validApp = { name: 'Priya Nair', phone: '+91 91234 56789', email: 'priya@example.com', consent: true };
 
 test('apply: validates input', async () => {
   for (const body of [{ ...validApp, name: '' }, { ...validApp, phone: '123' }, { ...validApp, email: 'x' }, { ...validApp, consent: false }]) {
@@ -90,17 +96,39 @@ test('apply: validates input', async () => {
   }
 });
 
-test('apply: saves an application once per mobile number', async () => {
+let regCode;
+let regToken;
+
+test('register: instantly active, returns a unique sales link + private earnings link', async () => {
   const r1 = fakeRes();
   await apply(fakeReq({ method: 'POST', body: validApp }), r1, deps);
-  assert.equal(r1.statusCode, 200);
+  assert.equal(r1.statusCode, 200, JSON.stringify(r1._json));
+  assert.match(r1._json.code, /^PRIYA\d{3}$/);
+  assert.equal(r1._json.salesLink, `https://studdylab.com/?ref=${r1._json.code}`);
+  assert.match(r1._json.earningsLink, /^https:\/\/studdylab\.com\/partner\?t=[a-f0-9]{48}$/);
+  regCode = r1._json.code;
+  regToken = r1._json.earningsLink.split('t=')[1];
+
+  const { rows } = await pool.query(`SELECT status, code, dashboard_token FROM partners WHERE phone='9123456789'`);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, 'approved');
+  assert.equal(rows[0].code, regCode);
+  assert.equal(rows[0].dashboard_token, regToken);
+
+  /* Earnings page works immediately. */
+  const page = fakeRes();
+  await me(fakeReq({ query: { t: regToken } }), page, deps);
+  assert.equal(page.statusCode, 200);
+  assert.equal(page._json.rules.payoutDay, 10);
+  assert.equal(page._json.rules.commission.quarterly, 700);
+});
+
+test('register: same mobile twice → 409 and the existing links are NOT revealed', async () => {
   const r2 = fakeRes();
   await apply(fakeReq({ method: 'POST', body: { ...validApp, email: 'other@example.com' } }), r2, deps);
   assert.equal(r2.statusCode, 409);
-  const { rows } = await pool.query(`SELECT status, phone, code FROM partners WHERE phone='9123456789'`);
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].status, 'applied');
-  assert.equal(rows[0].code, null);
+  assert.equal(JSON.stringify(r2._json).includes(regToken), false);
+  assert.equal(r2._json.code, undefined);
 });
 
 /* ---------- admin approve + partner page ---------- */
@@ -122,23 +150,19 @@ test('admin endpoints refuse requests without an admin session', async () => {
   assert.equal(r2.statusCode, 401);
 });
 
-test('approve gives a code + private link; partner page shows only their own sales, masked', async () => {
+test('pause/resume never changes the code or link; partner page shows only their own sales, masked', async () => {
   const headers = await adminCookie();
   const { rows: [p] } = await pool.query(`SELECT id FROM partners WHERE phone='9123456789'`);
+  const code = regCode;
+  const token = regToken;
 
-  const r = fakeRes();
-  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'approve' } }), r, deps);
-  assert.equal(r.statusCode, 200, JSON.stringify(r._json));
-  const { code, dashboard_token: token, status } = r._json.partner;
-  assert.equal(status, 'approved');
-  assert.match(code, /^PRIYA\d{3}$/);
-  assert.match(token, /^[a-f0-9]{48}$/);
-
-  /* Approving again never changes the code or link. */
-  const r2 = fakeRes();
-  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'resume' } }), r2, deps);
-  assert.equal(r2._json.partner.code, code);
-  assert.equal(r2._json.partner.dashboard_token, token);
+  for (const action of ['pause', 'resume']) {
+    const r = fakeRes();
+    await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action } }), r, deps);
+    assert.equal(r.statusCode, 200, JSON.stringify(r._json));
+    assert.equal(r._json.partner.code, code);
+    assert.equal(r._json.partner.dashboard_token, token);
+  }
 
   /* Two paid sales for this partner, one for someone else, one unpaid. */
   const ins = (ref, status, daysAgo) => pool.query(

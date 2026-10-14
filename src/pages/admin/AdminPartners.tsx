@@ -1,6 +1,8 @@
 /**
- * /admin/partners — sales partner applications and approved partners.
- * Approve → the partner gets a referral code + private earnings link,
+ * /admin/partners — sales partners. Partners self-register on /partners
+ * and are active immediately (code + private earnings link); here you see
+ * their sales, add PAN/UPI for payouts on the 10th, and pause anyone.
+ * (Older 'applied' rows can still be approved.) Approve →
  * which you copy here and send them on WhatsApp.
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -23,7 +25,7 @@ export default function AdminPartners() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [partners, setPartners] = useState<Partner[] | null>(null);
-  const [filter, setFilter] = useState<'all' | 'applied' | 'approved'>('applied');
+  const [filter, setFilter] = useState<'all' | 'applied' | 'approved'>('approved');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
 
@@ -69,7 +71,7 @@ export default function AdminPartners() {
         {(['applied', 'approved', 'all'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)} className={btn}
             style={{ background: filter === f ? 'var(--ink)' : 'transparent', color: filter === f ? 'var(--dim)' : 'var(--soft)', border: '1px solid var(--border)' }}>
-            {f === 'applied' ? 'New applications' : f === 'approved' ? 'Partners' : 'All'}
+            {f === 'applied' ? 'Awaiting approval' : f === 'approved' ? 'Partners' : 'All'}
             {' '}({(partners || []).filter(p => f === 'all' || p.status === f || (f === 'approved' && p.status === 'paused')).length})
           </button>
         ))}

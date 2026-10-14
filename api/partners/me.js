@@ -7,7 +7,7 @@
  * last initial and the last 4 digits of the phone only.
  */
 import { getSupabase } from '../_lib/supabase.js';
-import { computeEarnings, COMMISSION, MONTHLY_BONUS, REFUND_WINDOW_DAYS } from '../_lib/partners.js';
+import { computeEarnings, COMMISSION, MONTHLY_BONUS, REFUND_WINDOW_DAYS, PAYOUT_DAY } from '../_lib/partners.js';
 
 const TOKEN_RE = /^[a-f0-9]{48}$/;
 
@@ -40,7 +40,7 @@ export default async function handler(req, res, deps = {}) {
       name: partner.name,
       code: partner.code,
       status: partner.status,
-      rules: { commission: COMMISSION, monthlyBonus: MONTHLY_BONUS, refundWindowDays: REFUND_WINDOW_DAYS },
+      rules: { commission: COMMISSION, monthlyBonus: MONTHLY_BONUS, refundWindowDays: REFUND_WINDOW_DAYS, payoutDay: PAYOUT_DAY },
       ...earnings,
     });
   } catch (err) {
