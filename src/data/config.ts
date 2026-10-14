@@ -251,3 +251,7 @@ export const REGIONS: { key: Region; label: string; flag: string }[] = [
   { key:'uae',   label:'UAE',   flag:'🇦🇪' },
   { key:'in',    label:'India', flag:'🇮🇳' },
 ];
+
+/** Legal entity that owns and operates Studdy Lab (must match the payment
+ * gateway KYC; Cashfree asked for it on the site, Oct 2026). */
+export const LEGAL_ENTITY = 'UNISCHOOLY';
