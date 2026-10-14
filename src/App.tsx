@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import Home from './pages/Home';
 import { trackEvent } from './utils/tracking';
 import { captureAttributionTouch } from './utils/attribution';
+import { captureRefCode } from './utils/ref';
 import { MarketProvider } from './context/MarketContext';
 
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
@@ -17,6 +18,9 @@ const ContactPage    = lazy(() => import('./pages/Legal').then(m => ({ default: 
 const AdminLogin      = lazy(() => import('./pages/admin/AdminLogin'));
 const AdminHome       = lazy(() => import('./pages/admin/AdminHome'));
 const CustomerSubscription = lazy(() => import('./pages/admin/CustomerSubscription'));
+const AdminPartners   = lazy(() => import('./pages/admin/AdminPartners'));
+const PartnersPage    = lazy(() => import('./pages/Partners'));
+const PartnerDashboard = lazy(() => import('./pages/PartnerDashboard'));
 
 function LoadingFallback() {
   return (
@@ -135,6 +139,7 @@ function AppRoutes() {
       /* CRM-3A — purely local (localStorage) first/latest-touch capture,
        * never a network call by itself. See src/utils/attribution.ts. */
       captureAttributionTouch();
+      captureRefCode();
     }
   }, []);
 
@@ -156,6 +161,9 @@ function AppRoutes() {
           <Route path="/admin/login"     element={<AdminLogin />} />
           <Route path="/admin"           element={<AdminHome />} />
           <Route path="/admin/subscriptions" element={<CustomerSubscription />} />
+          <Route path="/admin/partners"  element={<AdminPartners />} />
+          <Route path="/partners"        element={<PartnersPage />} />
+          <Route path="/partner"         element={<PartnerDashboard />} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>
