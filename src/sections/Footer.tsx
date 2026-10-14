@@ -37,7 +37,8 @@ export default function Footer() {
                 WhatsApp Support
               </a>
               <Link to="/contact" className="block text-[13.5px] mb-2 font-semibold hover:text-[var(--ink)] transition-colors" style={{ color: 'var(--soft)' }}>Contact Us</Link>
-              <a href={`mailto:${SUPPORT_EMAIL}`} className="block text-[13.5px] font-semibold hover:text-[var(--ink)] transition-colors" style={{ color: 'var(--soft)' }}>{SUPPORT_EMAIL}</a>
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="block text-[13.5px] mb-2 font-semibold hover:text-[var(--ink)] transition-colors" style={{ color: 'var(--soft)' }}>{SUPPORT_EMAIL}</a>
+              <Link to="/partners" className="block text-[13.5px] font-semibold hover:text-[var(--ink)] transition-colors" style={{ color: 'var(--soft)' }}>Become a sales partner</Link>
             </div>
           </div>
         </div>
