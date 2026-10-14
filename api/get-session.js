@@ -13,18 +13,22 @@
  *
  * Fallback: if Supabase doesn't have this session yet (e.g. the webhook
  * hasn't run yet, which can take a couple of seconds), we ask Stripe
- * directly so the page still shows something instead of an error, using
- * the last-resort shared placeholder credentials.
+ * directly so the page still shows the subscription details instead of an
+ * error.
+ *
+ * SECURITY (Oct 2026): the fallback NEVER returns Studdy login details.
+ * Previously it returned a hard-coded shared login for ANY session id,
+ * including checkouts that were never completed. Now:
+ *   - a session that is not `complete` in Stripe gets a 404, and
+ *   - a completed session that isn't in Supabase yet gets its subscription
+ *     details with empty credentials and accessPending: true, so the
+ *     dashboard shows "your login is being set up" and retries.
+ * Login details only ever come from the leads/studdy_accounts rows the
+ * webhook wrote after a real, completed checkout.
  */
 import Stripe from 'stripe';
 import { getSupabase } from './_lib/supabase.js';
 import { mapStatus, fmtDate, resolveNextBilling, daysUntil } from './_lib/status.js';
-
-const FALLBACK_CREDENTIALS = {
-  email: 'class1001@studdyai.org',
-  password: 'StuddyLab2024!',
-  url: 'https://studdyai.com',
-};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -80,6 +84,7 @@ export default async function handler(req, res) {
         totalMonthsPaid: lead.total_months_paid ?? 0,
         latestInvoiceUrl: lead.latest_invoice_url || null,
         cancelRequestedAt: lead.cancel_requested_at || null,
+        accessPending: !studdyEmail || !studdyPassword,
       });
     }
   } catch (err) {
@@ -96,7 +101,10 @@ export default async function handler(req, res) {
       expand: ['subscription', 'customer'],
     });
 
-    if (!session) {
+    /* Only a checkout the customer actually finished counts. An open or
+     * expired session (someone who started checkout and walked away) gets
+     * nothing — not even subscription details. */
+    if (!session || session.status !== 'complete') {
       return res.status(404).json({ error: 'Session not found' });
     }
 
@@ -117,15 +125,17 @@ export default async function handler(req, res) {
       nextBilling: fmtDate(nextBilling),
       trialEnds: fmtDate(trialEnd),
       daysLeftInTrial: daysUntil(trialEnd),
-      studdyEmail: FALLBACK_CREDENTIALS.email,
-      studdyPassword: FALLBACK_CREDENTIALS.password,
-      studdyUrl: FALLBACK_CREDENTIALS.url,
+      /* Never a shared/placeholder login — see the security note above. */
+      studdyEmail: '',
+      studdyPassword: '',
+      studdyUrl: 'https://studdyai.com',
       totalMonthsPaid: 0,
       latestInvoiceUrl: null,
       cancelRequestedAt: null,
+      accessPending: true,
     });
   } catch (err) {
     console.error('Stripe error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Could not load your dashboard. Please try again or message us on WhatsApp.' });
   }
 }

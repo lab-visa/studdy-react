@@ -1,12 +1,12 @@
 /**
- * Checkout.tsx — Embedded Stripe Checkout
+ * Checkout.tsx — Stripe Payment Link checkout
  *
  * Flow:
  * 1. Detect country via IP → set region + currency
  * 2. User picks Monthly or Yearly
  * 3. Click Start Free Trial
- * 4. Call /api/create-checkout-session → get clientSecret
- * 5. Render Stripe EmbeddedCheckout inside our page
+ * 4. Redirect to the Stripe Payment Link for this region/plan
+ * 5. Customer completes payment on Stripe
  * 6. On complete → Stripe redirects to /dashboard?session_id=xxx
  */
 import { useState, useEffect, useCallback } from 'react';

@@ -30,7 +30,14 @@ interface UserData {
   totalMonthsPaid: number;
   latestInvoiceUrl: string | null;
   cancelRequestedAt: string | null;
+  /* true when payment is confirmed but the Studdy login hasn't been
+   * assigned yet (webhook still running, or no free seat). */
+  accessPending?: boolean;
 }
+
+/* How long to keep re-checking for a login that's still being set up. */
+const PENDING_RETRY_MS = 5000;
+const PENDING_MAX_RETRIES = 12; // ~1 minute
 
 const HERO_GRADIENT = 'linear-gradient(135deg,#fdf4fb,#f0ecff,#eaf6ff)';
 
@@ -85,6 +92,7 @@ export default function Dashboard() {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [error, setError] = useState('');
+  const [pendingRetries, setPendingRetries] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -105,11 +113,22 @@ export default function Dashboard() {
       if (data.error) { setError(data.error); setStep('no-link'); return; }
       setUser(data);
       setStep('dashboard');
+      if (data.accessPending) setPendingRetries(n => n + 1);
     } catch {
       setError('Could not load your dashboard.');
       setStep('no-link');
     }
   };
+
+  /* Login still being set up — quietly re-check every few seconds for
+   * about a minute, so the customer doesn't have to keep refreshing. */
+  useEffect(() => {
+    if (!user?.accessPending || !sessionId) return;
+    if (pendingRetries > PENDING_MAX_RETRIES) return;
+    const t = setTimeout(() => fetchSession(sessionId), PENDING_RETRY_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.accessPending, pendingRetries, sessionId]);
 
   const handleCancelRequest = async () => {
     setCancelSubmitting(true);
@@ -372,7 +391,23 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Credentials */}
+          {/* Credentials — or a "being set up" notice. A login is never shown
+            * unless the server returned one for a completed, assigned seat. */}
+          {user?.accessPending ? (
+            <div className="rounded-xl p-4 text-[13px]"
+              style={{ background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.3)', color: '#92400e' }}>
+              <div className="font-black mb-1">Your login is being set up</div>
+              {pendingRetries <= PENDING_MAX_RETRIES ? (
+                <div>This usually takes less than a minute. This page will update by itself.</div>
+              ) : (
+                <div>
+                  It's taking longer than usual. Please message us on{' '}
+                  <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer" className="underline font-bold">WhatsApp</a>
+                  {' '}or email {SUPPORT_EMAIL} and we'll send your login right away.
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="space-y-3">
             {/* URL */}
             <div className="flex items-center justify-between gap-3 flex-wrap p-3 rounded-xl"
@@ -446,6 +481,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Subscription Card */}
