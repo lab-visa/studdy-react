@@ -692,6 +692,20 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Partner programme - kept low and small on purpose */}
+        <a href={`/partners?${new URLSearchParams({ name: user?.name || '', email: user?.email || '' }).toString()}`}
+          className="mt-5 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 justify-between transition-transform hover:-translate-y-0.5"
+          style={{ background: 'linear-gradient(120deg,#fdf4fb,#f0ecff 55%,#eaf6ff)', border: '1.5px solid var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 text-[20px] bg-white" style={{ border: '1px solid var(--border)' }}>🤝</span>
+            <div>
+              <div className="font-black text-[15.5px]" style={{ color: 'var(--ink)' }}>Love Studdy? Recommend it and earn</div>
+              <div className="text-[13px]" style={{ color: 'var(--soft)' }}>Get ₹2,500 for every yearly plan bought through your link. Free to join.</div>
+            </div>
+          </div>
+          <span className="gost text-[13.5px] px-5 py-2.5 inline-flex items-center justify-center whitespace-nowrap">Become a partner</span>
+        </a>
+
         {/* Help */}
         <div className={`${card} p-6 sm:p-8 mt-5 grid md:grid-cols-[1fr_auto] gap-5 items-center`} style={cardStyle}>
           <div>

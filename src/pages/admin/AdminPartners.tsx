@@ -1,9 +1,8 @@
 /**
  * /admin/partners - sales partners. Partners self-register on /partners
- * and are active immediately (code + private earnings link); here you see
- * their sales, add PAN/UPI for payouts on the 10th, and pause anyone.
- * (Older 'applied' rows can still be approved.) Approve →
- * which you copy here and send them on WhatsApp.
+ * and are active immediately; they log in with WhatsApp number + PIN.
+ * Here you see their sales, reset a forgotten PIN (shown once, to send
+ * on WhatsApp), add PAN/UPI, pause anyone, or delete someone with no sales.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -11,7 +10,8 @@ import AdminLayout from '../../components/admin/AdminLayout';
 
 interface Partner {
   id: string; name: string; phone: string; email: string; city: string | null; occupation: string | null;
-  experience: string | null; why_join: string | null; status: string; code: string | null; dashboard_token: string | null;
+  experience: string | null; why_join: string | null; status: string; code: string | null;
+  has_pin: boolean; pin_must_change: boolean; locked: boolean; last_login_at: string | null; sales_ever: number;
   pan: string | null; payout_upi: string | null; notes: string | null; applied_at: string; approved_at: string | null;
   totals: { sales: number; earned: number; payable: number; pending: number; bonus: number };
 }
@@ -28,6 +28,8 @@ export default function AdminPartners() {
   const [filter, setFilter] = useState<'all' | 'applied' | 'approved'>('approved');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
+  const [tempPin, setTempPin] = useState<{ id: string; name: string; phone: string; pin: string } | null>(null);
+  const [q, setQ] = useState('');
 
   const load = useCallback(() => {
     fetch('/api/admin/partners', { credentials: 'same-origin' })
@@ -53,6 +55,13 @@ export default function AdminPartners() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) setError(d.error || 'Could not update');
     load();
+    return r.ok ? d : null;
+  };
+
+  const resetPin = async (p: Partner) => {
+    if (!window.confirm(`Reset the PIN for ${p.name}? They will be logged out and must choose a new PIN after logging in with the temporary one.`)) return;
+    const d = await act(p.id, { action: 'reset_pin' });
+    if (d?.tempPin) setTempPin({ id: p.id, name: p.name, phone: p.phone, pin: d.tempPin });
   };
 
   const copy = (key: string, text: string) => { navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(''), 1500); };
@@ -60,7 +69,10 @@ export default function AdminPartners() {
   const logout = async () => { setLoggingOut(true); try { await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' }); } finally { navigate('/admin/login'); } };
 
   if (!displayName) return null;
-  const shown = (partners || []).filter(p => filter === 'all' || p.status === filter || (filter === 'approved' && p.status === 'paused'));
+  const needle = q.trim().toLowerCase();
+  const shown = (partners || [])
+    .filter(p => filter === 'all' || p.status === filter || (filter === 'approved' && p.status === 'paused'))
+    .filter(p => !needle || [p.name, p.phone, p.email, p.code, p.city].some(v => (v || '').toLowerCase().includes(needle)));
   const btn = 'text-[12px] font-bold px-3 py-1.5 rounded-lg';
 
   return (
@@ -76,7 +88,20 @@ export default function AdminPartners() {
           </button>
         ))}
         <a href="/partners" target="_blank" rel="noopener noreferrer" className={btn} style={{ color: 'var(--soft)', border: '1px solid var(--border)' }}>Open public page ↗</a>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, phone, email, code, city"
+          className="ml-auto text-[13px] px-3 py-1.5 rounded-lg min-w-[240px]" style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--ink)' }} />
       </div>
+      {tempPin && (
+        <div className="rounded-2xl p-5 mb-4" style={{ border: '2px solid #16a34a', background: 'rgba(22,163,74,.06)' }}>
+          <div className="font-black text-[15px] mb-1">Temporary PIN for {tempPin.name}: <span className="font-mono text-[22px] tracking-[.25em] ml-1">{tempPin.pin}</span></div>
+          <div className="text-[13px] mb-3" style={{ color: 'var(--soft)' }}>Shown only now. Send it on WhatsApp; they'll choose their own PIN after logging in.</div>
+          <div className="flex gap-2 flex-wrap">
+            <a className={btn} style={{ background: '#25D366', color: '#fff' }} target="_blank" rel="noopener noreferrer"
+              href={`https://wa.me/91${tempPin.phone}?text=${encodeURIComponent(`Hi ${tempPin.name.split(' ')[0]}, your temporary Studdy Lab partner PIN is ${tempPin.pin}. Log in at https://studdylab.com/partner/login with your WhatsApp number and this PIN, then choose your own PIN.`)}`}>Send on WhatsApp</a>
+            <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => setTempPin(null)}>Done</button>
+          </div>
+        </div>
+      )}
       {error && <div className="rounded-xl p-3 mb-4 text-[13px]" style={{ color: '#dc2626', border: '1px solid rgba(239,68,68,.3)' }}>{error}</div>}
       {!partners ? <p style={{ color: 'var(--soft)' }}>Loading…</p> : shown.length === 0 ? (
         <p className="text-[14px]" style={{ color: 'var(--soft)' }}>Nothing here yet.</p>
@@ -84,7 +109,6 @@ export default function AdminPartners() {
         <div className="space-y-3">
           {shown.map(p => {
             const link = p.code ? `https://studdylab.com/?ref=${p.code}` : '';
-            const dash = p.dashboard_token ? `https://studdylab.com/partner?t=${p.dashboard_token}` : '';
             return (
               <div key={p.id} className="rounded-2xl p-5" style={{ border: '1px solid var(--border)', background: 'var(--card, transparent)' }}>
                 <div className="flex justify-between items-start gap-3 flex-wrap">
@@ -93,7 +117,13 @@ export default function AdminPartners() {
                     <div className="text-[13px]" style={{ color: 'var(--soft)' }}>
                       <a className="underline" href={`https://wa.me/91${p.phone}`} target="_blank" rel="noopener noreferrer">+91 {p.phone}</a> · {p.email}{p.city ? ` · ${p.city}` : ''}{p.occupation ? ` · ${p.occupation}` : ''}
                     </div>
-                    <div className="text-[12px]" style={{ color: 'var(--soft)' }}>Applied {new Date(p.applied_at).toLocaleDateString('en-IN')}</div>
+                    <div className="text-[12px]" style={{ color: 'var(--soft)' }}>
+                      Joined {new Date(p.applied_at).toLocaleDateString('en-IN')}
+                      {' · '}{p.last_login_at ? `last login ${new Date(p.last_login_at).toLocaleDateString('en-IN')}` : 'never logged in'}
+                      {!p.has_pin && <b style={{ color: '#d97706' }}> · no PIN yet</b>}
+                      {p.pin_must_change && <b style={{ color: '#d97706' }}> · temporary PIN</b>}
+                      {p.locked && <b style={{ color: '#dc2626' }}> · locked (wrong PINs)</b>}
+                    </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     {p.status === 'applied' && <>
@@ -121,7 +151,7 @@ export default function AdminPartners() {
                 {p.code && (
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => copy(p.id + 'l', link)}>{copied === p.id + 'l' ? 'Copied ✓' : `Copy sales link (${p.code})`}</button>
-                    <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => copy(p.id + 'd', dash)}>{copied === p.id + 'd' ? 'Copied ✓' : 'Copy earnings page link'}</button>
+                    <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => resetPin(p)}>Reset PIN</button>
                     <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => {
                       const pan = window.prompt('PAN (for TDS)', p.pan || '');
                       if (pan === null) return;
@@ -129,6 +159,11 @@ export default function AdminPartners() {
                       if (upi === null) return;
                       act(p.id, { pan, payoutUpi: upi });
                     }}>PAN & UPI {p.pan ? '✓' : ''}</button>
+                    {p.sales_ever === 0 && (
+                      <button className={btn} style={{ border: '1px solid rgba(239,68,68,.35)', color: '#dc2626' }} onClick={() => {
+                        if (window.confirm(`Delete ${p.name} permanently? This cannot be undone.`)) act(p.id, { action: 'delete' });
+                      }}>Delete</button>
+                    )}
                   </div>
                 )}
               </div>

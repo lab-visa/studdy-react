@@ -94,3 +94,21 @@ export function ContactPage() {
     </div>
   );
 }
+
+export function PartnerTerms() {
+  return <LegalPage title="Partner Terms" sections={[
+    { heading: '1. What this is', body: 'The Studdy Lab Partner Programme lets you recommend Studdy Lab plans sold in India and earn a commission on each purchase made through your personal link or partner code. You take part as an independent partner. This is not a job, employment, franchise or agency, and you are not authorised to make any promise, sign anything or collect money on behalf of Studdy Lab.' },
+    { heading: '2. Joining', body: 'Joining is free. Studdy Lab never asks partners for a fee or deposit. You must be 18 or older and give us your correct name, WhatsApp number and email. One account per person. You log in with your WhatsApp number and a PIN you choose; keep your PIN private.' },
+    { heading: '3. Commission', body: 'You earn ₹2,500 for every Yearly plan and ₹700 for every Quarterly plan bought through your personal link or partner code and paid in full. A sale is credited to the partner whose link or code was used for that purchase. If more than one partner is involved, the link or code used at payment decides.' },
+    { heading: '4. Monthly bonus', body: 'If you make 10 or more sales in a calendar month (India time, by payment date), you get an extra ₹5,000 for that month. If you make 20 or more, you get a further ₹10,000 (₹15,000 bonus in total). Refunded sales do not count. The count starts again on the 1st of every month.' },
+    { heading: '5. Refunds', body: 'Customers can ask for a full refund within 7 days of paying. No commission or bonus is earned on a refunded sale. If a sale is refunded or reversed after it was paid out, we may deduct that amount from your next payout.' },
+    { heading: '6. Payouts', body: 'We pay on the 10th of every month for the previous month’s sales, by bank transfer to the account you add in your dashboard. If the 10th is a bank holiday, we pay on the next working day. If your bank details or PAN are missing or wrong, the payout is held and paid in the next payout after you correct them.' },
+    { heading: '7. Tax', body: 'TDS is deducted from payouts as required by Indian tax law, and every payout statement shows the amount, the TDS and the net amount paid. You must give us a valid PAN before your first payout. You are responsible for any other taxes on your earnings.' },
+    { heading: '8. No self-purchase', body: 'You cannot earn commission on a plan bought for yourself or your own household through your own link or code, including renewals. Such sales will not earn a commission.' },
+    { heading: '9. How you may promote Studdy Lab', body: 'Be honest. Do not make false claims (for example guaranteed marks, ranks or results), do not offer discounts or cashback that Studdy Lab has not announced, do not pretend to be Studdy Lab staff, do not use Studdy Lab or Studdy names in ads, domains or social media handles without our written permission, and do not spam people, add them to groups without permission, or buy contact lists. Sales that break these rules earn no commission.' },
+    { heading: '10. Customer details', body: 'You see your customers only in masked form (first name, initial and last 4 digits of their number). Any customer information you learn while selling must be kept private and used only to help that customer.' },
+    { heading: '11. Pausing or ending', body: 'You can stop at any time by messaging us. We may pause or end your partner account if you break these terms or act in a way that harms customers or Studdy Lab. Commission already earned on genuine, non-refunded sales will still be paid, except where the sale broke these terms.' },
+    { heading: '12. Changes', body: 'We may change commission amounts, bonuses or these terms. Changes apply only to sales made after the change, and we will tell you on WhatsApp or email before they apply.' },
+    { heading: '13. Contact', body: 'For any question about the partner programme, message us on WhatsApp or email hr@studdyai.org.' },
+  ]} />;
+}

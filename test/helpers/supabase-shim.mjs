@@ -51,6 +51,11 @@ class QueryBuilder {
     return this;
   }
 
+  delete() {
+    this.mode = 'delete';
+    return this;
+  }
+
   insert(obj) {
     this.mode = 'insert';
     this.insertObj = obj;
@@ -217,6 +222,12 @@ class QueryBuilder {
         const { clauseSql, params: whereParams } = this._buildWhere(cols.length + 1);
         const sql = `UPDATE "${this.table}" SET ${setParts.join(', ')} ${clauseSql} RETURNING *`;
         const res = await this.pool.query(sql, [...setVals, ...whereParams]);
+        return this._shapeResult(res.rows);
+      }
+      if (this.mode === 'delete') {
+        const { clauseSql, params: whereParams } = this._buildWhere(1);
+        if (!clauseSql.trim()) throw new Error('supabase-shim: refusing DELETE without a filter');
+        const res = await this.pool.query(`DELETE FROM "${this.table}" ${clauseSql} RETURNING *`, whereParams);
         return this._shapeResult(res.rows);
       }
       throw new Error(`supabase-shim: unknown mode ${this.mode}`);

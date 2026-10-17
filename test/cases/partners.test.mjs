@@ -14,6 +14,7 @@ import { createTestSupabaseClient } from '../helpers/supabase-shim.mjs';
 import { fakeReq, fakeRes } from '../helpers/fake-http.mjs';
 import apply from '../../api/partners/apply.js';
 import me from '../../api/partners/me.js';
+import auth from '../../api/partners/auth.js';
 import adminPartners from '../../api/admin/partners.js';
 import * as adminAuth from '../../api/_lib/admin-auth.js';
 import { computeEarnings, bonusFor, maskCustomer, makePartnerCode, istMonth, payoutDate } from '../../api/_lib/partners.js';
@@ -84,61 +85,113 @@ test('partner codes are first name + 3 digits', () => {
   assert.match(makePartnerCode('राहुल'), /^PARTNER\d{3}$/);
 });
 
-/* ---------- application form ---------- */
+/* ---------- application form + login ---------- */
 
-const validApp = { name: 'Priya Nair', phone: '+91 91234 56789', email: 'priya@example.com', consent: true };
+const H = { origin: 'https://studdylab.com', host: 'studdylab.com' };
+const validApp = { name: 'Priya Nair', phone: '+91 91234 56789', email: 'priya@example.com', city: 'Pune', pin: '482913', consent: true };
+const cookieFrom = (res) => (res._headers['Set-Cookie'] || '').split(';')[0];
+const post = async (handler, body, headers = {}) => { const r = fakeRes(); await handler(fakeReq({ method: 'POST', headers: { ...H, ...headers }, body }), r, deps); return r; };
+const getMe = async (cookie) => { const r = fakeRes(); await me(fakeReq({ headers: cookie ? { cookie } : {} }), r, deps); return r; };
 
-test('apply: validates input', async () => {
-  for (const body of [{ ...validApp, name: '' }, { ...validApp, phone: '123' }, { ...validApp, email: 'x' }, { ...validApp, consent: false }]) {
-    const res = fakeRes();
-    await apply(fakeReq({ method: 'POST', body }), res, deps);
+test('apply: validates input, including a 6-digit, not-too-easy PIN', async () => {
+  for (const body of [
+    { ...validApp, name: '' }, { ...validApp, phone: '123' }, { ...validApp, email: 'x' }, { ...validApp, consent: false },
+    { ...validApp, pin: '12345' }, { ...validApp, pin: '111111' }, { ...validApp, pin: '123456' }, { ...validApp, pin: undefined },
+  ]) {
+    const res = await post(apply, body);
     assert.equal(res.statusCode, 400, JSON.stringify(body));
   }
 });
 
-let regCode;
-let regToken;
+test('apply: refuses cross-site requests', async () => {
+  const res = await post(apply, validApp, { origin: 'https://evil.example' });
+  assert.equal(res.statusCode, 403);
+});
 
-test('register: instantly active, returns a unique sales link + private earnings link', async () => {
-  const r1 = fakeRes();
-  await apply(fakeReq({ method: 'POST', body: validApp }), r1, deps);
+let regCode;
+let regCookie;
+
+test('register: instantly active, logged in by cookie, PIN stored only as a hash', async () => {
+  const r1 = await post(apply, validApp);
   assert.equal(r1.statusCode, 200, JSON.stringify(r1._json));
   assert.match(r1._json.code, /^PRIYA\d{3}$/);
   assert.equal(r1._json.salesLink, `https://studdylab.com/?ref=${r1._json.code}`);
-  assert.match(r1._json.earningsLink, /^https:\/\/studdylab\.com\/partner\?t=[a-f0-9]{48}$/);
+  assert.equal(r1._json.earningsLink, undefined);
+  assert.match(r1._headers['Set-Cookie'], /^sl_partner_session=[a-f0-9]{64}; HttpOnly/);
   regCode = r1._json.code;
-  regToken = r1._json.earningsLink.split('t=')[1];
+  regCookie = cookieFrom(r1);
 
-  const { rows } = await pool.query(`SELECT status, code, dashboard_token FROM partners WHERE phone='9123456789'`);
+  const { rows } = await pool.query(`SELECT status, code, city, pin_hash, pin_salt FROM partners WHERE phone='9123456789'`);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].status, 'approved');
-  assert.equal(rows[0].code, regCode);
-  assert.equal(rows[0].dashboard_token, regToken);
+  assert.equal(rows[0].city, 'Pune');
+  assert.ok(rows[0].pin_hash && rows[0].pin_salt);
+  assert.equal(rows[0].pin_hash.includes('482913'), false);
 
-  /* Earnings page works immediately. */
-  const page = fakeRes();
-  await me(fakeReq({ query: { t: regToken } }), page, deps);
+  const page = await getMe(regCookie);
   assert.equal(page.statusCode, 200);
+  assert.equal(page._json.code, regCode);
+  assert.equal(page._json.mustChangePin, false);
   assert.equal(page._json.rules.payoutDay, 10);
-  assert.equal(page._json.rules.commission.quarterly, 700);
 });
 
-test('register: same mobile twice → 409 and the existing links are NOT revealed', async () => {
-  const r2 = fakeRes();
-  await apply(fakeReq({ method: 'POST', body: { ...validApp, email: 'other@example.com' } }), r2, deps);
+test('earnings page needs a valid login', async () => {
+  assert.equal((await getMe()).statusCode, 401);
+  assert.equal((await getMe(`sl_partner_session=${'a'.repeat(64)}`)).statusCode, 401);
+});
+
+test('register: same mobile twice → 409, nothing revealed, no login', async () => {
+  const r2 = await post(apply, { ...validApp, email: 'other@example.com' });
   assert.equal(r2.statusCode, 409);
-  assert.equal(JSON.stringify(r2._json).includes(regToken), false);
   assert.equal(r2._json.code, undefined);
+  assert.equal(r2._headers['Set-Cookie'], undefined);
 });
 
-/* ---------- admin approve + partner page ---------- */
+test('login: right number + PIN works; wrong PIN and unknown number give the same answer', async () => {
+  const ok = await post(auth, { action: 'login', phone: '91234 56789', pin: '482913' });
+  assert.equal(ok.statusCode, 200);
+  assert.equal(ok._json.mustChange, false);
+  assert.equal((await getMe(cookieFrom(ok))).statusCode, 200);
+
+  const wrong = await post(auth, { action: 'login', phone: '9123456789', pin: '000001' });
+  const unknown = await post(auth, { action: 'login', phone: '9000000000', pin: '482913' });
+  assert.equal(wrong.statusCode, 401);
+  assert.equal(unknown.statusCode, 401);
+  assert.equal(wrong._json.error, unknown._json.error);
+});
+
+test('login: 5 wrong PINs lock the account, even the right PIN is refused while locked', async () => {
+  await pool.query(`UPDATE partners SET failed_attempts=0, locked_until=NULL WHERE phone='9123456789'`);
+  let last;
+  for (let i = 0; i < 5; i++) last = await post(auth, { action: 'login', phone: '9123456789', pin: '000002' });
+  assert.equal(last.statusCode, 429);
+  const right = await post(auth, { action: 'login', phone: '9123456789', pin: '482913' });
+  assert.equal(right.statusCode, 429);
+  await pool.query(`UPDATE partners SET failed_attempts=0, locked_until=NULL WHERE phone='9123456789'`);
+});
+
+test('change PIN needs the current PIN; logout ends the session', async () => {
+  const login = await post(auth, { action: 'login', phone: '9123456789', pin: '482913' });
+  const cookie = cookieFrom(login);
+  const bad = await post(auth, { action: 'change_pin', currentPin: '999999', newPin: '271828' }, { cookie });
+  assert.equal(bad.statusCode, 400);
+  const good = await post(auth, { action: 'change_pin', currentPin: '482913', newPin: '271828' }, { cookie });
+  assert.equal(good.statusCode, 200);
+  assert.equal((await post(auth, { action: 'login', phone: '9123456789', pin: '482913' })).statusCode, 401);
+  assert.equal((await post(auth, { action: 'login', phone: '9123456789', pin: '271828' })).statusCode, 200);
+
+  await post(auth, { action: 'logout' }, { cookie });
+  assert.equal((await getMe(cookie)).statusCode, 401);
+});
+
+/* ---------- admin ---------- */
 
 async function adminCookie() {
   const salt = adminAuth.generateSalt();
   const hash = adminAuth.deriveHash('1234', salt);
   const res = await pool.query(`INSERT INTO admin_users (display_name, pin_hash, pin_salt) VALUES ($1,$2,$3) RETURNING id`, [`Owner_${randomUUID()}`, hash, salt]);
   const { token } = await adminAuth.createSession(supabase, res.rows[0].id);
-  return { cookie: `sl_admin_session=${token}`, origin: 'https://studdylab.com', host: 'studdylab.com' };
+  return { cookie: `sl_admin_session=${token}`, ...H };
 }
 
 test('admin endpoints refuse requests without an admin session', async () => {
@@ -146,25 +199,51 @@ test('admin endpoints refuse requests without an admin session', async () => {
   await adminPartners(fakeReq({ method: 'GET' }), r1, deps);
   assert.equal(r1.statusCode, 401);
   const r2 = fakeRes();
-  await adminPartners(fakeReq({ method: 'PATCH', headers: { origin: 'https://studdylab.com', host: 'studdylab.com' }, body: { id: randomUUID(), action: 'approve' } }), r2, deps);
+  await adminPartners(fakeReq({ method: 'PATCH', headers: H, body: { id: randomUUID(), action: 'reset_pin' } }), r2, deps);
   assert.equal(r2.statusCode, 401);
 });
 
-test('pause/resume never changes the code or link; partner page shows only their own sales, masked', async () => {
+test('admin Reset PIN: temporary PIN shown once, partner logged out everywhere, must choose a new PIN', async () => {
+  const headers = await adminCookie();
+  const { rows: [p] } = await pool.query(`SELECT id FROM partners WHERE phone='9123456789'`);
+  const before = cookieFrom(await post(auth, { action: 'login', phone: '9123456789', pin: '271828' }));
+
+  const r = fakeRes();
+  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'reset_pin' } }), r, deps);
+  assert.equal(r.statusCode, 200);
+  assert.match(r._json.tempPin, /^\d{6}$/);
+  assert.equal((await getMe(before)).statusCode, 401);
+
+  const login = await post(auth, { action: 'login', phone: '9123456789', pin: r._json.tempPin });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login._json.mustChange, true);
+  const cookie = cookieFrom(login);
+  assert.equal((await getMe(cookie))._json.mustChangePin, true);
+  const set = await post(auth, { action: 'change_pin', newPin: '582039' }, { cookie });
+  assert.equal(set.statusCode, 200);
+  assert.equal((await getMe(cookie))._json.mustChangePin, false);
+
+  /* The admin list never exposes PIN material. */
+  const list = fakeRes();
+  await adminPartners(fakeReq({ method: 'GET', headers }), list, deps);
+  const row = list._json.partners.find(x => x.id === p.id);
+  assert.equal(row.has_pin, true);
+  assert.equal(JSON.stringify(list._json).includes('pin_hash'), false);
+});
+
+test('pause/resume never changes the code; partner page shows only their own sales, masked', async () => {
   const headers = await adminCookie();
   const { rows: [p] } = await pool.query(`SELECT id FROM partners WHERE phone='9123456789'`);
   const code = regCode;
-  const token = regToken;
 
   for (const action of ['pause', 'resume']) {
     const r = fakeRes();
     await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action } }), r, deps);
     assert.equal(r.statusCode, 200, JSON.stringify(r._json));
     assert.equal(r._json.partner.code, code);
-    assert.equal(r._json.partner.dashboard_token, token);
+    assert.equal(r._json.partner.pin_hash, undefined);
   }
 
-  /* Two paid sales for this partner, one for someone else, one unpaid. */
   const ins = (ref, status, daysAgo) => pool.query(
     `INSERT INTO india_orders (order_id, plan, amount, months, customer_name, customer_phone, ref_code, status, paid_at)
      VALUES ($1,'yearly',14999,12,'Ravi Kumar','9988776655',$2,$3, now() - ($4 || ' days')::interval)`,
@@ -174,35 +253,44 @@ test('pause/resume never changes the code or link; partner page shows only their
   await ins('SOMEONEELSE1', 'paid', 10);
   await ins(code, 'created', 0);
 
-  const page = fakeRes();
-  await me(fakeReq({ query: { t: token } }), page, deps);
+  const cookie = cookieFrom(await post(auth, { action: 'login', phone: '9123456789', pin: '582039' }));
+  const page = await getMe(cookie);
   assert.equal(page.statusCode, 200);
-  assert.equal(page._json.code, code);
   assert.equal(page._json.totals.sales, 2);
   assert.equal(page._json.totals.payable, 2500);
   assert.equal(page._json.totals.pending, 2500);
   assert.equal(page._json.sales[0].customer, 'Ravi K. · ••••6655');
   assert.equal(JSON.stringify(page._json).includes('9988776655'), false);
 
-  /* Admin list shows the same totals. */
   const list = fakeRes();
   await adminPartners(fakeReq({ method: 'GET', headers }), list, deps);
   const row = list._json.partners.find(x => x.id === p.id);
   assert.equal(row.totals.sales, 2);
+  assert.equal(row.sales_ever, 2);
 });
 
-test('partner page: bad or unknown token → 404; rejected partner → 404', async () => {
-  for (const t of ['nope', 'a'.repeat(48)]) {
-    const res = fakeRes();
-    await me(fakeReq({ query: { t } }), res, deps);
-    assert.equal(res.statusCode, 404);
-  }
+test('admin Delete: refused for a partner with sales, works for one without', async () => {
   const headers = await adminCookie();
-  const { rows: [p] } = await pool.query(`SELECT id, dashboard_token FROM partners WHERE phone='9123456789'`);
+  const { rows: [withSales] } = await pool.query(`SELECT id FROM partners WHERE phone='9123456789'`);
+  const r1 = fakeRes();
+  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: withSales.id, action: 'delete' } }), r1, deps);
+  assert.equal(r1.statusCode, 400);
+
+  const fresh = await post(apply, { ...validApp, name: 'Kiran Rao', phone: '9812345670', email: 'kiran@example.com' });
+  const { rows: [k] } = await pool.query(`SELECT id FROM partners WHERE phone='9812345670'`);
+  const r2 = fakeRes();
+  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: k.id, action: 'delete' } }), r2, deps);
+  assert.equal(r2.statusCode, 200);
+  assert.equal((await pool.query(`SELECT 1 FROM partners WHERE phone='9812345670'`)).rowCount, 0);
+  assert.equal((await getMe(cookieFrom(fresh))).statusCode, 401);
+});
+
+test('rejected partner cannot log in', async () => {
+  const headers = await adminCookie();
+  const { rows: [p] } = await pool.query(`SELECT id FROM partners WHERE phone='9123456789'`);
   await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'reject' } }), fakeRes(), deps);
-  const res = fakeRes();
-  await me(fakeReq({ query: { t: p.dashboard_token } }), res, deps);
-  assert.equal(res.statusCode, 404);
+  assert.equal((await post(auth, { action: 'login', phone: '9123456789', pin: '582039' })).statusCode, 401);
+  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'resume' } }), fakeRes(), deps);
 });
 
 test('admin PAN check rejects a malformed PAN and saves a valid one', async () => {
