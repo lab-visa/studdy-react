@@ -12,7 +12,7 @@
  */
 import { getSupabase } from '../_lib/supabase.js';
 import { cashfreeConfig, verifyWebhookSignature } from '../_lib/cashfree.js';
-import { markOrderPaid, markOrderFailed, assignSeatIfNeeded, loadOrder } from '../_lib/india-fulfilment.js';
+import { markOrderPaid, markOrderFailed, assignSeatIfNeeded, loadOrder, paymentFieldsFromWebhook } from '../_lib/india-fulfilment.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -71,14 +71,10 @@ export default async function handler(req, res, deps = {}) {
         console.error(`cashfree webhook: amount mismatch on ${orderId}`);
         return res.status(200).json({ received: true, ignored: 'amount mismatch' });
       }
-      await markOrderPaid(supabase, orderId, {
-        cfPaymentId: payment.cf_payment_id ? String(payment.cf_payment_id) : null,
-        paymentMethod: payment.payment_group || null,
-        paidAt: payment.payment_time || null,
-      });
+      await markOrderPaid(supabase, orderId, paymentFieldsFromWebhook(event));
       await assignSeatIfNeeded(supabase, orderId);
     } else if (type === 'PAYMENT_FAILED_WEBHOOK' || type === 'PAYMENT_USER_DROPPED_WEBHOOK') {
-      await markOrderFailed(supabase, orderId);
+      await markOrderFailed(supabase, orderId, paymentFieldsFromWebhook(event));
     }
     return res.status(200).json({ received: true });
   } catch (err) {
