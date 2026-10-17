@@ -102,7 +102,7 @@ export default function ThankYou() {
         style={{ background: 'radial-gradient(60% 70% at 50% 0%, rgba(199,101,199,.22), rgba(37,168,244,.10) 55%, transparent 80%)' }} />
 
       <header className="relative h-16 flex items-center justify-center px-4">
-        <Link to="/" className="font-black text-[22px]"><span className="grad-text">studdy</span> <span style={{ color: 'var(--soft)' }} className="text-[14px] font-bold">lab</span></Link>
+        <Link to="/" className="font-black text-[22px]"><span className="grad-text">studdy</span></Link>
       </header>
 
       <main className="relative max-w-[1040px] mx-auto px-4 sm:px-6 pb-16">
