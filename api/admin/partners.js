@@ -50,7 +50,11 @@ export default async function handler(req, res, deps = {}) {
           bank_branch: p.bank_branch, has_pan_photo: Boolean(p.pan_photo_path),
           aadhaar_last4: p.aadhaar_last4, has_aadhaar_front: Boolean(p.aadhaar_front_path), has_aadhaar_back: Boolean(p.aadhaar_back_path),
           aadhaar_consent_at: p.aadhaar_consent_at, details_complete: detailsComplete(p),
-          details_updated_at: p.payout_details_updated_at, details_checked_at: p.payout_details_checked_at, payout_upi: p.payout_upi, notes: p.notes,
+          details_updated_at: p.payout_details_updated_at, details_checked_at: p.payout_details_checked_at,
+          /* none = nothing added · incomplete = some missing · to_check = complete, waiting for your check · checked */
+          kyc_status: !p.payout_details_updated_at ? 'none' : !detailsComplete(p) ? 'incomplete' : p.payout_details_checked_at ? 'checked' : 'to_check',
+          /* Minimal sales list so the admin page can filter any date range (leaderboard). */
+          orders: orders.filter((o) => o.ref_code === p.code).map((o) => ({ paid_at: o.paid_at, plan: o.plan, amount: Number(o.amount), status: o.status })), payout_upi: p.payout_upi, notes: p.notes,
           applied_at: p.applied_at, approved_at: p.approved_at,
           totals: e.totals, this_month: e.months[0] || null,
         };

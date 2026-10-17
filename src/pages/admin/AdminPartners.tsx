@@ -1,29 +1,97 @@
 /**
- * /admin/partners - sales partners. Partners self-register on /partners
- * and are active immediately; they log in with WhatsApp number + PIN.
- * Here you see their sales, reset a forgotten PIN (shown once, to send
- * on WhatsApp), see bank details + PAN photo (private 5-minute link) and
- * mark them checked, pay monthly payouts (Payouts tab), pause anyone, or
- * delete someone with no sales.
+ * /admin/partners - sales partners. Three views:
+ *   Partners    - onboarding tracking: joined today / this month / total,
+ *                 KYC status (not started / incomplete / waiting for your
+ *                 check / checked) with filters by join date, KYC, status,
+ *                 search; per partner: bank + KYC, PIN reset, pause, delete.
+ *   Leaderboard - sales per partner for any date range (Today … Custom).
+ *   Payouts     - monthly payouts with TDS and UTR.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
 import PartnerPayouts from '../../components/admin/PartnerPayouts';
+import DateRangeFilter, { rangeFor, inRange, type DateRange } from '../../components/admin/DateRangeFilter';
 
+type Kyc = 'none' | 'incomplete' | 'to_check' | 'checked';
 interface Partner {
   id: string; name: string; phone: string; email: string; city: string | null; occupation: string | null;
   experience: string | null; why_join: string | null; status: string; code: string | null;
   has_pin: boolean; pin_must_change: boolean; locked: boolean; last_login_at: string | null; sales_ever: number;
   bank_holder: string | null; bank_account: string | null; bank_ifsc: string | null; bank_name: string | null; bank_branch: string | null;
   has_pan_photo: boolean; aadhaar_last4: string | null; has_aadhaar_front: boolean; has_aadhaar_back: boolean; aadhaar_consent_at: string | null;
-  details_complete: boolean; details_updated_at: string | null; details_checked_at: string | null;
+  details_complete: boolean; details_updated_at: string | null; details_checked_at: string | null; kyc_status: Kyc;
+  orders: { paid_at: string | null; plan: string; amount: number; status: string }[];
   pan: string | null; payout_upi: string | null; notes: string | null; applied_at: string; approved_at: string | null;
   totals: { sales: number; earned: number; payable: number; pending: number; bonus: number };
 }
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 const STATUS_COLORS: Record<string, string> = { applied: '#d97706', approved: '#16a34a', rejected: '#6b7280', paused: '#6b7280' };
+const KYC: Record<Kyc, { label: string; color: string }> = {
+  none: { label: 'KYC not started', color: '#6b7280' },
+  incomplete: { label: 'KYC incomplete', color: '#d97706' },
+  to_check: { label: 'Needs your check', color: '#dc2626' },
+  checked: { label: 'KYC checked', color: '#16a34a' },
+};
+const COMMISSION: Record<string, number> = { yearly: 2500, quarterly: 700 };
+
+function Leaderboard({ partners }: { partners: Partner[] }) {
+  const [range, setRange] = useState<DateRange>(() => rangeFor('this_month'));
+  const [showZero, setShowZero] = useState(false);
+  const rows = useMemo(() => partners.filter(p => p.code).map(p => {
+    const inR = p.orders.filter(o => inRange(o.paid_at, range));
+    const paid = inR.filter(o => o.status === 'paid');
+    return {
+      p, sales: paid.length, yearly: paid.filter(o => o.plan === 'yearly').length, quarterly: paid.filter(o => o.plan === 'quarterly').length,
+      refunded: inR.filter(o => o.status === 'refunded').length, revenue: paid.reduce((s, o) => s + o.amount, 0),
+      commission: paid.reduce((s, o) => s + (COMMISSION[o.plan] || 0), 0),
+    };
+  }).sort((a, b) => b.sales - a.sales || b.revenue - a.revenue), [partners, range]);
+  const shown = showZero ? rows : rows.filter(r => r.sales || r.refunded);
+  const total = rows.reduce((t, r) => ({ sales: t.sales + r.sales, revenue: t.revenue + r.revenue, commission: t.commission + r.commission }), { sales: 0, revenue: 0, commission: 0 });
+  const box = { border: '1px solid var(--border)' };
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <DateRangeFilter value={range} onChange={setRange} allowAll />
+        <label className="text-[12.5px] flex items-center gap-1.5 ml-auto" style={{ color: 'var(--soft)' }}>
+          <input type="checkbox" checked={showZero} onChange={e => setShowZero(e.target.checked)} /> Show partners with no sales
+        </label>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 text-[13px]">
+        {[['Partner sales', String(total.sales)], ['Revenue via partners', inr(total.revenue)], ['Commission earned', inr(total.commission)], ['Partners with a sale', `${rows.filter(r => r.sales).length} of ${rows.length}`]].map(([l, v]) => (
+          <div key={l} className="rounded-xl p-3" style={box}><div style={{ color: 'var(--soft)' }}>{l}</div><div className="font-black text-[20px]">{v}</div></div>
+        ))}
+      </div>
+      {shown.length === 0 ? <p className="text-[14px]" style={{ color: 'var(--soft)' }}>No partner sales in this period.</p> : (
+        <div className="rounded-2xl overflow-x-auto" style={box}>
+          <table className="w-full text-[13px]">
+            <thead><tr className="text-left" style={{ color: 'var(--soft)' }}>
+              {['#', 'Partner', 'City', 'Sales', 'Yearly / Quarterly', 'Refunded', 'Revenue', 'Commission', 'KYC'].map(h => <th key={h} className="py-2.5 px-3 font-bold whitespace-nowrap">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {shown.map((r, i) => (
+                <tr key={r.p.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td className="py-2 px-3 font-black">{i + 1}</td>
+                  <td className="py-2 px-3"><b>{r.p.name}</b> <span style={{ color: 'var(--soft)' }}>· {r.p.code}</span></td>
+                  <td className="py-2 px-3">{r.p.city || '-'}</td>
+                  <td className="py-2 px-3 font-black">{r.sales}</td>
+                  <td className="py-2 px-3">{r.yearly} / {r.quarterly}</td>
+                  <td className="py-2 px-3">{r.refunded || '-'}</td>
+                  <td className="py-2 px-3">{inr(r.revenue)}</td>
+                  <td className="py-2 px-3">{inr(r.commission)}</td>
+                  <td className="py-2 px-3 whitespace-nowrap" style={{ color: KYC[r.p.kyc_status].color }}>{KYC[r.p.kyc_status].label}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[12px] mt-3" style={{ color: 'var(--soft)' }}>Commission before the monthly bonus and TDS. Sales are counted on payment date (India time).</p>
+    </div>
+  );
+}
 
 export default function AdminPartners() {
   const navigate = useNavigate();
@@ -31,7 +99,11 @@ export default function AdminPartners() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [partners, setPartners] = useState<Partner[] | null>(null);
-  const [filter, setFilter] = useState<'all' | 'applied' | 'approved' | 'payouts'>('approved');
+  const [view, setView] = useState<'partners' | 'leaderboard' | 'payouts'>('partners');
+  const [statusF, setStatusF] = useState<'active' | 'applied' | 'all'>('active');
+  const [kycF, setKycF] = useState<'all' | Kyc>('all');
+  const [joined, setJoined] = useState<DateRange>(() => rangeFor('all'));
+  const [sort, setSort] = useState<'newest' | 'sales'>('newest');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
   const [tempPin, setTempPin] = useState<{ id: string; name: string; phone: string; pin: string } | null>(null);
@@ -75,31 +147,32 @@ export default function AdminPartners() {
   const logout = async () => { setLoggingOut(true); try { await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' }); } finally { navigate('/admin/login'); } };
 
   if (!displayName) return null;
+  const all = partners || [];
+  const live = all.filter(p => p.status === 'approved' || p.status === 'paused');
   const needle = q.trim().toLowerCase();
-  const shown = (partners || [])
-    .filter(p => filter === 'all' || p.status === filter || (filter === 'approved' && p.status === 'paused'))
-    .filter(p => !needle || [p.name, p.phone, p.email, p.code, p.city].some(v => (v || '').toLowerCase().includes(needle)));
+  const shown = all
+    .filter(p => statusF === 'all' || (statusF === 'active' ? p.status === 'approved' || p.status === 'paused' : p.status === 'applied'))
+    .filter(p => kycF === 'all' || p.kyc_status === kycF)
+    .filter(p => joined.preset === 'all' || inRange(p.applied_at, joined))
+    .filter(p => !needle || [p.name, p.phone, p.email, p.code, p.city].some(v => (v || '').toLowerCase().includes(needle)))
+    .sort((a, b) => (sort === 'sales' ? b.totals.sales - a.totals.sales : 0) || (b.applied_at < a.applied_at ? -1 : 1));
   const btn = 'text-[12px] font-bold px-3 py-1.5 rounded-lg';
+  const box = { border: '1px solid var(--border)' };
+  const chip = (on: boolean) => ({ background: on ? 'var(--ink)' : 'transparent', color: on ? 'var(--dim)' : 'var(--soft)', border: '1px solid var(--border)' });
+  const count = (k: Kyc) => live.filter(p => p.kyc_status === k).length;
+  const sellingThisMonth = live.filter(p => p.orders.some(o => o.status === 'paid' && inRange(o.paid_at, rangeFor('this_month')))).length;
 
   return (
     <AdminLayout currentPath={location.pathname} pageTitle="Sales Partners"
-      pageSubtitle="Applications, referral links and commissions (India)"
+      pageSubtitle="Onboarding, KYC, sales and payouts (India)"
       displayName={displayName} onLogout={logout} loggingOut={loggingOut}>
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {(['applied', 'approved', 'all'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={btn}
-            style={{ background: filter === f ? 'var(--ink)' : 'transparent', color: filter === f ? 'var(--dim)' : 'var(--soft)', border: '1px solid var(--border)' }}>
-            {f === 'applied' ? 'Awaiting approval' : f === 'approved' ? 'Partners' : 'All'}
-            {' '}({(partners || []).filter(p => f === 'all' || p.status === f || (f === 'approved' && p.status === 'paused')).length})
+      <div className="flex gap-1 p-1 rounded-xl mb-5 w-fit" style={box}>
+        {([['partners', `Partners (${live.length})`], ['leaderboard', 'Leaderboard'], ['payouts', 'Payouts']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setView(k)} className="text-[13px] font-bold px-4 py-2 rounded-lg" style={view === k ? { background: 'var(--ink)', color: 'var(--dim)' } : { color: 'var(--soft)' }}>
+            {l}{k === 'partners' && count('to_check') > 0 ? <span className="ml-1.5 text-[11px] px-1.5 rounded-full" style={{ background: '#dc2626', color: '#fff' }}>{count('to_check')}</span> : null}
           </button>
         ))}
-        <button onClick={() => setFilter('payouts')} className={btn}
-          style={{ background: filter === 'payouts' ? 'var(--ink)' : 'transparent', color: filter === 'payouts' ? 'var(--dim)' : 'var(--soft)', border: '1px solid var(--border)' }}>
-          Payouts{(partners || []).some(p => p.details_updated_at && !p.details_checked_at) ? ' •' : ''}
-        </button>
-        <a href="/partners" target="_blank" rel="noopener noreferrer" className={btn} style={{ color: 'var(--soft)', border: '1px solid var(--border)' }}>Open public page ↗</a>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, phone, email, code, city"
-          className="ml-auto text-[13px] px-3 py-1.5 rounded-lg min-w-[240px]" style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--ink)' }} />
+        <a href="/partners" target="_blank" rel="noopener noreferrer" className="text-[12px] font-bold px-3 py-2" style={{ color: 'var(--soft)' }}>Public page ↗</a>
       </div>
       {tempPin && (
         <div className="rounded-2xl p-5 mb-4" style={{ border: '2px solid #16a34a', background: 'rgba(22,163,74,.06)' }}>
@@ -113,8 +186,53 @@ export default function AdminPartners() {
         </div>
       )}
       {error && <div className="rounded-xl p-3 mb-4 text-[13px]" style={{ color: '#dc2626', border: '1px solid rgba(239,68,68,.3)' }}>{error}</div>}
-      {filter === 'payouts' ? <PartnerPayouts /> : !partners ? <p style={{ color: 'var(--soft)' }}>Loading…</p> : shown.length === 0 ? (
-        <p className="text-[14px]" style={{ color: 'var(--soft)' }}>Nothing here yet.</p>
+
+      {view === 'payouts' ? <PartnerPayouts /> : view === 'leaderboard' ? (partners ? <Leaderboard partners={all} /> : <p style={{ color: 'var(--soft)' }}>Loading…</p>) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3 text-[13px]">
+            {[
+              ['Joined today', live.filter(p => inRange(p.applied_at, rangeFor('today'))).length, () => { setJoined(rangeFor('today')); setKycF('all'); }],
+              ['Joined this month', live.filter(p => inRange(p.applied_at, rangeFor('this_month'))).length, () => { setJoined(rangeFor('this_month')); setKycF('all'); }],
+              ['Total partners', live.length, () => { setJoined(rangeFor('all')); setKycF('all'); }],
+              ['Selling this month', sellingThisMonth, () => setView('leaderboard')],
+            ].map(([l, v, on]) => (
+              <button key={l as string} onClick={on as () => void} className="rounded-xl p-3 text-left" style={box}>
+                <div style={{ color: 'var(--soft)' }}>{l as string}</div><div className="font-black text-[22px]">{v as number}</div>
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5 text-[13px]">
+            {(['to_check', 'incomplete', 'none', 'checked'] as Kyc[]).map(k => (
+              <button key={k} onClick={() => setKycF(kycF === k ? 'all' : k)} className="rounded-xl p-3 text-left"
+                style={{ border: `1.5px solid ${kycF === k ? KYC[k].color : 'var(--border)'}` }}>
+                <div style={{ color: KYC[k].color }} className="font-bold">{KYC[k].label}</div>
+                <div className="font-black text-[22px]">{count(k)}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-bold mr-1" style={{ color: 'var(--soft)' }}>Joined:</span>
+              <DateRangeFilter value={joined} onChange={setJoined} allowAll />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {(['active', 'applied', 'all'] as const).map(f => (
+                <button key={f} onClick={() => setStatusF(f)} className={btn} style={chip(statusF === f)}>
+                  {f === 'active' ? 'Active & paused' : f === 'applied' ? 'Awaiting approval' : 'All incl. rejected'}
+                </button>
+              ))}
+              {kycF !== 'all' && <button className={btn} style={chip(true)} onClick={() => setKycF('all')}>{KYC[kycF].label} ✕</button>}
+              <select value={sort} onChange={e => setSort(e.target.value as 'newest' | 'sales')} className="text-[12.5px] px-3 py-1.5 rounded-lg" style={{ ...box, background: 'transparent', color: 'var(--ink)' }}>
+                <option value="newest">Newest first</option><option value="sales">Most sales first</option>
+              </select>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, phone, email, code, city"
+                className="ml-auto text-[13px] px-3 py-1.5 rounded-lg min-w-[240px]" style={{ ...box, background: 'transparent', color: 'var(--ink)' }} />
+            </div>
+            <div className="text-[12px]" style={{ color: 'var(--soft)' }}>Showing {shown.length} partner(s)</div>
+          </div>
+      {!partners ? <p style={{ color: 'var(--soft)' }}>Loading…</p> : shown.length === 0 ? (
+        <p className="text-[14px]" style={{ color: 'var(--soft)' }}>No partners match these filters.</p>
       ) : (
         <div className="space-y-3">
           {shown.map(p => {
@@ -123,7 +241,8 @@ export default function AdminPartners() {
               <div key={p.id} className="rounded-2xl p-5" style={{ border: '1px solid var(--border)', background: 'var(--card, transparent)' }}>
                 <div className="flex justify-between items-start gap-3 flex-wrap">
                   <div>
-                    <div className="font-black text-[16px]">{p.name} <span className="text-[11px] font-black uppercase ml-1" style={{ color: STATUS_COLORS[p.status] }}>{p.status}</span></div>
+                    <div className="font-black text-[16px]">{p.name} <span className="text-[11px] font-black uppercase ml-1" style={{ color: STATUS_COLORS[p.status] }}>{p.status}</span>
+                      <span className="text-[11px] font-black ml-2 px-2 py-0.5 rounded-full" style={{ color: KYC[p.kyc_status].color, border: `1px solid ${KYC[p.kyc_status].color}` }}>{KYC[p.kyc_status].label}</span></div>
                     <div className="text-[13px]" style={{ color: 'var(--soft)' }}>
                       <a className="underline" href={`https://wa.me/91${p.phone}`} target="_blank" rel="noopener noreferrer">+91 {p.phone}</a> · {p.email}{p.city ? ` · ${p.city}` : ''}{p.occupation ? ` · ${p.occupation}` : ''}
                     </div>
@@ -203,6 +322,8 @@ export default function AdminPartners() {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </AdminLayout>
   );

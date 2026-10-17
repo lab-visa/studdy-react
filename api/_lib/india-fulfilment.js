@@ -29,13 +29,49 @@ export async function loadOrder(supabase, orderId) {
 }
 
 /**
+ * Everything useful Cashfree sends about a payment, flattened for the admin
+ * (amount, UTR, method detail, message) plus the raw verified payload.
+ */
+export function paymentFieldsFromWebhook(event) {
+  const pay = event?.data?.payment || {};
+  const m = pay.payment_method || {};
+  let detail = null;
+  if (m.upi) detail = ['UPI', m.upi.upi_id].filter(Boolean).join(' · ');
+  else if (m.card) detail = ['Card', [m.card.card_network, m.card.card_number ? `••••${String(m.card.card_number).slice(-4)}` : null].filter(Boolean).join(' '), m.card.card_bank_name, m.card.card_type].filter(Boolean).join(' · ');
+  else if (m.netbanking) detail = ['Netbanking', m.netbanking.netbanking_bank_name].filter(Boolean).join(' · ');
+  else if (m.app) detail = ['Wallet', m.app.provider].filter(Boolean).join(' · ');
+  else if (m.cardless_emi || m.emi) detail = 'EMI';
+  else if (m.pay_later || m.paylater) detail = 'Pay later';
+  return {
+    cfPaymentId: pay.cf_payment_id ? String(pay.cf_payment_id) : null,
+    paymentMethod: pay.payment_group || null,
+    paidAt: pay.payment_time || null,
+    amount: pay.payment_amount != null ? Number(pay.payment_amount) : null,
+    currency: pay.payment_currency || null,
+    bankReference: pay.bank_reference ? String(pay.bank_reference).slice(0, 80) : null,
+    detail: detail ? detail.slice(0, 160) : null,
+    message: pay.payment_message ? String(pay.payment_message).slice(0, 300) : null,
+    raw: event || null,
+  };
+}
+
+/**
  * Record a confirmed payment (idempotent). `payment` = { cfPaymentId,
- * paymentMethod, paidAt } - all optional. Returns the fresh row.
+ * paymentMethod, paidAt, amount, currency, bankReference, detail, message,
+ * raw } - all optional. Returns the fresh row.
  */
 export async function markOrderPaid(supabase, orderId, payment = {}) {
   const order = await loadOrder(supabase, orderId);
   if (!order) return null;
-  if (order.status === 'paid' || order.status === 'refunded') return order;
+  if (order.status === 'paid' || order.status === 'refunded') {
+    /* Already paid (e.g. the dashboard confirmed it first): still keep the
+       richer webhook details if we didn't have them yet. */
+    if (payment.raw && !order.cf_payment_raw) {
+      await supabase.from('india_orders').update(paymentColumns(payment, order)).eq('order_id', orderId);
+      return loadOrder(supabase, orderId);
+    }
+    return order;
+  }
 
   const paidAt = payment.paidAt ? new Date(payment.paidAt) : new Date();
   const { error } = await supabase
@@ -45,8 +81,7 @@ export async function markOrderPaid(supabase, orderId, payment = {}) {
       paid_at: paidAt.toISOString(),
       access_start: paidAt.toISOString(),
       access_end: addMonths(paidAt, order.months).toISOString(),
-      cf_payment_id: payment.cfPaymentId || order.cf_payment_id || null,
-      payment_method: payment.paymentMethod || order.payment_method || null,
+      ...paymentColumns(payment, order),
       updated_at: new Date().toISOString(),
     })
     .eq('order_id', orderId)
@@ -55,13 +90,52 @@ export async function markOrderPaid(supabase, orderId, payment = {}) {
   return loadOrder(supabase, orderId);
 }
 
-export async function markOrderFailed(supabase, orderId) {
+function paymentColumns(payment, order) {
+  return {
+    cf_payment_id: payment.cfPaymentId || order.cf_payment_id || null,
+    payment_method: payment.paymentMethod || order.payment_method || null,
+    cf_payment_amount: payment.amount ?? order.cf_payment_amount ?? null,
+    cf_payment_currency: payment.currency || order.cf_payment_currency || null,
+    bank_reference: payment.bankReference || order.bank_reference || null,
+    payment_detail: payment.detail || order.payment_detail || null,
+    payment_message: payment.message || order.payment_message || null,
+    cf_payment_raw: payment.raw || order.cf_payment_raw || null,
+  };
+}
+
+/** A failed / abandoned attempt: count it and keep Cashfree's reason. Never downgrades a paid order. */
+export async function markOrderFailed(supabase, orderId, payment = {}) {
+  const order = await loadOrder(supabase, orderId);
+  if (!order || order.status === 'paid' || order.status === 'refunded') return;
   const { error } = await supabase
     .from('india_orders')
-    .update({ status: 'failed', updated_at: new Date().toISOString() })
+    .update({
+      status: 'failed',
+      failed_attempts: (order.failed_attempts || 0) + 1,
+      payment_message: payment.message || order.payment_message || null,
+      payment_detail: payment.detail || order.payment_detail || null,
+      cf_payment_raw: payment.raw || order.cf_payment_raw || null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('order_id', orderId)
-    .eq('status', 'created');
+    .in('status', ['created', 'failed']);
   if (error) throw error;
+}
+
+/** Give a seat back to its Studdy login (compare-and-swap, never below 0). */
+export async function releaseSeat(supabase, groupName) {
+  for (let i = 0; i < 5; i++) {
+    const { data: acc, error } = await supabase.from('studdy_accounts').select('id, active_customer_count').eq('group_name', groupName).maybeSingle();
+    if (error) throw error;
+    if (!acc) return false;
+    const n = acc.active_customer_count ?? 0;
+    if (n <= 0) return true;
+    const { data: done, error: uErr } = await supabase.from('studdy_accounts')
+      .update({ active_customer_count: n - 1 }).eq('id', acc.id).eq('active_customer_count', n).select().maybeSingle();
+    if (uErr) throw uErr;
+    if (done) return true;
+  }
+  throw new Error(`releaseSeat: could not update ${groupName} after retries`);
 }
 
 /**
@@ -70,7 +144,8 @@ export async function markOrderFailed(supabase, orderId) {
  */
 export async function assignSeatIfNeeded(supabase, orderId) {
   let order = await loadOrder(supabase, orderId);
-  if (!order || order.status !== 'paid' || order.group_name) return order;
+  /* A seat the admin released (refund / test / expiry) is never re-assigned automatically. */
+  if (!order || order.status !== 'paid' || order.group_name || order.seat_released_at) return order;
 
   const now = new Date();
   /* Claim the right to assign: first-time claim, or a stale one. */

@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
 import CommandCenter from './CommandCenter';
+import IndiaTodayBox from '../../components/admin/IndiaTodayBox';
 
 export default function AdminHome() {
   const navigate = useNavigate();
@@ -70,6 +71,7 @@ export default function AdminHome() {
       onLogout={handleLogout}
       loggingOut={loggingOut}
     >
+      <IndiaTodayBox />
       <CommandCenter onSessionExpired={handleSessionExpired} />
     </AdminLayout>
   );

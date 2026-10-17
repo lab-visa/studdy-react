@@ -44,6 +44,8 @@ interface UserData {
   /* true when payment is confirmed but the Studdy login hasn't been
    * assigned yet (webhook still running, or no free seat). */
   accessPending?: boolean;
+  /* India: refunded, or the seat was released by the team. */
+  accessEnded?: boolean;
   /* India (Cashfree) orders only */
   market?: 'in';
   paymentStatus?: 'paid' | 'pending' | 'failed';
@@ -532,7 +534,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {user?.accessPending ? (
+            {user?.accessEnded ? (
+              <div className="rounded-2xl p-4 text-[13px]" style={{ background: 'var(--dim)', border: '1px solid var(--border)', color: 'var(--soft)' }}>
+                <div className="font-black mb-1" style={{ color: 'var(--ink)' }}>{user.status === 'Refunded' ? 'This order was refunded' : 'Your access has ended'}</div>
+                If you think this is a mistake, message us on{' '}
+                <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer" className="underline font-bold">WhatsApp</a> and we'll sort it out.
+              </div>
+            ) : user?.accessPending ? (
               <div className="rounded-2xl p-4 text-[13px]"
                 style={{ background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.3)', color: '#92400e' }}>
                 <div className="font-black mb-1 flex items-center gap-2"><span className="dash-spin inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent" /> Your login is being set up</div>

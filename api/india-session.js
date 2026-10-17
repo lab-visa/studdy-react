@@ -74,7 +74,7 @@ export default async function handler(req, res, deps = {}) {
       name: order.customer_name || '',
       email: order.customer_email || '',
       plan: INDIA_PLANS[order.plan]?.label || order.plan,
-      status: order.status === 'refunded' ? 'Refunded' : 'Active',
+      status: order.status === 'refunded' ? 'Refunded' : order.seat_released_at ? 'Access ended' : 'Active',
       amount: inr(order.amount),
       paidOn: fmtDate(order.paid_at),
       accessUntil: fmtDate(order.access_end),
@@ -87,7 +87,8 @@ export default async function handler(req, res, deps = {}) {
       totalMonthsPaid: 0,
       latestInvoiceUrl: null,
       cancelRequestedAt: null,
-      accessPending: order.status === 'paid' && (!studdyEmail || !studdyPassword),
+      accessPending: order.status === 'paid' && !order.seat_released_at && (!studdyEmail || !studdyPassword),
+      accessEnded: order.status === 'refunded' || Boolean(order.seat_released_at),
     });
   } catch (err) {
     console.error('india-session error:', err);

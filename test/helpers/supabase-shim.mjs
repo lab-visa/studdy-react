@@ -98,6 +98,11 @@ class QueryBuilder {
     return this;
   }
 
+  lte(col, val) {
+    this.filters.push({ type: 'lte', col, val });
+    return this;
+  }
+
   /** Chainable — matches supabase-js's own .order(col1).order(col2) multi-column pattern. */
   order(col, opts = {}) {
     this.orders.push({ col, ascending: opts.ascending !== false });
@@ -169,6 +174,10 @@ class QueryBuilder {
           params.push(f.val);
           idx++;
         }
+      } else if (f.type === 'lte') {
+        clauses.push(`"${f.col}" <= $${idx}`);
+        params.push(f.val);
+        idx++;
       } else if (f.type === 'lt') {
         clauses.push(`"${f.col}" < $${idx}`);
         params.push(f.val);

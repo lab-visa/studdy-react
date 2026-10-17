@@ -17,6 +17,8 @@ const CancelPage     = lazy(() => import('./pages/Legal').then(m => ({ default: 
 const ContactPage    = lazy(() => import('./pages/Legal').then(m => ({ default: m.ContactPage })));
 const PartnerTermsPage = lazy(() => import('./pages/Legal').then(m => ({ default: m.PartnerTerms })));
 const PartnerLogin   = lazy(() => import('./pages/PartnerLogin'));
+const AdminIndiaSales = lazy(() => import('./pages/admin/AdminIndiaSales'));
+const AdminStuddyLogins = lazy(() => import('./pages/admin/AdminStuddyLogins'));
 const AdminLogin      = lazy(() => import('./pages/admin/AdminLogin'));
 const AdminHome       = lazy(() => import('./pages/admin/AdminHome'));
 const CustomerSubscription = lazy(() => import('./pages/admin/CustomerSubscription'));
@@ -165,6 +167,8 @@ function AppRoutes() {
           <Route path="/admin"           element={<AdminHome />} />
           <Route path="/admin/subscriptions" element={<CustomerSubscription />} />
           <Route path="/admin/partners"  element={<AdminPartners />} />
+          <Route path="/admin/india-sales" element={<AdminIndiaSales />} />
+          <Route path="/admin/studdy-logins" element={<AdminStuddyLogins />} />
           <Route path="/partners"        element={<PartnersPage />} />
           <Route path="/partner"         element={<PartnerDashboard />} />
           <Route path="/partner/login"   element={<PartnerLogin />} />

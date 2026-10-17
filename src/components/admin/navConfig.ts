@@ -32,6 +32,8 @@ import {
   Plug,
   Settings,
   Handshake,
+  IndianRupee,
+  KeyRound,
 } from 'lucide-react';
 
 type NavIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string; style?: CSSProperties }>;
@@ -62,7 +64,9 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     label: 'Workspace',
     items: [
       { key: 'leads', label: 'Leads & Pipeline', icon: Users, path: '/admin/leads', status: 'comingLater' },
+      { key: 'india-sales', label: 'India Sales', icon: IndianRupee, path: '/admin/india-sales', status: 'active' },
       { key: 'partners', label: 'Sales Partners', icon: Handshake, path: '/admin/partners', status: 'active' },
+      { key: 'studdy-logins', label: 'Studdy Logins', icon: KeyRound, path: '/admin/studdy-logins', status: 'active' },
       { key: 'customers', label: 'Customers', icon: UserCheck, path: '/admin/customers', status: 'comingLater' },
       { key: 'conversations', label: 'Conversations', icon: MessageCircle, path: '/admin/conversations', status: 'comingLater' },
     ],
