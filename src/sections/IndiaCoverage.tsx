@@ -1,8 +1,8 @@
 /**
- * IndiaCoverage — shown only to visitors in India (see Home.tsx).
+ * IndiaCoverage - shown only to visitors in India (see Home.tsx).
  *
- * Answers the first question an Indian parent or student asks — "does it
- * cover MY board / MY exam / MY course?" — in one glance, from Class 1 all
+ * Answers the first question an Indian parent or student asks - "does it
+ * cover MY board / MY exam / MY course?" - in one glance, from Class 1 all
  * the way to college, PG and work skills.
  */
 import { School, Target, GraduationCap, Briefcase, type LucideIcon } from 'lucide-react';
@@ -15,7 +15,7 @@ const STAGES: { Icon: LucideIcon; title: string; line: string; tags: string[] }[
   {
     Icon: School,
     title: 'School · Class 1 to 12',
-    line: 'Homework, chapter doubts, NCERT exercises and board-exam revision — every subject.',
+    line: 'Homework, chapter doubts, NCERT exercises and board-exam revision - every subject.',
     tags: ['CBSE', 'ICSE / ISC', 'IB', 'IGCSE', 'All State Boards', 'Maths', 'Science', 'English', 'SST', 'Accounts'],
   },
   {
@@ -33,7 +33,7 @@ const STAGES: { Icon: LucideIcon; title: string; line: string; tags: string[] }[
   {
     Icon: Briefcase,
     title: 'Work & new skills',
-    line: 'Learn anything new, at your pace — for your first job or your next one.',
+    line: 'Learn anything new, at your pace - for your first job or your next one.',
     tags: ['Excel', 'Python & coding', 'Data & AI tools', 'Spoken English', 'Interview prep', 'Business writing'],
   },
 ];
@@ -47,7 +47,7 @@ export default function IndiaCoverage() {
         <SectionHeading
           eyebrow="Made for Indian learners"
           heading="One tutor from Class 1 to your first job."
-          sub="Whatever your board, entrance exam or course — ask any question and get a clear, step-by-step explanation in minutes, not days."
+          sub="Whatever your board, entrance exam or course - ask any question and get a clear, step-by-step explanation in minutes, not days."
           center
         />
 

@@ -1,7 +1,7 @@
 /**
- * CRM-2B — Section: subscription/customer health snapshot. Combines two
+ * CRM-2B - Section: subscription/customer health snapshot. Combines two
  * current-state counts (who's active right now) with one event-period
- * count (cancellation requests filed in the selected period) — each
+ * count (cancellation requests filed in the selected period) - each
  * clearly labeled so the two kinds of number are never confused.
  */
 import SectionCard from '../SectionCard';

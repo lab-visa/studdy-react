@@ -3,14 +3,14 @@ import FAQItem from '../components/FAQItem';
 import SectionHeading from '../components/SectionHeading';
 import { useMarket } from '../context/MarketContext';
 
-/* 12 questions grouped into 3 tabs, shown one tab at a time — like
- * unischooly.com's FAQ section — instead of one long stacked list that
+/* 12 questions grouped into 3 tabs, shown one tab at a time - like
+ * unischooly.com's FAQ section - instead of one long stacked list that
  * makes the page keep scrolling. */
 const FAQ_GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
   {
     heading: 'Who it\'s for',
     items: [
-      { q:'Who can use Studdy Lab?', a:'Anyone who needs clear explanations — primary and secondary school students, college and engineering students, professionals using Excel or writing documents, and anyone who gets stuck and needs something explained visually.' },
+      { q:'Who can use Studdy Lab?', a:'Anyone who needs clear explanations - primary and secondary school students, college and engineering students, professionals using Excel or writing documents, and anyone who gets stuck and needs something explained visually.' },
       { q:'Is this only for schoolchildren?', a:'Not at all. Studdy is designed for school students, college learners, coders, engineers and working professionals. The interface adapts to your topic and depth of question.' },
       { q:'Can adults and professionals use it?', a:'Absolutely. Many users are professionals who use Studdy for Excel, writing improvement, document analysis and concept explanations at work.' },
       { q:'Which subjects and tasks are supported?', a:'Maths, Science, English, History, Geography, coding in any language, engineering, economics, Excel formulas, business writing, document summarisation and exam preparation, among others.' },
@@ -36,7 +36,7 @@ const FAQ_GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
   },
 ];
 
-/* India (Oct 2026): pay first, Quarterly/Yearly, 7-day full refund —
+/* India (Oct 2026): pay first, Quarterly/Yearly, 7-day full refund -
  * no free trial. Shown instead of FAQ_GROUPS when the visitor is in India. */
 const INDIA_FAQ_GROUPS: typeof FAQ_GROUPS = [
   {
@@ -53,7 +53,7 @@ const INDIA_FAQ_GROUPS: typeof FAQ_GROUPS = [
     items: [
       { q:'How do I ask a question?', a:'Type it, speak it, or upload a photo of the question from your book or notebook. Studdy explains it on a live whiteboard, and you can interrupt anytime with a follow-up.' },
       { q:'Which device do I need?', a:'Studdy works best on a laptop or a tablet (11-inch screen or larger). This website works on any phone, but the full whiteboard tutor needs a bigger screen.' },
-      { q:'How do I get my login after paying?', a:'Right after payment you get your personal dashboard link with your login details and simple steps to start. We also send it to you on WhatsApp and email.' },
+      { q:'How do I get my login after paying?', a:'Right after payment you land on your personal dashboard with your login details and simple steps to start. Bookmark that page or save it on WhatsApp: it is your permanent link. Lost it? Message us and we will resend it.' },
       { q:'Can the whole family use it?', a:"Your plan is for one learner. Need it for more than one child? Message us on WhatsApp and we'll help." },
     ],
   },
@@ -96,7 +96,7 @@ export default function FAQ() {
           ))}
         </div>
 
-        {/* Only the active group's questions are rendered — no giant
+        {/* Only the active group's questions are rendered - no giant
          * stacked list, no extra page scroll. */}
         <div className="bg-white rounded-3xl px-6 sm:px-8" style={{ border: '1.5px solid var(--border)' }}>
           {groups[tab].items.map((f, i) => <FAQItem key={f.q} {...f} last={i === groups[tab].items.length - 1} />)}

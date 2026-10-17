@@ -1,11 +1,11 @@
 /**
- * CRM-3A — full single-customer detail panel. Fetches
+ * CRM-3A - full single-customer detail panel. Fetches
  * GET /api/admin/customer-detail?id=... on open, renders the required
  * field list (Name/Email/Phone/Country/Original+Latest source/Plan/
  * Currency/Stripe refs/Trial dates/Next payment/Subscription status/
  * Cancellation status/Access+group/Sales Owner) plus the IST activity
  * timeline, and lets an admin set/clear Sales Owner
- * (PATCH /api/admin/customer-sales-owner) — the one write action this
+ * (PATCH /api/admin/customer-sales-owner) - the one write action this
  * round ships.
  */
 import { useEffect, useState, useCallback } from 'react';
@@ -35,7 +35,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
         {label}
       </div>
       <div className="text-[13.5px] font-semibold mt-0.5" style={{ color: 'var(--ink)' }}>
-        {value ?? '—'}
+        {value ?? '-'}
       </div>
     </div>
   );
@@ -48,12 +48,12 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
   const [ownerDraft, setOwnerDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // CRM-3A ChatGPT review round 3 — "genuine server-side pagination":
+  // CRM-3A ChatGPT review round 3 - "genuine server-side pagination":
   // the Activity Timeline is now cursor/keyset-paginated (migration
   // 0018's search_customer_activity_timeline), not OFFSET/page-number.
   // cursorStack[0] is always null (the first page); cursorStack[i] for
   // i>0 is the cursor that fetches page i+1. cursorIndex is which page
-  // is currently displayed — Previous just moves the index back
+  // is currently displayed - Previous just moves the index back
   // (no refetch of a NEW cursor needed, the stack already holds it);
   // Next either reuses an already-known cursor (the user went back then
   // forward again) or, at the tail, pushes the cursor the last response
@@ -132,7 +132,7 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
       onSalesOwnerSaved(customerId, json.customer.sales_owner ?? null);
       await load();
     } catch {
-      setSaveError('Could not save Sales Owner — try again.');
+      setSaveError('Could not save Sales Owner - try again.');
     } finally {
       setSaving(false);
     }
@@ -205,12 +205,12 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
                 <div>
                   <div className="font-bold" style={{ color: 'var(--soft)' }}>Original (first touch)</div>
                   <div style={{ color: 'var(--ink)' }}>{data.customer.attribution.first_touch.utm_source ?? 'direct'}</div>
-                  <div style={{ color: 'var(--soft)' }}>{data.customer.attribution.first_touch.utm_campaign ?? '—'}</div>
+                  <div style={{ color: 'var(--soft)' }}>{data.customer.attribution.first_touch.utm_campaign ?? '-'}</div>
                 </div>
                 <div>
                   <div className="font-bold" style={{ color: 'var(--soft)' }}>Latest touch</div>
                   <div style={{ color: 'var(--ink)' }}>{data.customer.attribution.latest_touch.utm_source ?? 'direct'}</div>
-                  <div style={{ color: 'var(--soft)' }}>{data.customer.attribution.latest_touch.utm_campaign ?? '—'}</div>
+                  <div style={{ color: 'var(--soft)' }}>{data.customer.attribution.latest_touch.utm_campaign ?? '-'}</div>
                 </div>
               </div>
             </div>
@@ -256,10 +256,10 @@ export default function CustomerDetailDrawer({ customerId, onClose, onSessionExp
                 <>
                   <ul className="flex flex-col gap-2">
                     {/* Backend already sorts newest-first with a stable,
-                        genuinely unique secondary key — each entry's own
+                        genuinely unique secondary key - each entry's own
                         event_key (migration 0018's
                         search_customer_activity_timeline), used as the
-                        list key below instead of the array index — no
+                        list key below instead of the array index - no
                         client-side re-sort. */}
                     {data.activity_timeline.map((entry) => (
                       <li key={entry.event_key} className="text-[12.5px]" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '10px' }}>

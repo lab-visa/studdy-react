@@ -3,7 +3,7 @@
  * get-session (which reads it back, or computes it directly from Stripe
  * as a fallback) always agree on the exact same values. Before this file
  * existed, the webhook wrote "Active" for a trialing subscription while
- * the dashboard checked for the raw Stripe word "trialing" — they never
+ * the dashboard checked for the raw Stripe word "trialing" - they never
  * matched, so the trial banner never showed. Everything reads through
  * here now so that can't drift apart again.
  */
@@ -36,7 +36,7 @@ export const fmtDate = (isoDate) =>
         month: 'long',
         year: 'numeric',
       })
-    : '—';
+    : '-';
 
 /**
  * Stripe API versions from 2025 onward moved current_period_start/end off

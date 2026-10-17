@@ -1,11 +1,11 @@
 /**
- * geo.ts — shared IP → Region detection.
+ * geo.ts - shared IP → Region detection.
  *
- * Oct 2026: asks our own /api/geo first (Vercel's built-in country header —
+ * Oct 2026: asks our own /api/geo first (Vercel's built-in country header -
  * fast, no third party, no rate limit), and only falls back to the free
  * ipapi.co lookup if that returns nothing (e.g. local development). If
  * both fail, or the country isn't one we have a mapping for, we default to
- * United States / USD — a locked decision (Vish, Aug 2026), not a guess.
+ * United States / USD - a locked decision (Vish, Aug 2026), not a guess.
  *
  * The result is cached for the page's lifetime, so every section that asks
  * gets the same answer from a single network call.

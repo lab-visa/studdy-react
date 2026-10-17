@@ -1,12 +1,12 @@
 /**
- * AskStuddy.tsx — "Try It Yourself" — Section 3
+ * AskStuddy.tsx - "Try It Yourself" - Section 3
  *
  * Changes in this pass:
- *  FIX 2 — Mobile layout: lesson stage appears before context panel on mobile
- *  FIX 3 — Auto-scroll to lesson stage on mobile after topic selection
- *  FIX 4 — Removed minHeight from response body; card grows naturally
- *  FIX 5 — Mobile category selector: compact cards (2+1 grid) on < 640px
- *  FIX 6 — Category-based gradients on topic card icons; auto-enables when mp4Url set
+ *  FIX 2 - Mobile layout: lesson stage appears before context panel on mobile
+ *  FIX 3 - Auto-scroll to lesson stage on mobile after topic selection
+ *  FIX 4 - Removed minHeight from response body; card grows naturally
+ *  FIX 5 - Mobile category selector: compact cards (2+1 grid) on < 640px
+ *  FIX 6 - Category-based gradients on topic card icons; auto-enables when mp4Url set
  *
  * State machine unchanged:
  *   idle → typingMain → thinkingMain → playingMain
@@ -104,7 +104,7 @@ function ContextPanel({ cat, topic, onCta }: {
   const heading = topic ? topic.question : ctx.heading;
   const bullets: [string, string, string] = topic
     ? ['Visual whiteboard explanation', 'Ask follow-up questions',
-       isIndia ? `${INDIA_REFUND_DAYS}-day full refund` : 'Start free — no card needed']
+       isIndia ? `${INDIA_REFUND_DAYS}-day full refund` : 'Start free - no card needed']
     : ctx.bullets;
 
   return (
@@ -133,7 +133,7 @@ function ContextPanel({ cat, topic, onCta }: {
         ))}
       </ul>
       <button className="gbtn" style={{ fontSize: '13.5px', padding: '10px 20px' }}
-        onClick={onCta} aria-label={`${ctaLabel} — ${ctx.cta}`}>
+        onClick={onCta} aria-label={`${ctaLabel} - ${ctx.cta}`}>
         {topic ? ctaLabel : ctx.cta}
       </button>
     </div>
@@ -293,7 +293,7 @@ function usePreloadVideos(urls: string[]) {
   }, [urls.join('|')]);
 }
 
-/* ── Category cards — all screen sizes (FIX 2) ─────────────────── *
+/* ── Category cards - all screen sizes (FIX 2) ─────────────────── *
  * Desktop: 3 cards in one row (grid-cols-3)
  * Tablet:  3 in a row if it fits, else 2+1
  * Mobile:  2+1 (first two side by side, third full width)
@@ -411,7 +411,7 @@ function CategoryCards({ catIdx, onChange }: {
           grid-template-columns: repeat(3, 1fr);
         }
         @media (max-width: 639px) {
-          /* Mobile: 2+1 — last card spans both columns */
+          /* Mobile: 2+1 - last card spans both columns */
           .cat-card-grid {
             grid-template-columns: repeat(2, 1fr);
           }
@@ -501,7 +501,7 @@ function LessonStage({
         </div>
       </div>
 
-      {/* Response body — FIX 4: no minHeight, grows naturally */}
+      {/* Response body - FIX 4: no minHeight, grows naturally */}
       <div>
         {/* Idle */}
         {showIdle && (
@@ -574,12 +574,12 @@ function LessonStage({
           </div>
         )}
 
-        {/* Video stage — stays visible through followup typing/complete */}
+        {/* Video stage - stays visible through followup typing/complete */}
         {showStage &&
           lessonState !== 'typingMain' && lessonState !== 'thinkingMain' &&
           lessonState !== 'unavailable' && lessonState !== 'error' && (
           <div>
-            {/* 16:9 player — FIX 4: no reserved space outside this container */}
+            {/* 16:9 player - FIX 4: no reserved space outside this container */}
             <div style={{
               position: 'relative', width: '100%', aspectRatio: '16/9',
               background: '#fbfaf5', overflow: 'hidden',
@@ -605,7 +605,7 @@ function LessonStage({
               )}
             </div>
 
-            {/* Follow-up suggestions — only rendered when needed */}
+            {/* Follow-up suggestions - only rendered when needed */}
             {lessonState === 'followupSelection' && activeTopic && (
               <div style={{ padding: '16px 18px', borderTop: '1px solid var(--border)' }} aria-live="polite">
                 <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--soft)', marginBottom: '10px' }}>
@@ -619,7 +619,7 @@ function LessonStage({
               </div>
             )}
 
-            {/* Lesson complete — only rendered when needed */}
+            {/* Lesson complete - only rendered when needed */}
             {lessonState === 'complete' && (
               <div style={{ padding: '18px', borderTop: '1px solid var(--border)', textAlign: 'center' }}
                 aria-live="assertive">
@@ -807,7 +807,7 @@ export default function AskStuddy() {
           center
         />
 
-        {/* FIX 2: CategoryCards on all screen sizes — responsive via CSS grid */}
+        {/* FIX 2: CategoryCards on all screen sizes - responsive via CSS grid */}
         <CategoryCards catIdx={catIdx} onChange={handleCatChange} />
 
         {/*
@@ -826,7 +826,7 @@ export default function AskStuddy() {
               ))}
             </div>
 
-            {/* Lesson stage — scroll target */}
+            {/* Lesson stage - scroll target */}
             <div ref={stageRef}>
               <LessonStage {...stageProps} />
             </div>
@@ -853,7 +853,7 @@ export default function AskStuddy() {
               <ContextPanel cat={cat} topic={activeTopic} onCta={ctaFn} />
             </div>
 
-            {/* Right — lesson stage */}
+            {/* Right - lesson stage */}
             <div ref={stageRef}>
               <LessonStage {...stageProps} />
             </div>

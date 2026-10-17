@@ -4,17 +4,17 @@
  * Reusable mute/unmute pill for any autoplay video.
  *
  * Props:
- *   videoRef              — ref to the <video> element to control
- *   isMuted               — current muted state (controlled externally)
- *   onToggle              — called when user clicks; parent updates isMuted
- *   top / right / bottom / left — position inside the video container (default top:18px right:18px)
- *   className             — optional extra class
- *   storageKey            — localStorage key for persistence (default 'studdy_muted')
+ *   videoRef              - ref to the <video> element to control
+ *   isMuted               - current muted state (controlled externally)
+ *   onToggle              - called when user clicks; parent updates isMuted
+ *   top / right / bottom / left - position inside the video container (default top:18px right:18px)
+ *   className             - optional extra class
+ *   storageKey            - localStorage key for persistence (default 'studdy_muted')
  *
  * Behaviour:
  *   - Before first interaction: pill is always expanded, showing "Click to unmute"
  *   - After first click: collapses to icon-only after 2s; hover re-expands
- *   - Uses Lucide icons (Volume2 / VolumeX) — no emojis
+ *   - Uses Lucide icons (Volume2 / VolumeX) - no emojis
  *   - Smooth 250ms width + opacity transition
  *   - Accessible: aria-label, keyboard-focusable, visible focus ring
  *   - Respects prefers-reduced-motion
@@ -63,7 +63,7 @@ export default function VideoSoundToggle({
     }
   }, []);
 
-  /* Schedule collapse — only fires after first interaction */
+  /* Schedule collapse - only fires after first interaction */
   const scheduleCollapse = useCallback(() => {
     clearCollapse();
     collapseTimer.current = setTimeout(() => setExpanded(false), 2000);
@@ -72,14 +72,14 @@ export default function VideoSoundToggle({
   /* Cleanup on unmount */
   useEffect(() => () => clearCollapse(), [clearCollapse]);
 
-  /* Expand on hover — only after first interaction */
+  /* Expand on hover - only after first interaction */
   const handleMouseEnter = useCallback(() => {
     if (!hasInteracted) return;
     clearCollapse();
     setExpanded(true);
   }, [hasInteracted, clearCollapse]);
 
-  /* Start collapse on mouse-leave — only after first interaction */
+  /* Start collapse on mouse-leave - only after first interaction */
   const handleMouseLeave = useCallback(() => {
     if (!hasInteracted) return;
     scheduleCollapse();
@@ -142,7 +142,7 @@ export default function VideoSoundToggle({
         overflow: 'hidden',
         lineHeight: 1,
         outline: 'none',
-        /* Focus ring — keyboard accessible */
+        /* Focus ring - keyboard accessible */
         boxShadow: undefined,
         ...transitionStyle,
       }}
@@ -150,7 +150,7 @@ export default function VideoSoundToggle({
       onFocus={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 2px rgba(37,168,244,.7)'; }}
       onBlur={e  => { (e.currentTarget as HTMLElement).style.boxShadow = ''; }}
     >
-      {/* Lucide icon — no emoji */}
+      {/* Lucide icon - no emoji */}
       <span style={{ flexShrink: 0, lineHeight: 0, display: 'flex', alignItems: 'center' }}>
         {isMuted
           ? <VolumeX size={14} aria-hidden="true" />
@@ -158,7 +158,7 @@ export default function VideoSoundToggle({
         }
       </span>
 
-      {/* Label — expands/collapses */}
+      {/* Label - expands/collapses */}
       <span
         aria-hidden="true"   /* screen readers use aria-label on the button */
         style={{

@@ -1,6 +1,6 @@
 /**
- * CRM-2B — Section: open disputes / attention-needed. Current-state list
- * straight from open_dispute.items — no amount summed across currencies.
+ * CRM-2B - Section: open disputes / attention-needed. Current-state list
+ * straight from open_dispute.items - no amount summed across currencies.
  */
 import { AlertCircle } from 'lucide-react';
 import SectionCard from '../SectionCard';
@@ -15,7 +15,7 @@ export default function DisputesSection({ metrics }: DisputesSectionProps) {
   const items = metrics.open_dispute.items;
 
   return (
-    <SectionCard title="Open disputes" description="Needs attention — live snapshot, not affected by the selected date range">
+    <SectionCard title="Open disputes" description="Needs attention - live snapshot, not affected by the selected date range">
       {items.length === 0 ? (
         <p className="text-[13px] font-medium" style={{ color: 'var(--soft)' }}>
           No open disputes right now.

@@ -1,5 +1,5 @@
 /**
- * CRM-2B — Section 1: Executive KPI overview. The at-a-glance headline
+ * CRM-2B - Section 1: Executive KPI overview. The at-a-glance headline
  * numbers; deeper breakdowns (revenue by currency, churn split, capacity
  * by group) live in their own sections below, not duplicated here.
  */

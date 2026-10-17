@@ -13,7 +13,7 @@ function LegalPage({ title, sections }: Props) {
       <h1 className="font-black mb-8" style={{ fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-1px' }}>{title}</h1>
       <p className="text-[13px] mb-8" style={{ color: 'var(--soft)' }}>Last updated: 14 October 2026</p>
       <p className="text-[15px] leading-relaxed mb-8" style={{ color: 'var(--soft)' }}>
-        Studdy Lab (studdylab.com) is owned and operated by <b style={{ color: 'var(--ink)' }}>{LEGAL_ENTITY}</b>. In this policy, “we”, “us” and “Studdy Lab” mean {LEGAL_ENTITY}.
+        Studdy Lab (studdylab.com) is owned and operated by {LEGAL_ENTITY}. In this policy, “we”, “us” and “Studdy Lab” mean {LEGAL_ENTITY}.
       </p>
       {sections.map((s, i) => (
         <div key={i} className="mb-8">
@@ -44,8 +44,8 @@ export function TermsOfService() {
     { heading: '1. Service', body: 'Studdy Lab gives you access to the Studdy AI tutoring platform (a third-party product) through an account we set up and manage for you. The service is a supplemental learning aid and does not replace qualified human teachers or professional advice. Responses are AI-generated and may occasionally be incomplete or inaccurate, so use judgment before relying on them for graded or professional work.' },
     { heading: '2. Eligibility', body: 'You must be at least 13 years old to use Studdy Lab. If you are under 18, a parent or guardian must agree to these terms and is responsible for your use of the service.' },
     { heading: '3. Trial and billing', body: 'Trials are 7 days and require a card on file, but nothing is charged during the trial. After the trial, billing begins automatically at the agreed rate unless you cancel first. We will message you on WhatsApp before any charge.' },
-    { heading: '4. Account access', body: 'Your access is provided through an account managed by Studdy Lab, which may be shared with a small number of other Studdy Lab customers as part of how we operate the service. Please do not change the shared password or share your access with anyone outside your own household.' },
-    { heading: '5. Cancellation', body: 'You may request cancellation at any time by messaging us on WhatsApp or email, before your next billing date. We will contact you on WhatsApp within 24 hours to confirm and help resolve any issues before your subscription is cancelled. Your subscription remains active and billable until we have processed the cancellation — see our Cancellation Policy for full details.' },
+    { heading: '4. Account access', body: 'Your access is provided through an account managed by Studdy Lab, which may be shared with a small number of other Studdy Lab customers as part of how we operate the service. Please do not change the shared password or share your access with anyone outside your own household. Sharing your login details with anyone outside your household may lead to your access being terminated without a refund.' },
+    { heading: '5. Cancellation', body: 'You may request cancellation at any time by messaging us on WhatsApp or email, before your next billing date. We will contact you on WhatsApp within 24 hours to confirm and help resolve any issues before your subscription is cancelled. Your subscription remains active and billable until we have processed the cancellation - see our Cancellation Policy for full details.' },
     { heading: '6. Acceptable use', body: 'You may not use the service for any unlawful purpose, attempt to disrupt or reverse-engineer it, or share access with others outside the agreed account terms above.' },
     { heading: '7. No warranty', body: 'The service is provided "as is." We do not guarantee that it will be uninterrupted, error-free, or that AI-generated explanations will always be correct.' },
     { heading: '8. Liability', body: 'To the extent permitted by law, Studdy Lab is not liable for outcomes resulting from reliance on the service. Content is provided for educational purposes only.' },
@@ -80,7 +80,7 @@ export function ContactPage() {
       <Link to="/" className="text-[14px] font-bold mb-8 block" style={{ color: 'var(--soft)' }}>← Back to Studdy Lab</Link>
       <h1 className="font-black mb-4" style={{ fontSize: 'clamp(28px,4vw,42px)', letterSpacing: '-1px' }}>Contact & Support</h1>
       <p className="text-[16px] mb-4" style={{ color: 'var(--soft)' }}>The fastest way to reach us is WhatsApp. We reply within minutes during business hours.</p>
-      <p className="text-[15px] mb-10" style={{ color: 'var(--soft)' }}>Studdy Lab is owned and operated by <b style={{ color: 'var(--ink)' }}>{LEGAL_ENTITY}</b>.</p>
+      <p className="text-[15px] mb-10" style={{ color: 'var(--soft)' }}>Studdy Lab is owned and operated by {LEGAL_ENTITY}.</p>
       <div className="space-y-4">
         <a href={SUPPORT_WHATSAPP} target="_blank" rel="noreferrer" className="flex items-center gap-4 p-5 rounded-2xl bg-white font-bold" style={{ border: '1.5px solid var(--border)' }}>
           <span className="text-[28px]">💬</span>

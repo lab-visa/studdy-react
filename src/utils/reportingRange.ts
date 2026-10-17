@@ -1,15 +1,15 @@
 /**
- * CRM-2B — reporting-period preset calculations for the Command Center's
+ * CRM-2B - reporting-period preset calculations for the Command Center's
  * date-range control.
  *
  * Per the CRM-2B handoff: "Reuse the existing CRM-2A reporting-timezone
  * utility. Do not independently recreate timezone logic." api/_lib/
  * reporting-timezone.js is plain, dependency-free JS (only Intl/Date, no
- * Node built-ins) — safe to import directly into the client bundle, so
+ * Node built-ins) - safe to import directly into the client bundle, so
  * this file imports it rather than reimplementing IST day-boundary math.
  *
  * All presets are IST CALENDAR-DAY windows (matching how every CRM-2A
- * event-period metric and site_traffic_daily already bucket "a day") —
+ * event-period metric and site_traffic_daily already bucket "a day") -
  * never a rolling 24h/168h window from the current instant. `to` is
  * always the exclusive upper bound the API expects (`.lt(column, to)`),
  * so "through today" uses tomorrow's IST midnight as `to`.
@@ -45,7 +45,7 @@ function formatDayLabel(day: string): string {
   });
 }
 
-/** Tomorrow's IST midnight, as an ISO instant — the exclusive `to` bound covering "through right now". */
+/** Tomorrow's IST midnight, as an ISO instant - the exclusive `to` bound covering "through right now". */
 function throughNowBound(): string {
   const tomorrow = addDays(todayReportingDay(), 1);
   return reportingDayBoundsUtc(tomorrow).startUtc.toISOString();
@@ -54,7 +54,7 @@ function throughNowBound(): string {
 /**
  * Resolves a preset (or an explicit custom 'YYYY-MM-DD' pair) into the
  * {from, to} instant bounds the API expects. Returns {} (both undefined)
- * for 'all' — the honest "no filter" case, never a fabricated wide range.
+ * for 'all' - the honest "no filter" case, never a fabricated wide range.
  */
 export function resolveRange(preset: RangePreset, custom?: { from: string; to: string }): ResolvedRange {
   const today = todayReportingDay();
@@ -100,7 +100,7 @@ export function resolveRange(preset: RangePreset, custom?: { from: string; to: s
 
     case 'custom': {
       if (!custom || !custom.from || !custom.to || custom.from > custom.to) {
-        // Invalid/incomplete custom range — never silently substitute a
+        // Invalid/incomplete custom range - never silently substitute a
         // guessed window. Caller (RangeControls) must treat this as an
         // error state and not fetch.
         return { label: 'Invalid custom range' };
@@ -126,7 +126,7 @@ export function isValidCustomRange(from: string, to: string): boolean {
 }
 
 // Mirrors api/_lib/metrics.js's TRIAL_TO_PAID_WINDOW_DAYS. This is only a
-// UI convenience preset — the authoritative 14-day window is enforced
+// UI convenience preset - the authoritative 14-day window is enforced
 // server-side in trialToPaid14d() regardless of which cohort range the
 // user actually picks.
 const COHORT_MATURITY_DAYS = 14;
@@ -140,12 +140,12 @@ function monthStart(year: number, monthIndex0: number): string {
 
 /**
  * A full-calendar-month cohort preset, chosen so cohortTo is always at
- * least COHORT_MATURITY_DAYS in the past — never a still-maturing cohort,
+ * least COHORT_MATURITY_DAYS in the past - never a still-maturing cohort,
  * regardless of what day of the month this is clicked on. Offered as a
  * convenience button; never applied automatically/silently. The Command
  * Center still requires an explicit user action (clicking this, or
  * entering a custom cohort range) before trial_to_paid_14d is ever
- * requested — see CommandCenter.tsx.
+ * requested - see CommandCenter.tsx.
  */
 export function lastMatureCohortMonth(): { cohortFrom: string; cohortTo: string; label: string } {
   const today = todayReportingDay();
@@ -157,7 +157,7 @@ export function lastMatureCohortMonth(): { cohortFrom: string; cohortTo: string;
 
   const daysSinceCohortTo = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${cohortTo}T00:00:00Z`)) / (24 * 60 * 60 * 1000);
   if (daysSinceCohortTo < COHORT_MATURITY_DAYS) {
-    // Early in the month — last month alone hasn't matured yet. Shift the
+    // Early in the month - last month alone hasn't matured yet. Shift the
     // whole window back one more month so it always has.
     cohortTo = cohortFrom;
     cohortFrom = monthStart(ty, tm - 3);

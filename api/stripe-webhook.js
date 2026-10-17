@@ -7,7 +7,7 @@
  *   checkout.session.completed
  *     -> customer finished checkout, 7-day trial started, card saved
  *     -> assign a Studdy account seat, save card/trial/billing info
- *     -> stage = 'trial_started' (NOT 'paid' yet — no money has moved)
+ *     -> stage = 'trial_started' (NOT 'paid' yet - no money has moved)
  *
  *   invoice.payment_succeeded
  *     -> Stripe actually took a real payment (trial ended, or a later
@@ -64,7 +64,7 @@ import {
 } from './_lib/sync-customer.js';
 
 /* Runs the new-CRM-tables sync alongside the existing `leads` sync above.
- * Wrapped so that if anything in here ever throws, it's only logged —
+ * Wrapped so that if anything in here ever throws, it's only logged -
  * never allowed to affect the response Stripe gets, or the `leads` row a
  * real customer's dashboard depends on. New-CRM-table sync being a few
  * seconds late (retried on the next webhook) is fine; breaking a paying
@@ -74,7 +74,7 @@ import {
  * best-effort record the failure into the already-existing, previously
  * unused `activity_log` table (migration 0008), so there's a durable,
  * queryable failure history beyond Vercel's ephemeral logs. Identified
- * only by Stripe's own event.id/event.type — never a name, email, card,
+ * only by Stripe's own event.id/event.type - never a name, email, card,
  * or Studdy credential. This logging attempt is itself wrapped in its
  * own try/catch, so a failure to log the failure can never throw or
  * affect the response Stripe gets. */
@@ -103,36 +103,36 @@ export async function logSyncFailure(supabase, label, event) {
 
 /* CRM-1 Objective 3 (Revision 2.1 correction): atomic at-most-once claim
  * for invoice.payment_succeeded, gating the legacy total_months_paid
- * increment BEFORE it runs — not a "SELECT then decide" check, which is
+ * increment BEFORE it runs - not a "SELECT then decide" check, which is
  * not atomic under concurrent duplicate delivery (two requests can both
  * pass a SELECT before either writes). A single, plain INSERT into the
- * dedicated payment_claims table (migration 0015) — deliberately NOT an
- * upsert/"ON CONFLICT DO NOTHING" — is the only gate: payment_claims.
+ * dedicated payment_claims table (migration 0015) - deliberately NOT an
+ * upsert/"ON CONFLICT DO NOTHING" - is the only gate: payment_claims.
  * stripe_event_id is that table's PRIMARY KEY, so a plain INSERT can only
  * ever do one of two things: (1) succeed, meaning it just created exactly
  * one new row (a plain INSERT with no ON CONFLICT clause can never
  * silently affect zero rows), or (2) fail with Postgres error code 23505
- * (unique-violation on the primary key) because some request — this
- * process or another — already holds the claim for this exact event.
+ * (unique-violation on the primary key) because some request - this
+ * process or another - already holds the claim for this exact event.
  * Postgres's own primary-key enforcement is the sole arbiter of which
  * concurrent request wins; there is no separate "check, then decide"
  * step for a duplicate to race against. Deliberately its own table, not
- * payment_events — payment_events is written by the best-effort new-CRM
+ * payment_events - payment_events is written by the best-effort new-CRM
  * bookkeeping path below, which can legitimately fail or lag; the legacy
  * path's correctness must never depend on that succeeding.
  *
- * Returns true if THIS call won the claim — positive evidence, not an
+ * Returns true if THIS call won the claim - positive evidence, not an
  * absence-of-error assumption: `!error` is only reachable here if the
  * INSERT actually completed, and a plain INSERT with no ON CONFLICT
  * clause has no way to "succeed" without creating the row. Returns false
- * only for a genuine 23505 (a real duplicate — this event is already,
+ * only for a genuine 23505 (a real duplicate - this event is already,
  * correctly, someone else's claim; skip the legacy increment). Any OTHER
  * error is NOT a duplicate and must never be treated like one: silently
  * returning false here would make the caller respond 200 to Stripe (no
- * retry) while never running the legacy increment — a payment that's
+ * retry) while never running the legacy increment - a payment that's
  * quietly never recorded. So an unexpected error is thrown instead,
  * which propagates to this handler's own outer try/catch and produces a
- * 500 — the correct, safe outcome, since Stripe will retry a 500. */
+ * 500 - the correct, safe outcome, since Stripe will retry a 500. */
 export async function claimPaymentEvent(supabase, event) {
   const { error } = await supabase
     .from('payment_claims')
@@ -147,7 +147,7 @@ export async function claimPaymentEvent(supabase, event) {
   );
 }
 
-/* Vercel must NOT parse the body — Stripe's signature check needs the
+/* Vercel must NOT parse the body - Stripe's signature check needs the
  * exact raw bytes Stripe sent, not a re-serialized JSON object. */
 export const config = {
   api: {
@@ -180,7 +180,7 @@ async function releaseStuddyAccount(supabase, groupName) {
 }
 
 /* Disputes and refunds both come in attached to a charge ID, not a
- * customer ID or subscription ID — look the charge up first to find
+ * customer ID or subscription ID - look the charge up first to find
  * which customer it belongs to, then match our lead by that. */
 async function findLeadByChargeId(stripe, supabase, chargeId) {
   if (!chargeId) return null;
@@ -215,13 +215,13 @@ export default async function handler(req, res) {
 
   try {
     /* ─────────────────────────────────────────────────────────────
-     * Checkout finished — trial starts, card is saved
+     * Checkout finished - trial starts, card is saved
      * ───────────────────────────────────────────────────────────── */
     if (event.type === 'checkout.session.completed') {
       const sessionSummary = event.data.object;
       await syncCheckoutSession(stripe, supabase, sessionSummary.id);
 
-      /* New-CRM-tables sync — this is the moment a Paid ID is created.
+      /* New-CRM-tables sync - this is the moment a Paid ID is created.
        * Fetches the session again (separately from syncCheckoutSession
        * above) so this addition can never risk changing what that
        * existing, already-correct function does. */
@@ -234,7 +234,7 @@ export default async function handler(req, res) {
     }
 
     /* ─────────────────────────────────────────────────────────────
-     * A real payment actually succeeded — trial ended and the card was
+     * A real payment actually succeeded - trial ended and the card was
      * charged, or a later month/year renewed. THIS is the moment money
      * actually moved.
      * ───────────────────────────────────────────────────────────── */
@@ -242,21 +242,21 @@ export default async function handler(req, res) {
       const invoice = event.data.object;
       if ((invoice.amount_paid ?? 0) <= 0) {
         /* A $0 invoice (can happen right at trial creation on some Stripe
-         * API versions) is not a real payment — ignore it. */
+         * API versions) is not a real payment - ignore it. */
         return res.status(200).json({ received: true });
       }
 
-      /* Atomic at-most-once claim — see claimPaymentEvent() above. Must
+      /* Atomic at-most-once claim - see claimPaymentEvent() above. Must
        * run BEFORE any legacy increment. If this call didn't win the
        * claim (lost a concurrent race, or this is a genuine Stripe
        * redelivery of an event already processed), skip the legacy
-       * increment entirely and return 200 — correct, idempotent
+       * increment entirely and return 200 - correct, idempotent
        * behavior either way. A genuine (non-duplicate) database error
-       * is intentionally NOT caught here — claimPaymentEvent() throws
+       * is intentionally NOT caught here - claimPaymentEvent() throws
        * in that case, deliberately left to propagate to this handler's
        * own outer try/catch below, which responds 500. Stripe treats a
        * 500 as "retry me", which is the correct, safe recovery path for
-       * an unexpected infrastructure failure — never a silent 200 that
+       * an unexpected infrastructure failure - never a silent 200 that
        * would leave a real payment unrecorded. */
       const claimed = await claimPaymentEvent(supabase, event);
       if (!claimed) {
@@ -328,7 +328,7 @@ export default async function handler(req, res) {
           .eq('lead_id', lead.lead_id);
       }
 
-      /* CRM-3A: additive sync into the new subscriptions table — status,
+      /* CRM-3A: additive sync into the new subscriptions table - status,
        * cancel_at_period_end, cancel_at, current_period_start/end. Never
        * affects the legacy leads update above or the response Stripe
        * gets. See sync-customer.js's syncSubscriptionUpdated() comment
@@ -338,7 +338,7 @@ export default async function handler(req, res) {
 
     /* ─────────────────────────────────────────────────────────────
      * 3 days left in someone's trial. We don't have automatic WhatsApp
-     * sending wired up yet, so this doesn't message anyone by itself —
+     * sending wired up yet, so this doesn't message anyone by itself -
      * it just flags the lead so Vish can filter for "trial ending soon"
      * in Supabase and message them himself before they're charged.
      * ───────────────────────────────────────────────────────────── */
@@ -358,7 +358,7 @@ export default async function handler(req, res) {
     }
 
     /* ─────────────────────────────────────────────────────────────
-     * A dispute we already flagged has now been resolved — won, lost,
+     * A dispute we already flagged has now been resolved - won, lost,
      * or closed. Records the outcome so it's never left hanging.
      * ───────────────────────────────────────────────────────────── */
     if (event.type === 'charge.dispute.closed') {
@@ -374,7 +374,7 @@ export default async function handler(req, res) {
           })
           .eq('lead_id', lead.lead_id);
 
-        /* CRM-2A: additive payment_events ledger entry — see
+        /* CRM-2A: additive payment_events ledger entry - see
          * sync-customer.js's recordDisputeClosed() comment. Never affects
          * the leads update above or the response Stripe gets. */
         await safely(supabase, 'charge.dispute.closed', event, () =>
@@ -385,7 +385,7 @@ export default async function handler(req, res) {
 
     /* ─────────────────────────────────────────────────────────────
      * A refund was issued (from Stripe directly, e.g. by Vish manually)
-     * — log it so it doesn't just vanish from our records. A full
+     * - log it so it doesn't just vanish from our records. A full
      * refund also flips their status so it's obvious at a glance.
      * ───────────────────────────────────────────────────────────── */
     if (event.type === 'refund.created') {
@@ -405,7 +405,7 @@ export default async function handler(req, res) {
           })
           .eq('lead_id', lead.lead_id);
 
-        /* CRM-2A: additive payment_events ledger entry — see
+        /* CRM-2A: additive payment_events ledger entry - see
          * sync-customer.js's recordRefund() comment. Never affects the
          * leads update above or the response Stripe gets. */
         await safely(supabase, 'refund.created', event, () =>
@@ -415,7 +415,7 @@ export default async function handler(req, res) {
     }
 
     /* ─────────────────────────────────────────────────────────────
-     * Subscription actually ended — cancelled by us, by the customer's
+     * Subscription actually ended - cancelled by us, by the customer's
      * bank, or the card kept failing until Stripe gave up. Free the seat.
      * ───────────────────────────────────────────────────────────── */
     if (event.type === 'customer.subscription.deleted') {
@@ -438,7 +438,7 @@ export default async function handler(req, res) {
     }
 
     /* ─────────────────────────────────────────────────────────────
-     * Customer or their bank raised a dispute/chargeback — flag it so
+     * Customer or their bank raised a dispute/chargeback - flag it so
      * it's never silently missed.
      * ───────────────────────────────────────────────────────────── */
     if (event.type === 'charge.dispute.created') {
@@ -454,14 +454,14 @@ export default async function handler(req, res) {
           })
           .eq('lead_id', matched.lead_id);
 
-        /* CRM-2A: additive payment_events ledger entry — see
+        /* CRM-2A: additive payment_events ledger entry - see
          * sync-customer.js's recordDisputeCreated() comment. Never affects
          * the leads update above or the response Stripe gets. */
         await safely(supabase, 'charge.dispute.created', event, () =>
           recordDisputeCreated(supabase, event, { stripeCustomerId: matched.stripe_customer_id })
         );
       }
-      console.error(`Dispute raised on charge ${dispute.charge} — check Stripe Dashboard > Disputes.`);
+      console.error(`Dispute raised on charge ${dispute.charge} - check Stripe Dashboard > Disputes.`);
     }
 
     return res.status(200).json({ received: true });

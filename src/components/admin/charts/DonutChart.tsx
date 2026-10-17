@@ -1,5 +1,5 @@
 /**
- * CRM-2B (visual refinement) — reusable, accessible SVG donut/ring chart.
+ * CRM-2B (visual refinement) - reusable, accessible SVG donut/ring chart.
  *
  * Design rules this component enforces so every caller gets them for
  * free: an all-zero/empty input renders an explicit "no data" ring
@@ -105,7 +105,7 @@ export default function DonutChart({
         {(centerValue || isEmpty) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3">
             <span className="font-black text-[18px] leading-none" style={{ color: 'var(--ink)' }}>
-              {isEmpty ? '—' : centerValue}
+              {isEmpty ? '-' : centerValue}
             </span>
             {(centerLabel || isEmpty) && (
               <span className="text-[10px] font-bold mt-1 leading-tight" style={{ color: 'var(--soft)' }}>
@@ -116,7 +116,7 @@ export default function DonutChart({
         )}
       </div>
 
-      {/* Exact values, always as real text — never color-only. */}
+      {/* Exact values, always as real text - never color-only. */}
       <figcaption className="w-full flex flex-col gap-1.5">
         {segments.map((s) => (
           <div key={s.key} className="flex items-center justify-between gap-3 text-[12px]">

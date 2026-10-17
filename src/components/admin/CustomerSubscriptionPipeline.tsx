@@ -1,5 +1,5 @@
 /**
- * CRM-3A — Customer & Subscription pipeline page content. Fetches
+ * CRM-3A - Customer & Subscription pipeline page content. Fetches
  * GET /api/admin/today-actions once, and GET /api/admin/customers on
  * mount + whenever a filter changes. Read-only except for the Sales
  * Owner edit inside CustomerDetailDrawer.
@@ -25,7 +25,7 @@ const TONE_COLORS: Record<string, string> = {
 /**
  * "1 customer" / "0 customers" when everything fits on one page (or
  * there's nothing to show), "Showing 1–100 of 125,430 customers" once
- * pagination is actually in play — never the old flat "N matching
+ * pagination is actually in play - never the old flat "N matching
  * (capped at 2000)" wording, since there is no cap anymore (see
  * migration 0017 / api/admin/customers.js).
  */
@@ -59,7 +59,7 @@ export default function CustomerSubscriptionPipeline({ onSessionExpired }: Props
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
-  // Any filter (including search) changing means "start over from page 1" —
+  // Any filter (including search) changing means "start over from page 1" -
   // the previous page number almost never still makes sense against a new
   // result set, and silently keeping it risks landing past the new last page.
   useEffect(() => {
@@ -214,7 +214,7 @@ export default function CustomerSubscriptionPipeline({ onSessionExpired }: Props
       <SectionCard title="Customers" description={listData ? customerCountLabel(listData) : undefined}>
         {listError && listData && (
           <p role="alert" className="text-[12.5px] font-bold mb-3" style={{ color: 'var(--g1)' }}>
-            Last refresh failed — showing the most recently loaded data. {listError}
+            Last refresh failed - showing the most recently loaded data. {listError}
           </p>
         )}
         {listData && listData.customers.length === 0 ? (
@@ -345,11 +345,11 @@ function CustomerTable({ rows, onSelect }: { rows: CustomerListRow[]; onSelect: 
                 </span>
               </td>
               <td className="py-2.5 px-2" style={{ color: 'var(--ink)' }}>
-                {row.plan_type ?? '—'} {row.currency ?? ''}
+                {row.plan_type ?? '-'} {row.currency ?? ''}
               </td>
               <td className="py-2.5 px-2" style={{ color: 'var(--ink)' }}>{row.latest_utm_source ?? row.first_utm_source ?? 'direct'}</td>
               <td className="py-2.5 px-2" style={{ color: 'var(--ink)' }}>{row.sales_owner ?? 'Unassigned'}</td>
-              <td className="py-2.5 px-2" style={{ color: 'var(--ink)' }}>{row.group_name ?? '—'}</td>
+              <td className="py-2.5 px-2" style={{ color: 'var(--ink)' }}>{row.group_name ?? '-'}</td>
             </tr>
           ))}
         </tbody>

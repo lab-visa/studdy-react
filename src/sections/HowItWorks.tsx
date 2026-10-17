@@ -10,7 +10,7 @@ const STEPS = [
     stageLabel: 'Learner asks',
     content: '"Explain photosynthesis visually."',
     isQuestion: true,
-    desc: 'Voice, text, image or document — any question, any format.',
+    desc: 'Voice, text, image or document - any question, any format.',
   },
   {
     id: 1,
@@ -26,7 +26,7 @@ const STEPS = [
     stageLabel: 'Learner follows up',
     content: '"Why do plants specifically need sunlight?"',
     isQuestion: true,
-    desc: 'Interrupt, clarify, go deeper — unlimited questions, no hesitation.',
+    desc: 'Interrupt, clarify, go deeper - unlimited questions, no hesitation.',
   },
   {
     id: 3,
@@ -133,7 +133,7 @@ export default function HowItWorks() {
           From question to understanding.
         </h2>
         <p className="mb-12 text-[15px]" style={{ color:'rgba(255,255,255,.35)' }}>
-          Follow one question — photosynthesis — through the complete journey.
+          Follow one question - photosynthesis - through the complete journey.
         </p>
 
         {/* ── Desktop connected track ── */}
@@ -222,7 +222,7 @@ export default function HowItWorks() {
 
         {/* ── Mobile: vertical stacked ── */}
         <div className="md:hidden flex flex-col gap-6">
-          {/* Vertical line — grows as user scrolls */}
+          {/* Vertical line - grows as user scrolls */}
           <div className="relative">
             <div className="absolute left-[19px] top-0 bottom-0 w-px"
               style={{ background:'rgba(255,255,255,.08)' }} aria-hidden="true" />

@@ -1,10 +1,10 @@
 /**
- * CRM-2B — Section: Studdy account capacity. Current-state, independent
- * of the selected date range — matches allocatedSeats()'s own
+ * CRM-2B - Section: Studdy account capacity. Current-state, independent
+ * of the selected date range - matches allocatedSeats()'s own
  * `type: 'current_state'`. Visual refinement: a donut/radial visual
  * (allocated vs. remaining) alongside the exact numbers and the
  * existing group table. total_capacity === 0 renders as an explicit
- * "not configured yet" empty state — never as "full", which would be
+ * "not configured yet" empty state - never as "full", which would be
  * misleading (see AlertsBanner's identical distinction).
  */
 import SectionCard from '../SectionCard';
@@ -21,7 +21,7 @@ export default function CapacitySection({ metrics }: CapacitySectionProps) {
   const isFull = seats.total_capacity > 0 && seats.remaining_capacity <= 0;
 
   return (
-    <SectionCard title="Studdy account capacity" description="Live snapshot — not affected by the selected date range">
+    <SectionCard title="Studdy account capacity" description="Live snapshot - not affected by the selected date range">
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-6 items-start mb-5">
         <DonutChart
           title="Allocated vs. remaining Studdy account capacity"

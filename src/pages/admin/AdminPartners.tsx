@@ -1,5 +1,5 @@
 /**
- * /admin/partners — sales partners. Partners self-register on /partners
+ * /admin/partners - sales partners. Partners self-register on /partners
  * and are active immediately (code + private earnings link); here you see
  * their sales, add PAN/UPI for payouts on the 10th, and pause anyone.
  * (Older 'applied' rows can still be approved.) Approve →

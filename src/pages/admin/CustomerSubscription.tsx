@@ -1,10 +1,10 @@
 /**
- * CustomerSubscription.tsx — /admin/subscriptions route entry point.
+ * CustomerSubscription.tsx - /admin/subscriptions route entry point.
  *
  * CRM-3A: activates the "Customer & Subscription" sidebar item. Mirrors
  * AdminHome.tsx's own session-verification shape exactly (confirm via
  * /api/admin/whoami before rendering any admin data, redirect to
- * /admin/login on no/expired/revoked session) — this is a second,
+ * /admin/login on no/expired/revoked session) - this is a second,
  * independent page under the same admin shell, not a variant of Command
  * Center.
  */

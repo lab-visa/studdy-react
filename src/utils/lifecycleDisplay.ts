@@ -1,8 +1,8 @@
 /**
- * CRM-3A — pure display-tone mapping for a lifecycle stage string, split
+ * CRM-3A - pure display-tone mapping for a lifecycle stage string, split
  * out of any component (same rationale as checkoutLink.ts/tracking.ts)
  * so it's directly unit-testable with node:test, no JSX/renderer needed.
- * Never invents a stage — only maps stage strings api/_lib/lifecycle.js
+ * Never invents a stage - only maps stage strings api/_lib/lifecycle.js
  * can actually produce to a visual tone; an unrecognized string still
  * renders, just with the neutral tone, so a future new stage never
  * crashes the UI.

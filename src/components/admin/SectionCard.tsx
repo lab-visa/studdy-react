@@ -1,5 +1,5 @@
 /**
- * CRM-2B — shared card chrome for every dashboard section, so section
+ * CRM-2B - shared card chrome for every dashboard section, so section
  * components only implement their own content, not repeated
  * border/padding/heading markup.
  */

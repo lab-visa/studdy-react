@@ -1,5 +1,5 @@
 /**
- * ProductProof.tsx — Section 2
+ * ProductProof.tsx - Section 2
  *
  * Changes from previous version:
  *  - Eyebrow label: "Product proof" → "See it teach."
@@ -69,7 +69,7 @@ const learningSessions: LessonSession[] = [
  * - Conditionally mounted (not permanently hidden in DOM)
  * - No orientation/resize listeners added
  * - ESC listener registered only while open, removed on cleanup
- * - Body overflow restored via useEffect cleanup — always fires
+ * - Body overflow restored via useEffect cleanup - always fires
  * - No pause()/play()/currentTime called on Bunny iframe
  * - Unmounting the selected iframe stops Bunny playback automatically
  * - state update guard via mounted ref prevents post-unmount setState
@@ -86,7 +86,7 @@ function LessonModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
 
-  /* Body scroll lock — cleanup always restores overflow */
+  /* Body scroll lock - cleanup always restores overflow */
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
@@ -233,7 +233,7 @@ function LessonModal({ onClose }: { onClose: () => void }) {
                   <button
                     key={lesson.id}
                     onClick={() => handleSelectLesson(lesson)}
-                    aria-label={`Watch ${lesson.title} — ${lesson.duration}`}
+                    aria-label={`Watch ${lesson.title} - ${lesson.duration}`}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '14px',
                       padding: '16px 18px',
@@ -293,14 +293,14 @@ function LessonModal({ onClose }: { onClose: () => void }) {
 
           {/* ── Selected lesson iframe ──
            * Only one iframe rendered at a time.
-           * Unmounting clears Bunny playback — no pause()/currentTime needed.
+           * Unmounting clears Bunny playback - no pause()/currentTime needed.
            */}
           {selected && (
             <div style={{ aspectRatio: '16/9', width: '100%', background: '#000', flexShrink: 0 }}>
               <iframe
                 key={selected.id}          /* key ensures fresh mount on lesson switch */
                 src={selected.embedUrl}
-                title={`${selected.title} — Studdy learning session`}
+                title={`${selected.title} - Studdy learning session`}
                 loading="lazy"
                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
                 allowFullScreen
@@ -327,7 +327,7 @@ export default function ProductProof() {
       <div className="max-w-[1100px] mx-auto">
         <div className="grid lg:grid-cols-2 gap-14 items-center">
 
-          {/* Left — copy and CTA (layout unchanged) */}
+          {/* Left - copy and CTA (layout unchanged) */}
           <div>
             <SectionHeading
               eyebrow="See it teach."
@@ -343,7 +343,7 @@ export default function ProductProof() {
             </button>
           </div>
 
-          {/* Right — B2: Bunny highlights iframe, replaces LazyVideo placeholder */}
+          {/* Right - B2: Bunny highlights iframe, replaces LazyVideo placeholder */}
           <div
             style={{
               position: 'relative',
@@ -367,7 +367,7 @@ export default function ProductProof() {
         </div>
       </div>
 
-      {/* B4–B6: Lesson selector modal — conditionally mounted */}
+      {/* B4–B6: Lesson selector modal - conditionally mounted */}
       {modalOpen && <LessonModal onClose={closeModal} />}
     </section>
   );

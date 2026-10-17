@@ -1,5 +1,5 @@
 /**
- * Sales partner programme — commission rules and calculations.
+ * Sales partner programme - commission rules and calculations.
  *
  * Rules (Oct 2026, Vish):
  *   - Commission per sale: Yearly ₹2,500, Quarterly ₹700.
@@ -34,7 +34,7 @@ export function bonusFor(salesInMonth) {
 
 /**
  * orders: india_orders rows for ONE partner (status paid or refunded).
- * Returns per-sale lines and a per-month summary. Pure — no database.
+ * Returns per-sale lines and a per-month summary. Pure - no database.
  */
 export function computeEarnings(orders, now = new Date()) {
   const windowMs = REFUND_WINDOW_DAYS * 24 * 60 * 60 * 1000;

@@ -1,36 +1,36 @@
 /**
- * CRM-2A — authoritative metric/query layer.
+ * CRM-2A - authoritative metric/query layer.
  *
  * Every function here is the ONE place a given metric's definition lives,
  * per the approved Metric Contract (design review, Sep 2026). No React
  * component, dashboard page, or future Mr. Snoofy tool computes its own
- * SQL/aggregation for any of these — they all call through here.
+ * SQL/aggregation for any of these - they all call through here.
  *
  * Style: plain supabase-js `.from()` queries + JS-side aggregation,
  * matching api/admin/reconciliation.js's existing pattern exactly (no new
- * Postgres functions, no migration needed — current data volumes are
+ * Postgres functions, no migration needed - current data volumes are
  * small, same justification reconciliation.js already documents).
  *
  * CODE-REVIEW FIX (round 2, "silent metric row cap"): earlier this file
  * fetched every authoritative KPI with a single `.limit(METRIC_ROW_CAP)`
- * call — once the matching population exceeded that cap, results would
+ * call - once the matching population exceeded that cap, results would
  * silently truncate and every downstream number (Dashboard, later Mr.
  * Snoofy) would quietly go wrong. Fixed two ways, chosen per metric:
  *   - a metric that is a pure COUNT of matching rows (trial_started,
  *     active_trial, active_paid_customer, successful_payment,
  *     failed_payment, cancellation_requested, cancelled_customer) uses
  *     Postgres's own exact COUNT(*) via supabase-js's
- *     `{ count: 'exact', head: true }` — no row transfer, no cap of any
+ *     `{ count: 'exact', head: true }` - no row transfer, no cap of any
  *     kind, full stop.
  *   - a metric that needs actual ROW DATA (sums by currency, the
  *     trial_to_paid_14d cohort/first-payment population, open-dispute
  *     correlation, churn's per-row voluntary/involuntary classification,
  *     funnel totals) fully paginates via fetchAllRows()/.range() below,
- *     looping until every matching row has been fetched — however many
+ *     looping until every matching row has been fetched - however many
  *     pages that takes. No DB-side GROUP BY aggregate is used for the sum
  *     functions because that would require a new Postgres function/view,
  *     which is explicitly out of CRM-2A's approved, migration-free scope
- *     — full pagination is the documented fallback for that case.
+ *     - full pagination is the documented fallback for that case.
  * See fetchAllRows()'s own comment for why deterministic ORDER BY is
  * required for this to be correct, not just fast.
  *
@@ -42,13 +42,13 @@
  *     when the outcome happens.
  *   - 'current_state': a live snapshot, no date range.
  * Two 'event_period' results must NEVER be divided by each other to
- * fabricate a rate — see trialToPaid14d() for the one correct cohort
+ * fabricate a rate - see trialToPaid14d() for the one correct cohort
  * calculation this contract defines. There is deliberately no
- * `churn_rate` export anywhere in this file — only event-period churn
+ * `churn_rate` export anywhere in this file - only event-period churn
  * COUNTS ship in CRM-2A (see churn() below).
  *
  * Currency: revenue-shaped results are always `by_currency` objects,
- * never a single blended number — see grossRevenue()/refundAmount()/
+ * never a single blended number - see grossRevenue()/refundAmount()/
  * netRevenue(). No function anywhere sums payment_events.amount across
  * event types or currencies.
  */
@@ -60,10 +60,10 @@ let METRIC_PAGE_SIZE = 1000;
 
 /**
  * Fully paginates a supabase-js query via .range(), accumulating EVERY
- * matching row — never an arbitrary cap. `buildBaseQuery` must be a
+ * matching row - never an arbitrary cap. `buildBaseQuery` must be a
  * function that returns a FRESH, fully-filtered and deterministically
  * ORDERED query each time it's invoked (with .range()/.limit() NOT yet
- * applied) — this helper applies .range() itself, once per page, and
+ * applied) - this helper applies .range() itself, once per page, and
  * keeps paging until a page comes back smaller than the page size.
  *
  * Deterministic ordering (tie-broken by a column unique per row, e.g. a
@@ -92,7 +92,7 @@ async function fetchAllRows(buildBaseQuery) {
 /**
  * TEST-ONLY: override the pagination page size so tests can prove
  * multi-page correctness (a real page boundary actually crossed) without
- * needing to seed thousands of rows. Never called from production code —
+ * needing to seed thousands of rows. Never called from production code -
  * only test/cases/metrics.test.mjs uses this, and always resets it
  * afterward so it can never leak into another test's expectations.
  */
@@ -124,7 +124,7 @@ async function fetchFirstSuccessfulPaymentByCustomer(supabase) {
 
 /* ───────────────────────── trial / conversion ───────────────────────── */
 
-/** event-period: exact COUNT of customers rows created (trial started) in [from, to). No cap — Postgres COUNT(*), never a fetched/truncated row set. */
+/** event-period: exact COUNT of customers rows created (trial started) in [from, to). No cap - Postgres COUNT(*), never a fetched/truncated row set. */
 export async function trialStarted(supabase, { from, to } = {}) {
   let q = supabase.from('customers').select('id', { count: 'exact', head: true });
   if (from) q = q.gte('created_at', from);
@@ -149,9 +149,9 @@ export async function activeTrial(supabase) {
  * cohort: of trials that STARTED in [cohortFrom, cohortTo), what
  * percentage received their FIRST-EVER successful payment within
  * TRIAL_TO_PAID_WINDOW_DAYS days of trial start. This is the approved
- * headline conversion KPI — see the design review corrections:
+ * headline conversion KPI - see the design review corrections:
  *   - numerator/denominator are NOT customers.lifecycle (which moves on
- *     to 'churned' and would wrongly zero out a real past conversion) —
+ *     to 'churned' and would wrongly zero out a real past conversion) -
  *     "ever converted" is determined from the payment_events ledger.
  *   - a cohort only gets a published percentage once its full 14-day
  *     window has elapsed (still_maturing=false); a still-maturing cohort
@@ -160,8 +160,8 @@ export async function activeTrial(supabase) {
  *   - a customer who converted (per lifecycle) but has NO payment_events
  *     row (a legacy, pre-ledger customer) cannot be dated precisely and
  *     is excluded from both numerator and denominator, reported
- *     separately as legacy_excluded — never fabricated a date.
- * The cohort population itself is fully paginated (fetchAllRows) — a
+ *     separately as legacy_excluded - never fabricated a date.
+ * The cohort population itself is fully paginated (fetchAllRows) - a
  * cohort window can never silently drop customers past a row cap.
  */
 export async function trialToPaid14d(supabase, { cohortFrom, cohortTo }) {
@@ -194,12 +194,12 @@ export async function trialToPaid14d(supabase, { cohortFrom, cohortTo }) {
 
     if (!firstPaidAt) {
       if (c.lifecycle === 'converted' || c.lifecycle === 'retained' || c.lifecycle === 'churned') {
-        // Ever converted (per lifecycle) but no dated payment_events row —
+        // Ever converted (per lifecycle) but no dated payment_events row -
         // legacy/pre-ledger customer. Exclude entirely, never guess a date.
         legacyExcludedIds.push(c.id);
         continue;
       }
-      // Genuinely never converted as of now — a real, dated non-conversion.
+      // Genuinely never converted as of now - a real, dated non-conversion.
       measurableCohortSize += 1;
       continue;
     }
@@ -225,20 +225,20 @@ export async function trialToPaid14d(supabase, { cohortFrom, cohortTo }) {
     legacy_excluded_count: legacyExcludedIds.length,
     legacy_excluded_customer_ids: legacyExcludedIds,
     note: stillMaturing
-      ? 'still maturing — this cohort’s full 14-day observation window has not elapsed yet; excluded from the headline KPI, must be shown separately, never blended into a mature-cohort percentage'
-      : 'mature cohort — eligible for the headline trial_to_paid_14d KPI',
+      ? 'still maturing - this cohort’s full 14-day observation window has not elapsed yet; excluded from the headline KPI, must be shown separately, never blended into a mature-cohort percentage'
+      : 'mature cohort - eligible for the headline trial_to_paid_14d KPI',
   };
 }
 
-/** event-period: customers whose FIRST-EVER successful payment fell in [from, to). Never a renewal. Built from the fully-paginated first-payment map above — no cap. */
+/** event-period: customers whose FIRST-EVER successful payment fell in [from, to). Never a renewal. Built from the fully-paginated first-payment map above - no cap. */
 export async function newPaidCustomer(supabase, { from, to } = {}) {
   const firstByCustomer = await fetchFirstSuccessfulPaymentByCustomer(supabase);
   let count = 0;
-  // occurred_at comes back from the DB as a timestamptz — the pg driver
+  // occurred_at comes back from the DB as a timestamptz - the pg driver
   // parses that into a JS Date, not an ISO string. Comparing a Date
   // directly against an ISO-string boundary with < / >= would coerce via
   // Date.prototype.toString() (not toISOString()), silently producing
-  // wrong results — so every side is normalized to epoch ms first.
+  // wrong results - so every side is normalized to epoch ms first.
   const fromMs = from ? new Date(from).getTime() : null;
   const toMs = to ? new Date(to).getTime() : null;
   for (const occurredAt of firstByCustomer.values()) {
@@ -283,7 +283,7 @@ export async function failedPayment(supabase, { from, to } = {}) {
   return { metric: 'failed_payment', type: 'event_period', from: from ?? null, to: to ?? null, count: count ?? 0 };
 }
 
-/** Fully paginated — needs the actual amount/currency of every matching row, so a COUNT alone isn't enough. No DB-side SUM/GROUP BY available without a new Postgres function, which is out of CRM-2A's migration-free scope. */
+/** Fully paginated - needs the actual amount/currency of every matching row, so a COUNT alone isn't enough. No DB-side SUM/GROUP BY available without a new Postgres function, which is out of CRM-2A's migration-free scope. */
 async function sumAmountByCurrency(supabase, eventType, { from, to } = {}) {
   const rows = await fetchAllRows(() => {
     let q = supabase
@@ -333,9 +333,9 @@ export async function netRevenue(supabase, range = {}) {
 /**
  * current-state: disputes with a 'charge.dispute.created' row but no
  * matching 'charge.dispute.closed' row, correlated by Stripe's own stable
- * dispute id (raw_metadata->>'id' on both rows — see
+ * dispute id (raw_metadata->>'id' on both rows - see
  * sync-customer.js's recordDisputeClosed() for why this is the right
- * key, not the underlying charge id). Both sides are fully paginated —
+ * key, not the underlying charge id). Both sides are fully paginated -
  * an open dispute must never be silently dropped just because the total
  * dispute history exceeds one page.
  */
@@ -395,11 +395,11 @@ export async function cancellationRequested(supabase, { from, to } = {}) {
  * by leads.cancelled_at.
  *
  * CODE-REVIEW FIX (round 2, "historical churn/cancelled metrics"): this
- * used to also require leads.status = 'Cancelled'. status is MUTABLE — a
+ * used to also require leads.status = 'Cancelled'. status is MUTABLE - a
  * later refund, dispute, or other status update on the same lead row
  * would silently erase a real historical cancellation from this count.
  * cancelled_at is the durable, never-overwritten historical signal that
- * "this subscription ended on this date" — that alone is now the basis,
+ * "this subscription ended on this date" - that alone is now the basis,
  * so a later status change (e.g. 'Refunded', 'Disputed') can never remove
  * a customer from historical counts here. See churn() below for the same
  * fix applied to voluntary/involuntary classification.
@@ -414,20 +414,20 @@ export async function cancelledCustomer(supabase, { from, to } = {}) {
 }
 
 /**
- * event-period COUNTS ONLY — voluntary_churn / involuntary_churn /
+ * event-period COUNTS ONLY - voluntary_churn / involuntary_churn /
  * total_churn. Classified from leads (authoritative, always present):
  *   - the durable historical event basis is cancelled_at IS NOT NULL (see
- *     cancelledCustomer()'s comment above — status is mutable and must
+ *     cancelledCustomer()'s comment above - status is mutable and must
  *     never be able to erase a real historical churn event; a later
  *     status='Refunded'/'Disputed' still counts here).
  *   - voluntary: cancel_requested_at IS NOT NULL.
  *   - involuntary: cancel_requested_at IS NULL.
  * IMPORTANT, stated in the result itself, not just here: "no
  * cancel_requested_at" is the best currently-available classifier, not a
- * confirmed statement that every such loss was payment-failure-driven —
+ * confirmed statement that every such loss was payment-failure-driven -
  * the precise Stripe termination reason isn't separately captured
- * anywhere in this schema. There is deliberately no churn_rate here —
- * only counts. Fully paginated — per-row classification needs the actual
+ * anywhere in this schema. There is deliberately no churn_rate here -
+ * only counts. Fully paginated - per-row classification needs the actual
  * cancel_requested_at value, so a COUNT alone isn't enough here.
  */
 export async function churn(supabase, { from, to } = {}) {
@@ -464,13 +464,13 @@ export async function churn(supabase, { from, to } = {}) {
     involuntary_churn: involuntaryChurn,
     total_churn: voluntaryChurn + involuntaryChurn,
     limitation:
-      'involuntary_churn uses "no cancel_requested_at on file" as a best-available classifier, not a confirmed payment-failure diagnosis — the exact Stripe termination reason is not separately captured in this schema. churn_rate is intentionally not computed here; only event-period counts ship in CRM-2A.',
+      'involuntary_churn uses "no cancel_requested_at on file" as a best-available classifier, not a confirmed payment-failure diagnosis - the exact Stripe termination reason is not separately captured in this schema. churn_rate is intentionally not computed here; only event-period counts ship in CRM-2A.',
   };
 }
 
 /* ──────────────────────────── allocation ─────────────────────────────── */
 
-/** current-state: live seat capacity, matching assignStuddyAccount()'s own eligibility rule (positive, finite max_capacity). No cap — the number of Studdy WhatsApp groups is small and operationally bounded, and this query never used .limit() in the first place. */
+/** current-state: live seat capacity, matching assignStuddyAccount()'s own eligibility rule (positive, finite max_capacity). No cap - the number of Studdy WhatsApp groups is small and operationally bounded, and this query never used .limit() in the first place. */
 export async function allocatedSeats(supabase) {
   const { data, error } = await supabase.from('studdy_accounts').select('group_name, max_capacity, active_customer_count');
   if (error) throw error;
@@ -500,12 +500,12 @@ export async function allocatedSeats(supabase) {
  * event-period, aggregate only: website_visit / CTA / checkout counts
  * from site_traffic_daily. NEVER attributes to an individual visitor.
  * `day` is Asia/Kolkata from the CRM-2A cutover forward; rows written
- * before that are legacy UTC-bucketed — see reporting-timezone.js and
+ * before that are legacy UTC-bucketed - see reporting-timezone.js and
  * api/track-event.js's own comment. This function does not attempt to
  * distinguish the two eras in its output; callers spanning the cutover
  * date must treat the boundary as approximate for `day`-level precision.
  * Fully paginated (site_traffic_daily has no single id column, so the
- * tiebreak orders by its full composite primary key) — a funnel total
+ * tiebreak orders by its full composite primary key) - a funnel total
  * must never silently truncate once the table has more than one page of
  * day/event/campaign/country/device rows.
  */

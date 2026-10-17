@@ -1,7 +1,7 @@
 /**
- * CRM-2B (visual refinement) — one small gross/refund/net comparison
+ * CRM-2B (visual refinement) - one small gross/refund/net comparison
  * chart PER CURRENCY. Bars are scaled relative to that currency's own
- * gross amount only — never compared against another currency's bars,
+ * gross amount only - never compared against another currency's bars,
  * and never summed into a cross-currency total. Each currency gets its
  * own isolated <CurrencyCompareBars> instance; RevenueOverview renders
  * one per currency present in the response.
@@ -16,7 +16,7 @@ interface CurrencyCompareBarsProps {
 }
 
 export default function CurrencyCompareBars({ currency, gross, refund, net }: CurrencyCompareBarsProps) {
-  // Scaled against this currency's own gross figure only — refund/net
+  // Scaled against this currency's own gross figure only - refund/net
   // are fractions of THIS currency's gross, never another currency's.
   const scale = Math.max(gross, net, 1);
   const rows: Array<{ label: string; value: number; tone: 'gradient' | 'neutral' }> = [

@@ -105,14 +105,14 @@ export default function Header() {
       </nav>
 
       {/* Mobile sticky bottom CTA
-       * FIX (Sep 2026): two real bugs found in an actual mobile audit —
+       * FIX (Sep 2026): two real bugs found in an actual mobile audit -
        * (1) nothing on the page reserved space for this bar, so whatever
        * content happened to scroll to the very bottom (confirmed: the
        * Pricing section's own Yearly-plan button) rendered partially
-       * hidden behind it — see the matching paddingBottom added to
+       * hidden behind it - see the matching paddingBottom added to
        * Home.tsx's <main> and to Footer.tsx below; (2) it sat flush
        * against the bottom edge with no iPhone safe-area allowance, so on
-       * every iPhone with a Home indicator (X and later — effectively all
+       * every iPhone with a Home indicator (X and later - effectively all
        * current iPhones) it rendered under/into that gesture area. Both
        * fixed here; env(safe-area-inset-bottom) is 0 on every device
        * without a safe area, so this is a no-op everywhere else. */}

@@ -1,17 +1,17 @@
 /**
- * CRM-2B (visual refinement) — pure, JSX-free chart math. Kept separate
+ * CRM-2B (visual refinement) - pure, JSX-free chart math. Kept separate
  * from the SVG components so the arithmetic that actually decides what
- * gets drawn — stage-to-stage conversion, donut arc geometry, "is this
- * genuinely empty" — is unit-testable the same way
+ * gets drawn - stage-to-stage conversion, donut arc geometry, "is this
+ * genuinely empty" - is unit-testable the same way
  * test/cases/admin-dashboard-logic.test.mjs already tests reportingRange
  * and metricsFormat. No rendering, no React, no fabricated fallback:
- * every function here either returns a real computed number or null —
+ * every function here either returns a real computed number or null -
  * never a guessed placeholder.
  */
 
 /**
  * Stage-to-stage conversion percentage for the acquisition funnel. Never
- * divides by zero — returns null (caller must omit the badge entirely,
+ * divides by zero - returns null (caller must omit the badge entirely,
  * not render a fabricated 0%/100%) when the previous stage's count is 0.
  */
 export function stageConversionPct(current: number, previous: number): number | null {
@@ -53,7 +53,7 @@ export interface DonutArc {
  * produce a (zero-length) arc rather than being silently dropped, so
  * caller code that zips this array back up against segment labels never
  * gets misaligned. Returns [] for a non-positive circumference or an
- * empty/all-zero input — callers must treat that as "no data", not draw
+ * empty/all-zero input - callers must treat that as "no data", not draw
  * a full circle for any single segment.
  */
 export function computeDonutArcs(segments: DonutSegmentInput[], circumference: number): DonutArc[] {
@@ -77,7 +77,7 @@ export function computeDonutArcs(segments: DonutSegmentInput[], circumference: n
   });
 }
 
-/** Success percentage of successful vs. failed payment EVENTS (counts) — null (never fabricated) when both are zero. */
+/** Success percentage of successful vs. failed payment EVENTS (counts) - null (never fabricated) when both are zero. */
 export function paymentSuccessPct(successful: number, failed: number): number | null {
   const total = successful + failed;
   if (total <= 0) return null;

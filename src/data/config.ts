@@ -3,7 +3,7 @@
 // To change a price: update amount + stripeMonthlyId / stripeYearlyId.
 
 /* One shared support number for everyone for now (per Vish, Aug 2026).
- * Locked decision was USA number for USA / UK number for everyone else —
+ * Locked decision was USA number for USA / UK number for everyone else -
  * once the USA number exists, split this by region the same way pricing
  * already is. */
 export const SUPPORT_WHATSAPP_NUMBER = '447587357644';
@@ -41,7 +41,7 @@ export interface RegionConfig {
  * Every region below now points at a brand-new Stripe product/price pair
  * (nothing from the pre-Sep-2026 catalog was touched or archived).
  * Kuwait, Oman and Bahrain are priced and charged in USD, NOT their local
- * currency (KWD/OMR/BHD) — this Stripe account can't settle in those three
+ * currency (KWD/OMR/BHD) - this Stripe account can't settle in those three
  * currencies, so per Vish's explicit fallback instruction they use the same
  * $26.99/mo, $129.99/yr as US/Other. symbol/amount/display below reflect the
  * ACTUAL USD charge for those three, not the original local-currency target
@@ -84,7 +84,7 @@ export const REGION_DATA: Record<Region, RegionConfig> = {
     tutorPrice: 'From SAR 200/hr',
   },
   kw: {
-    /* USD fallback — see file-level note above. */
+    /* USD fallback - see file-level note above. */
     label:'Kuwait', flag:'🇰🇼', group:'Gulf', symbol:'$',
     monthly: { amount:'30.99', display:'$30.99/mo',  stripeId:'price_1URWYRSo2yKs7RdkZyrPDgED', paymentLink:'https://buy.stripe.com/6oU28t7jx1Pu2yT8N15J62w' },
     yearly:  { amount:'172.99', display:'$172.99/yr', stripeId:'price_1URWYVSo2yKs7RdkZy0AVWsn', paymentLink:'https://buy.stripe.com/7sY28t33h79O7TdbZd5J62x', yearlyTotal:'$172.99' },
@@ -97,14 +97,14 @@ export const REGION_DATA: Record<Region, RegionConfig> = {
     tutorPrice: 'From QAR 200/hr',
   },
   om: {
-    /* USD fallback — see file-level note above. */
+    /* USD fallback - see file-level note above. */
     label:'Oman', flag:'🇴🇲', group:'Gulf', symbol:'$',
     monthly: { amount:'30.99', display:'$30.99/mo',  stripeId:'price_1URWYkSo2yKs7RdkmA3qDkoC', paymentLink:'https://buy.stripe.com/5kQdRbgU7am02yTaV95J62A' },
     yearly:  { amount:'172.99', display:'$172.99/yr', stripeId:'price_1URWYqSo2yKs7RdkaDS5xTcM', paymentLink:'https://buy.stripe.com/eVq6oJbzN79O5L58N15J62B', yearlyTotal:'$172.99' },
     tutorPrice: 'From OMR 20/hr',
   },
   bh: {
-    /* USD fallback — see file-level note above. */
+    /* USD fallback - see file-level note above. */
     label:'Bahrain', flag:'🇧🇭', group:'Gulf', symbol:'$',
     monthly: { amount:'30.99', display:'$30.99/mo',  stripeId:'price_1URWYuSo2yKs7RdkIycvoMpv', paymentLink:'https://buy.stripe.com/14AcN79rFeCg1uPgft5J62C' },
     yearly:  { amount:'172.99', display:'$172.99/yr', stripeId:'price_1URWYySo2yKs7RdkLo8xq9dK', paymentLink:'https://buy.stripe.com/fZu6oJ0V9dyc3CXbZd5J62D', yearlyTotal:'$172.99' },
@@ -159,7 +159,7 @@ export const REGION_DATA: Record<Region, RegionConfig> = {
     tutorPrice: 'From ฿1,500/hr',
   },
   jp: {
-    /* Yen has no decimal subunit — Stripe/JPY amounts below are whole yen
+    /* Yen has no decimal subunit - Stripe/JPY amounts below are whole yen
      * (rounded from the target 4194.99 / 20135.99), not truncated .99s. */
     label:'Japan', flag:'🇯🇵', group:'South East Asia', symbol:'¥',
     monthly: { amount:'4799', display:'¥4,799/mo',  stripeId:'price_1URWa7So2yKs7RdkAyG5IxX3', paymentLink:'https://buy.stripe.com/8x228t0V9cu81uP9R55J62S' },
@@ -194,7 +194,7 @@ export const REGION_DATA: Record<Region, RegionConfig> = {
 
 /* Country code → Region mapping for IP detection.
  * EU_COUNTRIES = the 27 EU member states (minus UK, which is its own region)
- * — every one of them routes to the single 'eu' / Euro pricing region. */
+ * - every one of them routes to the single 'eu' / Euro pricing region. */
 const EU_COUNTRIES = [
   'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE',
   'IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
@@ -220,7 +220,7 @@ export const REGION_GROUPS = [
   { label: 'Other',         regions: ['other'] as Region[] },
 ];
 
-/* Stripe publishable key — replace with your real key */
+/* Stripe publishable key - replace with your real key */
 export const STRIPE_PUBLISHABLE_KEY = 'pk_live_REPLACE_WITH_YOUR_KEY';
 
 /* ── Backward compatibility exports ─────────────────────────────
@@ -242,10 +242,10 @@ export const PLANS: Array<{id:string; name:string; badge:string|undefined; month
   {
     id: 'annual', name: 'Annual', badge: 'Save 60%',
     monthly: {
-      us:    { symbol:'$',    amount:'16.40',  period:'/mo', trialNote:'$196.75/year after 7 days free — save 60%' },
-      uk:    { symbol:'£',    amount:'11.60',  period:'/mo', trialNote:'£139.15/year after 7 days free — save 60%' },
-      uae:   { symbol:'AED ', amount:'62.80',  period:'/mo', trialNote:'AED 753.55/year after 7 days free — save 60%' },
-      india: { symbol:'₹',    amount:'1,440',  period:'/mo', trialNote:'₹17,284/year after 7 days free — save 60%' },
+      us:    { symbol:'$',    amount:'16.40',  period:'/mo', trialNote:'$196.75/year after 7 days free - save 60%' },
+      uk:    { symbol:'£',    amount:'11.60',  period:'/mo', trialNote:'£139.15/year after 7 days free - save 60%' },
+      uae:   { symbol:'AED ', amount:'62.80',  period:'/mo', trialNote:'AED 753.55/year after 7 days free - save 60%' },
+      india: { symbol:'₹',    amount:'1,440',  period:'/mo', trialNote:'₹17,284/year after 7 days free - save 60%' },
     },
   },
 ];
@@ -259,4 +259,4 @@ export const REGIONS: { key: Region; label: string; flag: string }[] = [
 
 /** Legal entity that owns and operates Studdy Lab (must match the payment
  * gateway KYC; Cashfree asked for it on the site, Oct 2026). */
-export const LEGAL_ENTITY = 'UNISCHOOLY';
+export const LEGAL_ENTITY = 'Unischooly';

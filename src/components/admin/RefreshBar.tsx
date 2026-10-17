@@ -1,6 +1,6 @@
 /**
- * CRM-2B — "data as of" timestamp + manual refresh. Deliberately the only
- * way data re-fetches besides a range/cohort change — no polling
+ * CRM-2B - "data as of" timestamp + manual refresh. Deliberately the only
+ * way data re-fetches besides a range/cohort change - no polling
  * interval, so no uncontrolled repeated API calls.
  */
 import { RefreshCw } from 'lucide-react';

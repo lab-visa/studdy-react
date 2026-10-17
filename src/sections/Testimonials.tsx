@@ -1,5 +1,5 @@
 /**
- * Testimonials.tsx — Section 7
+ * Testimonials.tsx - Section 7
  *
  * Layout:
  * 1. Section heading
@@ -210,7 +210,7 @@ function ReviewTicker() {
 export default function Testimonials() {
   const BUNNY_LIB = '712849';
   const VIDEO_ID  = '1a2c0484-f73a-474b-a2ea-d35487f524f5';
-  /* Vish's call: don't force the video to loop in the background — let it
+  /* Vish's call: don't force the video to loop in the background - let it
    * sit there like a real video and only play if a visitor chooses to. */
   const embedUrl  =
     `https://player.mediadelivery.net/embed/${BUNNY_LIB}/${VIDEO_ID}` +

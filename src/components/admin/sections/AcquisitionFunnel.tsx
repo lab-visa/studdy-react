@@ -1,12 +1,12 @@
 /**
- * CRM-2B — Section: acquisition funnel, website visits through paid.
+ * CRM-2B - Section: acquisition funnel, website visits through paid.
  * Every stage is a real, separately-sourced CRM-2A count for the SAME
  * selected date range (funnel_traffic for visits/CTA/checkout,
- * trial_started and new_paid_customer for the last two stages) —
+ * trial_started and new_paid_customer for the last two stages) -
  * presented together as a funnel because they share one time window,
  * not because any single query computes a "funnel". Visual refinement:
  * rendered by FunnelChart as a gradient, centered/tapered stepped
- * funnel with real stage-to-stage conversion badges (never fabricated —
+ * funnel with real stage-to-stage conversion badges (never fabricated -
  * see stageConversionPct).
  */
 import SectionCard from '../SectionCard';

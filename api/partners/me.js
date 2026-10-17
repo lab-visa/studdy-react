@@ -3,7 +3,7 @@
  *
  * A partner's private earnings page data. The long random token in their
  * link is the access key (same no-password design as the customer
- * dashboard). Customer details are masked — partners see first name,
+ * dashboard). Customer details are masked - partners see first name,
  * last initial and the last 4 digits of the phone only.
  */
 import { getSupabase } from '../_lib/supabase.js';

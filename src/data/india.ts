@@ -1,6 +1,6 @@
 /**
  * India offer (Oct 2026, Vish): pay first, no free trial, 7-day full refund.
- * Two plans only — Quarterly and Yearly. Prices are GST-inclusive, what the
+ * Two plans only - Quarterly and Yearly. Prices are GST-inclusive, what the
  * customer actually pays.
  *
  * Every other country is unchanged and still uses REGION_DATA in config.ts
@@ -27,4 +27,4 @@ export const INDIA_PLANS: Record<IndiaPlan, {
 export const INDIA_YEARLY_SAVING = '₹16,997';
 export const INDIA_YEARLY_SAVING_PCT = '53%';
 
-export const INDIA_TUTOR_PRICE = '₹800–1,500/hr';
+export const INDIA_TUTOR_PRICE = '₹1,500/hr';

@@ -11,7 +11,7 @@ import { getAttributionSnapshot } from '../utils/attribution';
 
 type Plan = 'monthly' | 'yearly';
 
-/* Read utm_source directly off THIS page's own URL — for a homepage
+/* Read utm_source directly off THIS page's own URL - for a homepage
  * pricing-section click this is exactly correct (the visitor's landing
  * URL), unlike Checkout.tsx's own copy of this helper which has to read
  * it off /checkout's URL instead, several navigations later. */
@@ -23,9 +23,9 @@ function getUtmSource() {
 export default function Pricing() {
   /* Country now comes from the shared MarketContext (Oct 2026) so that
    * switching the dropdown here also switches every other section/button
-   * on the page — India gets its own pay-first offer (IndiaPricing). */
+   * on the page - India gets its own pay-first offer (IndiaPricing). */
   const { region, setRegion, detectedRegion, isIndia } = useMarket();
-  /* Which plan box is "selected" (gets the live gradient border) — you
+  /* Which plan box is "selected" (gets the live gradient border) - you
    * can click either card to switch it, independent of which one you
    * actually start a trial on. Yearly is highlighted by default since
    * it's the recommended plan everywhere else on the site. */
@@ -45,7 +45,7 @@ export default function Pricing() {
   const hasStripe = Boolean(rd.monthly.stripeId) && Boolean(rd.yearly.stripeId);
 
   /* FIX (Sep 2026, Vish): these two buttons are the only entry point that
-   * skips /checkout entirely and goes straight to Stripe — every other
+   * skips /checkout entirely and goes straight to Stripe - every other
    * "Start Free Trial"/CTA button on the site still goes through
    * /checkout unchanged. This is safe specifically here because, by the
    * time either button is clickable, this section has already done
@@ -55,7 +55,7 @@ export default function Pricing() {
    * missing payment link), and the exact post-trial price/trial length is
    * already printed right above this button. Logic mirrors Checkout.tsx's
    * own handleStart() exactly (same attribution capture, same Stripe
-   * Payment Link URL builder) — kept in sync with it deliberately, not
+   * Payment Link URL builder) - kept in sync with it deliberately, not
    * copy-pasted by accident. */
   const handlePlan = (chosenPlan: Plan, event: string) => {
     track(event as Parameters<typeof track>[0]);
@@ -95,14 +95,14 @@ export default function Pricing() {
           center
         />
 
-        {/* Region selector — one compact dropdown instead of a wall of pills */}
+        {/* Region selector - one compact dropdown instead of a wall of pills */}
         <div className="flex justify-center mb-10">
           <RegionPicker region={region} onChange={setRegion} detectedRegion={detectedRegion} />
         </div>
 
         {!hasStripe && (
           <p className="text-center text-[13px] mb-8 font-semibold" style={{ color: 'var(--g1)' }}>
-            {rd.flag} {rd.label} pricing is coming soon — email hello@studdyai.org to join the waitlist.
+            {rd.flag} {rd.label} pricing is coming soon - email hello@studdyai.org to join the waitlist.
           </p>
         )}
 
@@ -130,7 +130,7 @@ export default function Pricing() {
             </ul>
             {/* FIX (Sep 2026): this button was hardcoded to className="gost"
              * (the permanently-white/outlined "ghost" style) regardless of
-             * whether Monthly was the selected plan — it never once
+             * whether Monthly was the selected plan - it never once
              * highlighted, unlike Yearly's button below which was hardcoded
              * to the opposite ("gbtn", filled gradient) class. Both buttons
              * now switch style based on selectedPlan, same as the card
@@ -142,7 +142,7 @@ export default function Pricing() {
             </button>
           </div>
 
-          {/* Yearly — Best Value */}
+          {/* Yearly - Best Value */}
           <div
             onClick={() => setSelectedPlan('yearly')}
             className={`rounded-2xl p-8 flex flex-col relative cursor-pointer ${selectedPlan === 'yearly' ? 'gradient-border-live' : ''}`}
@@ -175,7 +175,7 @@ export default function Pricing() {
             </button>
           </div>
 
-          {/* Human Tutor — comparison only, real per-region price */}
+          {/* Human Tutor - comparison only, real per-region price */}
           <div className="rounded-2xl p-8 flex flex-col" style={{ border: '1.5px solid var(--border)', background: '#fff', opacity: 0.6 }}>
             <div className="text-[12px] font-black uppercase tracking-wide mb-3" style={{ color: 'var(--soft)' }}>Human Tutor</div>
             <div className="font-black mb-1" style={{ fontSize: '38px', letterSpacing: '-1.5px' }}>
@@ -189,7 +189,7 @@ export default function Pricing() {
                 </li>
               ))}
             </ul>
-            <button className="gost w-full justify-center opacity-50" disabled aria-label="Human tutor comparison — no action">
+            <button className="gost w-full justify-center opacity-50" disabled aria-label="Human tutor comparison - no action">
               Comparison only
             </button>
           </div>

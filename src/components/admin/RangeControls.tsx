@@ -1,7 +1,7 @@
 /**
- * CRM-2B — reporting-period control. Presets apply immediately; "Custom"
+ * CRM-2B - reporting-period control. Presets apply immediately; "Custom"
  * reveals two date inputs and only applies once both are filled with a
- * valid, non-inverted range (isValidCustomRange) — never a guessed
+ * valid, non-inverted range (isValidCustomRange) - never a guessed
  * partial range.
  */
 import { Calendar } from 'lucide-react';

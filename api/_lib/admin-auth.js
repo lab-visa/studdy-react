@@ -1,14 +1,14 @@
 /**
- * CRM-1B — Admin Access Foundation.
+ * CRM-1B - Admin Access Foundation.
  *
  * Fresh design (NOT a reuse of the old local-only single-shared-password
- * HMAC-cookie pattern) — real per-user rows in `admin_users`, real
+ * HMAC-cookie pattern) - real per-user rows in `admin_users`, real
  * server-side sessions in `admin_sessions` (migration 0014). Single
  * admin, Name + 4-digit PIN, for V1.
  *
  * PIN hashing, per CRM-1 Revision 2.1's required correction: a 4-digit
  * PIN has only 10,000 possible values, so salt+scrypt alone is not
- * enough protection if `admin_users` is ever leaked — a server-side
+ * enough protection if `admin_users` is ever leaked - a server-side
  * pepper (ADMIN_PIN_PEPPER, a Vercel-only environment variable, never
  * stored in Supabase, never committed, never logged, never returned to
  * the browser) is required in addition:
@@ -18,10 +18,10 @@
  *
  * This exact function is imported by BOTH this file (production,
  * verification) and scripts/create-admin.mjs (local bootstrap, hash
- * generation) — one shared implementation, so the two can never derive
+ * generation) - one shared implementation, so the two can never derive
  * differently for the same Name/PIN/pepper/salt.
  *
- * The real PIN is never stored, logged, or returned anywhere — not in
+ * The real PIN is never stored, logged, or returned anywhere - not in
  * `admin_users`, not in `activity_log`, not in any API response, not in
  * this file.
  */
@@ -37,7 +37,7 @@ const SCRYPT_KEYLEN = 64;
 function getPepper() {
   const pepper = process.env.ADMIN_PIN_PEPPER;
   if (!pepper) {
-    throw new Error('Missing ADMIN_PIN_PEPPER environment variable — admin auth cannot run without it.');
+    throw new Error('Missing ADMIN_PIN_PEPPER environment variable - admin auth cannot run without it.');
   }
   return pepper;
 }
@@ -48,7 +48,7 @@ export function generateSalt() {
 }
 
 /**
- * The one shared derivation function — HMAC-with-pepper, then
+ * The one shared derivation function - HMAC-with-pepper, then
  * scrypt-with-per-user-salt. Used identically by production login
  * verification and by the local bootstrap script.
  */
@@ -67,11 +67,11 @@ function hashesEqual(a, b) {
 }
 
 /* Dummy salt/hash pair, computed once per process (lazily, on first use)
- * against a fixed non-secret placeholder PIN — never tied to any real
+ * against a fixed non-secret placeholder PIN - never tied to any real
  * admin account. Used ONLY to keep the "unknown name" login path doing
  * the same amount of cryptographic work as the "known name, wrong PIN"
  * path, so the two are not distinguishable by response time. Its result
- * is never used to decide success — an unknown name always fails,
+ * is never used to decide success - an unknown name always fails,
  * regardless of what this comparison returns. */
 let dummyCredential = null;
 function getDummyCredential() {
@@ -85,7 +85,7 @@ function getDummyCredential() {
 
 /**
  * Verifies a login attempt's PIN against a known admin_users row.
- * Always runs the real derivation — never short-circuits.
+ * Always runs the real derivation - never short-circuits.
  */
 export function verifyPin(pin, salt, storedHash) {
   const computed = deriveHash(pin, salt);
@@ -95,7 +95,7 @@ export function verifyPin(pin, salt, storedHash) {
 /**
  * Runs the identical cost (HMAC + scrypt + constant-time compare) for an
  * unknown display name, so response timing cannot reveal whether a name
- * exists. The return value is intentionally ignored by callers — this
+ * exists. The return value is intentionally ignored by callers - this
  * function's only job is to burn the same amount of time.
  */
 export function runDummyVerification(pin) {
@@ -109,7 +109,7 @@ export function generateSessionToken() {
   return randomBytes(32).toString('hex');
 }
 
-/** SHA-256 of the session token — this, never the raw token, is what's stored in admin_sessions. */
+/** SHA-256 of the session token - this, never the raw token, is what's stored in admin_sessions. */
 export function hashSessionToken(token) {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -189,7 +189,7 @@ export async function verifySession(supabase, token) {
   return adminUser;
 }
 
-/** Revokes a session server-side (true logout — not just a cookie clear). */
+/** Revokes a session server-side (true logout - not just a cookie clear). */
 export async function revokeSession(supabase, token) {
   if (!token) return;
   const tokenHash = hashSessionToken(token);
@@ -202,7 +202,7 @@ export async function revokeSession(supabase, token) {
 
 /**
  * Call at the top of every /api/admin/* handler (except login). Sends 401
- * and returns null if the request isn't authenticated — caller should
+ * and returns null if the request isn't authenticated - caller should
  * `return` immediately when this returns null. No client-side-only
  * gating anywhere: this is the actual, only enforcement point.
  */
@@ -270,7 +270,7 @@ export function isSameOriginRequest(req) {
   if (originOk !== null) return originOk;
   const refererOk = check(referer);
   if (refererOk !== null) return refererOk;
-  /* Neither header present — some legitimate same-site requests omit
+  /* Neither header present - some legitimate same-site requests omit
    * both (e.g. certain browser privacy modes). SameSite=Strict already
    * carries the primary defense here, so we don't hard-fail on absence
    * alone. */

@@ -1,6 +1,6 @@
 /**
- * CRM-2B — a single KPI stat tile. Deliberately plain: one number, one
- * label, one small "what kind of number is this" badge — no decorative
+ * CRM-2B - a single KPI stat tile. Deliberately plain: one number, one
+ * label, one small "what kind of number is this" badge - no decorative
  * numbers without business meaning, no fake sparkline.
  */
 import type { ReactNode } from 'react';

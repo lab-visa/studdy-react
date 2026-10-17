@@ -1,5 +1,5 @@
 /**
- * /partners — public page for the India sales partner programme:
+ * /partners - public page for the India sales partner programme:
  * what the role is, how much you earn, and instant registration (name,
  * WhatsApp, email → personal link straight away).
  * Commission numbers must match api/_lib/partners.js.

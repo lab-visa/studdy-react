@@ -1,5 +1,5 @@
 /**
- * Single shared definition of "open cancellation workflow" — used by both
+ * Single shared definition of "open cancellation workflow" - used by both
  * api/cancel-request.js (application-level pre-check) and
  * api/admin/reconciliation.js (check #5), so the two can never disagree
  * with each other or with the database constraint

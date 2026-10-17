@@ -4,24 +4,24 @@
  *
  * Called from the dashboard's "Request cancellation" form.
  *
- * IMPORTANT — this does NOT touch Stripe and does NOT stop billing.
+ * IMPORTANT - this does NOT touch Stripe and does NOT stop billing.
  * It only saves the customer's reason + message + timestamp to Supabase
  * and marks the lead's stage as 'cancel_requested', so it shows up for
  * Vish to review and follow up on WhatsApp within 24 hours, per the
  * original plan. Actually cancelling the subscription in Stripe is a
- * manual step Vish does himself after that conversation — this is
+ * manual step Vish does himself after that conversation - this is
  * intentional, not a bug: subscriptions must never be auto-cancelled
  * from this endpoint.
  *
  * CRM-1 Objective 2 (additive, byte-for-byte unchanged `leads` write
- * above/before it): after the legacy `leads` update succeeds — which is
- * still the only thing the customer's response depends on — this also
+ * above/before it): after the legacy `leads` update succeeds - which is
+ * still the only thing the customer's response depends on - this also
  * best-effort mirrors the request into the new `cancellation_requests`
  * table, matching migration 0006's schema and the
  * cancellation_requests_one_open_per_customer partial unique index
  * (migration 0013). A failure anywhere in this additive block is only
  * logged, never surfaced to the customer and never a reason to fail this
- * request — same safely()/log-only discipline already used throughout
+ * request - same safely()/log-only discipline already used throughout
  * this codebase (see stripe-webhook.js).
  */
 import { getSupabase } from './_lib/supabase.js';
@@ -36,14 +36,14 @@ export async function safely(label, fn) {
 }
 
 /**
- * Additive dual-write into cancellation_requests. Never throws — every
+ * Additive dual-write into cancellation_requests. Never throws - every
  * failure path is caught by the safely() wrapper this is called from.
  *
  * Idempotency has two layers, matching the mirrorLegacyAllocation()
  * pattern already proven in api/_lib/sync-customer.js:
  *   1. An application-level pre-check (cheap, handles the common case).
  *   2. The database's own unique index as the real guarantor under
- *      concurrency — a 23505 conflict from a near-simultaneous duplicate
+ *      concurrency - a 23505 conflict from a near-simultaneous duplicate
  *      request is caught here and treated as "an open request already
  *      exists", not an error.
  * Either way, a repeated/double-click request resolves to the existing
@@ -64,9 +64,9 @@ export async function mirrorCancellationRequest(supabase, { sessionId, reason, m
   }
   if (!customer) {
     /* No matching customers row yet (e.g. predates Phase 3, or the
-     * new-CRM sync hasn't caught up yet) — nothing to mirror into. Not an
+     * new-CRM sync hasn't caught up yet) - nothing to mirror into. Not an
      * error: the legacy leads row is still the record of truth here. */
-    console.error(`mirrorCancellationRequest: no customers row for session ${sessionId} — skipping mirror.`);
+    console.error(`mirrorCancellationRequest: no customers row for session ${sessionId} - skipping mirror.`);
     return;
   }
 
@@ -82,7 +82,7 @@ export async function mirrorCancellationRequest(supabase, { sessionId, reason, m
     return;
   }
   if (existingOpen) {
-    /* An open cancellation workflow already exists for this customer —
+    /* An open cancellation workflow already exists for this customer -
      * leave it exactly as-is. This is the "repeated/double-click request
      * resolves to the existing open request" behavior. */
     return;
@@ -99,7 +99,7 @@ export async function mirrorCancellationRequest(supabase, { sessionId, reason, m
 
   if (insertError) {
     if (insertError.code === '23505') {
-      /* Lost a race against a near-simultaneous duplicate request — the
+      /* Lost a race against a near-simultaneous duplicate request - the
        * database's own partial unique index caught it. An open request
        * now exists (just not the one we tried to create); this is the
        * correct, expected no-op outcome under concurrency, not a failure. */
@@ -152,7 +152,7 @@ export default async function handler(req, res) {
       })
       .eq('lead_id', lead.lead_id);
 
-    /* Additive, best-effort — see mirrorCancellationRequest() above. This
+    /* Additive, best-effort - see mirrorCancellationRequest() above. This
      * can never affect the response below, which is what the customer's
      * dashboard actually depends on. */
     await safely('mirror', () => mirrorCancellationRequest(supabase, { sessionId: session_id, reason, message, requestedAt }));

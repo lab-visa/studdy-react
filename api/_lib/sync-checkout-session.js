@@ -3,12 +3,12 @@
  * Used by:
  *   - api/stripe-webhook.js, live, every time checkout.session.completed
  *     actually fires from Stripe.
- *   - api/refresh-lead.js, an admin-only manual "resync" — no new payment,
- *     no new subscription — for fixing a specific customer's row after a
+ *   - api/refresh-lead.js, an admin-only manual "resync" - no new payment,
+ *     no new subscription - for fixing a specific customer's row after a
  *     code change, without needing them to pay again.
  *
  * IMPORTANT: if this lead already has a Studdy account group assigned,
- * that assignment is kept exactly as-is — this function never claims a
+ * that assignment is kept exactly as-is - this function never claims a
  * second seat for someone who already has one. A seat is only claimed
  * the first time a lead is synced.
  */
@@ -23,18 +23,18 @@ import { mapStatus, toDate, resolveNextBilling } from './status.js';
 const MAX_ALLOCATION_ATTEMPTS = 5;
 
 /* Finds a Studdy account/group with a free seat and atomically claims one
- * seat — safe under concurrent Stripe checkouts.
+ * seat - safe under concurrent Stripe checkouts.
  *
- * Capacity comes ONLY from studdy_accounts.max_capacity — configurable per
+ * Capacity comes ONLY from studdy_accounts.max_capacity - configurable per
  * row via plain SQL (`update studdy_accounts set max_capacity = ... where
  * group_name = ...`), no code change or redeploy needed for it to take
  * effect, since this queries the table fresh on every call. There is no
  * hardcoded fallback number: a row with a missing/invalid max_capacity is
  * skipped and logged as a data-integrity problem rather than silently
- * treated as some default. Groups are tried in group_name order — first
+ * treated as some default. Groups are tried in group_name order - first
  * one with room wins, same priority as before.
  *
- * CONCURRENCY: a plain "read the count, then write count+1" is racy — two
+ * CONCURRENCY: a plain "read the count, then write count+1" is racy - two
  * requests can both read the same active_customer_count before either
  * writes, and both then believe they claimed a seat that only existed
  * once. The fix here is an atomic conditional (compare-and-swap) update:
@@ -42,7 +42,7 @@ const MAX_ALLOCATION_ATTEMPTS = 5;
  * id = ... AND active_customer_count = observed`. A single UPDATE
  * statement is always executed atomically by Postgres, and its WHERE
  * clause is re-evaluated against the row's current, correctly-locked
- * value at the moment the statement actually runs — so if another request
+ * value at the moment the statement actually runs - so if another request
  * already changed active_customer_count since our read, this WHERE clause
  * simply matches zero rows instead of the two writers silently
  * overwriting each other. That is what makes this safe without a Postgres
@@ -50,12 +50,12 @@ const MAX_ALLOCATION_ATTEMPTS = 5;
  * across separate serverless invocations): the atomicity comes from a
  * single SQL statement, not from anything in this JS process.
  *
- * If we lose that race (0 rows updated), we do NOT return that account —
+ * If we lose that race (0 rows updated), we do NOT return that account -
  * we retry the whole read+claim from a fresh snapshot, which naturally
  * finds the next eligible account (or discovers none are left). A
  * customer only ever receives an account object here if the conditional
- * update actually affected a row — never assumed. */
-async function assignStuddyAccount(supabase) {
+ * update actually affected a row - never assumed. */
+export async function assignStuddyAccount(supabase) {
   for (let attempt = 0; attempt < MAX_ALLOCATION_ATTEMPTS; attempt++) {
     const { data: groups, error } = await supabase
       .from('studdy_accounts')
@@ -69,7 +69,7 @@ async function assignStuddyAccount(supabase) {
       if (typeof capacity !== 'number' || !Number.isFinite(capacity) || capacity <= 0) {
         console.error(
           `studdy_accounts row "${g.group_name}" (${g.id}) has a missing or invalid max_capacity ` +
-          `(${JSON.stringify(capacity)}) — skipping it for allocation until fixed in the database. ` +
+          `(${JSON.stringify(capacity)}) - skipping it for allocation until fixed in the database. ` +
           `This is never silently treated as 7 or any other default.`
         );
         return false;
@@ -92,21 +92,21 @@ async function assignStuddyAccount(supabase) {
 
     if (claimed) {
       // The conditional UPDATE actually matched and changed this exact
-      // row — we genuinely own this seat. Only now is it safe to return.
+      // row - we genuinely own this seat. Only now is it safe to return.
       return claimed;
     }
 
     // 0 rows matched: someone else claimed this exact seat between our
-    // read and our write. Never return this account — retry from a fresh
+    // read and our write. Never return this account - retry from a fresh
     // read instead, which will see the account's true current state.
     console.error(
       `assignStuddyAccount: lost the race for "${candidate.group_name}" (expected ` +
-      `active_customer_count=${observedCount}, but it had already changed) — retrying ` +
+      `active_customer_count=${observedCount}, but it had already changed) - retrying ` +
       `(attempt ${attempt + 1}/${MAX_ALLOCATION_ATTEMPTS}).`
     );
   }
 
-  console.error('assignStuddyAccount: exhausted retry attempts under contention — no seat claimed this call.');
+  console.error('assignStuddyAccount: exhausted retry attempts under contention - no seat claimed this call.');
   return null;
 }
 
@@ -148,8 +148,8 @@ export async function syncCheckoutSession(stripe, supabase, sessionId) {
 
   const dashboardUrl = `https://studdylab.com/dashboard?session_id=${session.id}`;
 
-  /* Already exists? Find it first — by lead_id (from client_reference_id)
-   * or by this exact stripe_session_id — so we know whether to keep their
+  /* Already exists? Find it first - by lead_id (from client_reference_id)
+   * or by this exact stripe_session_id - so we know whether to keep their
    * existing Studdy account assignment or claim a fresh one. */
   const existing = (await findLeadBy(supabase, 'lead_id', leadId)) || (await findLeadBy(supabase, 'stripe_session_id', session.id));
 
@@ -157,7 +157,7 @@ export async function syncCheckoutSession(stripe, supabase, sessionId) {
   if (!existing?.group_name) {
     account = await assignStuddyAccount(supabase);
     if (!account) {
-      console.error(`No free Studdy account slot for session ${session.id} — add a new group in studdy_accounts.`);
+      console.error(`No free Studdy account slot for session ${session.id} - add a new group in studdy_accounts.`);
     }
   }
 
@@ -211,7 +211,7 @@ export async function syncCheckoutSession(stripe, supabase, sessionId) {
     return data?.lead_id ?? leadId;
   }
 
-  /* No lead ID at all — someone paid without ever being tracked on the
+  /* No lead ID at all - someone paid without ever being tracked on the
    * site. Still record the real customer so nothing is lost. */
   const { data } = await supabase
     .from('leads')

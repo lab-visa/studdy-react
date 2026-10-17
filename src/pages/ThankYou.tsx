@@ -1,10 +1,10 @@
 /**
- * /thank-you?plan=quarterly|yearly — where Cashfree Payment Forms send the
+ * /thank-you?plan=quarterly|yearly - where Cashfree Payment Forms send the
  * customer after paying (set as the form's Redirect URL in the Cashfree
  * dashboard). Interim flow until studdylab.com is whitelisted for the
  * built-in checkout (#16): the Studdy login is sent manually on WhatsApp.
  *
- * Deliberately shows NO login details — this URL is public and guessable,
+ * Deliberately shows NO login details - this URL is public and guessable,
  * so it only confirms, reassures and explains what happens next.
  */
 import { useEffect, useMemo, useRef } from 'react';

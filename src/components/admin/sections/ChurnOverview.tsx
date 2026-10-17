@@ -1,9 +1,9 @@
 /**
- * CRM-2B — Section: cancellation & churn overview. Counts only — no
+ * CRM-2B - Section: cancellation & churn overview. Counts only - no
  * churn_rate anywhere, matching api/_lib/metrics.js's churn() contract
  * (it deliberately doesn't compute one, and this component must never
  * fabricate one client-side either). Visual refinement: a voluntary vs.
- * involuntary donut alongside the counts — an empty state (not a
+ * involuntary donut alongside the counts - an empty state (not a
  * misleading full circle) when total_churn is 0.
  */
 import SectionCard from '../SectionCard';

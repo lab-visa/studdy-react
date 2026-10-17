@@ -1,12 +1,12 @@
 /**
- * Dashboard.tsx — Customer Dashboard
+ * Dashboard.tsx - Customer Dashboard
  *
- * Flow (no login, ever — this is the whole point of the design):
+ * Flow (no login, ever - this is the whole point of the design):
  * 1. Customer arrives from Stripe (or from their saved link) with
  *    ?session_id=xxx in the URL.
  * 2. We call /api/get-session to fetch their details.
  * 3. Show their Studdy credentials + subscription info.
- * There is no account, no password to remember, no "log out" — the link
+ * There is no account, no password to remember, no "log out" - the link
  * itself IS their access. If someone lands here with no session_id, we
  * point them to WhatsApp to get their link resent, not a fake login form.
  */
@@ -33,6 +33,11 @@ interface UserData {
   /* true when payment is confirmed but the Studdy login hasn't been
    * assigned yet (webhook still running, or no free seat). */
   accessPending?: boolean;
+  /* India (Cashfree) orders only */
+  market?: 'in';
+  paymentStatus?: 'paid' | 'pending' | 'failed';
+  paidOn?: string;
+  accessUntil?: string;
 }
 
 /* How long to keep re-checking for a login that's still being set up. */
@@ -70,7 +75,7 @@ function StatusPill({ status, isTrialing }: { status: string; isTrialing: boolea
     Disputed:  { bg: 'rgba(239,68,68,.12)',  fg: '#991b1b', dot: '#dc2626', label: 'Disputed' },
     Refunded:  { bg: 'rgba(107,114,128,.12)',fg: '#374151', dot: '#6b7280', label: 'Refunded' },
   };
-  const s = map[status] ?? { bg: 'var(--dim)', fg: 'var(--soft)', dot: 'var(--soft)', label: status || '—' };
+  const s = map[status] ?? { bg: 'var(--dim)', fg: 'var(--soft)', dot: 'var(--soft)', label: status || '-' };
   const label = isTrialing ? map.Trialing.label : s.label;
   const style = isTrialing ? map.Trialing : s;
   return (
@@ -83,7 +88,10 @@ function StatusPill({ status, isTrialing }: { status: string; isTrialing: boolea
 }
 
 export default function Dashboard() {
-  const [step, setStep] = useState<'loading' | 'dashboard' | 'no-link' | 'cancel'>('loading');
+  const [step, setStep] = useState<'loading' | 'dashboard' | 'no-link' | 'cancel' | 'confirming' | 'payment-failed'>('loading');
+  /* India orders use ?order_id= (Cashfree); everyone else ?session_id= (Stripe). */
+  const [orderId, setOrderId] = useState('');
+  const [confirmTries, setConfirmTries] = useState(0);
   const [user, setUser] = useState<UserData | null>(null);
   const [showPwd, setShowPwd] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -97,14 +105,44 @@ export default function Dashboard() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sid = params.get('session_id');
+    const oid = params.get('order_id');
 
-    if (sid) {
+    if (oid) {
+      setOrderId(oid);
+      fetchIndiaOrder(oid);
+    } else if (sid) {
       setSessionId(sid);
       fetchSession(sid);
     } else {
       setStep('no-link');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchIndiaOrder = async (oid: string) => {
+    try {
+      const res = await fetch(`/api/india-session?order_id=${encodeURIComponent(oid)}`);
+      const data = await res.json();
+      if (data.error) { setError(data.error); setStep('no-link'); return; }
+      setUser(data);
+      if (data.paymentStatus === 'failed') { setStep('payment-failed'); return; }
+      if (data.paymentStatus === 'pending') { setStep('confirming'); setConfirmTries(n => n + 1); return; }
+      setStep('dashboard');
+      if (data.accessPending) setPendingRetries(n => n + 1);
+    } catch {
+      setError('Could not load your dashboard.');
+      setStep('no-link');
+    }
+  };
+
+  /* Payment just made, Cashfree confirmation still on its way - re-check
+   * every 4s for about a minute. */
+  useEffect(() => {
+    if (step !== 'confirming' || !orderId || confirmTries > 15) return;
+    const t = setTimeout(() => fetchIndiaOrder(orderId), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, confirmTries, orderId]);
 
   const fetchSession = async (sid: string) => {
     try {
@@ -120,15 +158,15 @@ export default function Dashboard() {
     }
   };
 
-  /* Login still being set up — quietly re-check every few seconds for
+  /* Login still being set up - quietly re-check every few seconds for
    * about a minute, so the customer doesn't have to keep refreshing. */
   useEffect(() => {
-    if (!user?.accessPending || !sessionId) return;
+    if (!user?.accessPending || (!sessionId && !orderId)) return;
     if (pendingRetries > PENDING_MAX_RETRIES) return;
-    const t = setTimeout(() => fetchSession(sessionId), PENDING_RETRY_MS);
+    const t = setTimeout(() => (orderId ? fetchIndiaOrder(orderId) : fetchSession(sessionId)), PENDING_RETRY_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.accessPending, pendingRetries, sessionId]);
+  }, [user?.accessPending, pendingRetries, sessionId, orderId]);
 
   const handleCancelRequest = async () => {
     setCancelSubmitting(true);
@@ -164,7 +202,40 @@ export default function Dashboard() {
     );
   }
 
-  /* ── No link found — no login form, just point to WhatsApp ── */
+  /* ── India: payment being confirmed / failed ── */
+  if (step === 'confirming' || step === 'payment-failed') {
+    const failed = step === 'payment-failed';
+    const gaveUp = !failed && confirmTries > 15;
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: HERO_GRADIENT }}>
+        <div className="w-full max-w-[440px] bg-white rounded-3xl p-8 text-center"
+          style={{ border: '1.5px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,.08)' }}>
+          <div className="font-black text-[22px] mb-4"><span className="grad-text">studdy</span></div>
+          <div className="text-[16px] font-black mb-2" style={{ color: 'var(--ink)' }}>
+            {failed ? "Your payment didn't go through" : gaveUp ? 'Still confirming your payment' : 'Confirming your payment…'}
+          </div>
+          <div className="text-[13px] mb-6" style={{ color: 'var(--soft)' }}>
+            {failed
+              ? 'No money was taken for this attempt. You can try again - UPI, card or netbanking.'
+              : gaveUp
+                ? "If money left your account, don't worry - message us with this page's link and we'll sort it out right away."
+                : 'This usually takes a few seconds. Please keep this page open.'}
+          </div>
+          {failed && (
+            <a href="/checkout" className="gbtn w-full text-[14px] py-3 flex items-center justify-center mb-3">Try again</a>
+          )}
+          {(failed || gaveUp) && (
+            <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer"
+              className="gost w-full text-[14px] py-3 flex items-center justify-center gap-2">
+              💬 WhatsApp Support
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── No link found - no login form, just point to WhatsApp ── */
   if (step === 'no-link') {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: HERO_GRADIENT }}>
@@ -181,7 +252,7 @@ export default function Dashboard() {
               We couldn't find your dashboard link
             </div>
             <div className="text-[13px] mb-6" style={{ color: 'var(--soft)' }}>
-              Every Studdy Lab customer gets a personal link — the same one you got
+              Every Studdy Lab customer gets a personal link - the same one you got
               right after signing up. Message us on WhatsApp and we'll resend it to you.
             </div>
             <a href={SUPPORT_WHATSAPP} target="_blank" rel="noopener noreferrer"
@@ -273,6 +344,7 @@ export default function Dashboard() {
 
   /* ── Main Dashboard ── */
   const isTrialing = user?.status === 'Trialing';
+  const isIndiaOrder = user?.market === 'in';
   const alreadyRequestedCancel = Boolean(user?.cancelRequestedAt);
   const amountLabel = isTrialing ? "You'll be charged" : 'Amount';
 
@@ -288,7 +360,7 @@ export default function Dashboard() {
         </span>
       </header>
 
-      {/* Hero welcome band — same gradient language as checkout, so this
+      {/* Hero welcome band - same gradient language as checkout, so this
           doesn't suddenly feel like a different, plainer product the
           moment someone's card is charged. */}
       <div className="px-4 pt-10 pb-8" style={{ background: HERO_GRADIENT }}>
@@ -303,7 +375,7 @@ export default function Dashboard() {
             Welcome{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 🎉
           </h1>
           <p className="text-[14px] mb-4" style={{ color: 'var(--soft)' }}>
-            This page is your permanent link — save it or keep it in WhatsApp, you can
+            This page is your permanent link - save it or keep it in WhatsApp, you can
             come back to it any time.
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -379,7 +451,7 @@ export default function Dashboard() {
               'Click "Sign in with Google"',
               'Click "Use another account"',
               'Enter the email and password below',
-              'Start asking questions — type or speak anything',
+              'Start asking questions - type or speak anything',
             ].map((step, i) => (
               <div key={i} className="flex items-start gap-3 mb-2">
                 <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
@@ -391,7 +463,7 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Credentials — or a "being set up" notice. A login is never shown
+          {/* Credentials - or a "being set up" notice. A login is never shown
             * unless the server returned one for a completed, assigned seat. */}
           {user?.accessPending ? (
             <div className="rounded-xl p-4 text-[13px]"
@@ -448,7 +520,7 @@ export default function Dashboard() {
                   <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--soft)' }}>Google Account</div>
                   <div className="text-[14px] font-bold break-all" style={{ color: 'var(--ink)' }}>
-                    {user?.studdyEmail ?? '—'}
+                    {user?.studdyEmail ?? '-'}
                   </div>
                 </div>
               </div>
@@ -467,7 +539,7 @@ export default function Dashboard() {
                   <div className="text-[10px] font-black uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--soft)' }}>Password</div>
                   <div className="text-[14px] font-bold font-mono" style={{ color: 'var(--ink)' }}>
-                    {showPwd ? (user?.studdyPassword ?? '—') : '••••••••••'}
+                    {showPwd ? (user?.studdyPassword ?? '-') : '••••••••••'}
                   </div>
                 </div>
               </div>
@@ -491,15 +563,21 @@ export default function Dashboard() {
             Subscription
           </div>
           <div className="space-y-3">
-            {[
-              { label: 'Plan', value: user?.plan ?? '—' },
+            {(isIndiaOrder ? [
+              { label: 'Plan', value: user?.plan ?? '-' },
+              { label: 'Status', value: <StatusPill status={user?.status ?? ''} isTrialing={false} /> },
+              { label: 'Amount paid', value: user?.amount ?? '-' },
+              { label: 'Paid on', value: user?.paidOn ?? '-' },
+              { label: 'Access until', value: user?.accessUntil ?? '-' },
+            ] : [
+              { label: 'Plan', value: user?.plan ?? '-' },
               { label: 'Status', value: <StatusPill status={user?.status ?? ''} isTrialing={isTrialing} /> },
-              { label: amountLabel, value: user?.amount ?? '—' },
-              { label: isTrialing ? 'First payment date' : 'Next billing', value: user?.trialEnds && isTrialing ? user.trialEnds : (user?.nextBilling ?? '—') },
+              { label: amountLabel, value: user?.amount ?? '-' },
+              { label: isTrialing ? 'First payment date' : 'Next billing', value: user?.trialEnds && isTrialing ? user.trialEnds : (user?.nextBilling ?? '-') },
               ...(user && user.totalMonthsPaid > 0
                 ? [{ label: 'Payments made', value: String(user.totalMonthsPaid) }]
                 : []),
-            ].map((row, i) => (
+            ]).map((row, i) => (
               <div key={i} className="flex justify-between items-center py-2"
                 style={{ borderBottom: '1px solid var(--border)' }}>
                 <div className="text-[13px]" style={{ color: 'var(--soft)' }}>{row.label}</div>
@@ -529,7 +607,12 @@ export default function Dashboard() {
             className="gost w-full text-[14px] py-3 flex items-center justify-center gap-2 mb-3">
             <Mail size={15} /> {SUPPORT_EMAIL}
           </a>
-          {!alreadyRequestedCancel && (
+          {isIndiaOrder && (
+            <p className="text-[12.5px] text-center mt-1" style={{ color: 'var(--soft)' }}>
+              No auto-debit - nothing is charged again. Not happy? Ask for a full refund within 7 days of paying.
+            </p>
+          )}
+          {!alreadyRequestedCancel && !isIndiaOrder && (
             <button
               onClick={() => setStep('cancel')}
               className="w-full py-3 rounded-xl text-[13px] font-semibold transition-all"

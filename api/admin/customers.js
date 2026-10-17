@@ -1,51 +1,51 @@
 /**
  * GET /api/admin/customers
  *
- * CRM-3A — Customer & Subscription pipeline list view. Scalable
+ * CRM-3A - Customer & Subscription pipeline list view. Scalable
  * server-side pagination: every filter (including free-text search)
  * and the total count are computed entirely in Postgres, over the
  * FULL customer population, via the search_customer_pipeline(...)
- * function (migration 0017) — there is no PIPELINE_ROW_CAP-style
+ * function (migration 0017) - there is no PIPELINE_ROW_CAP-style
  * ceiling on how many customers this endpoint can see or count.
  *
  * Query params (all optional):
- *   search                — matches name/email/phone/paid_id (substring,
+ *   search                - matches name/email/phone/paid_id (substring,
  *                            case-insensitive), server-side, across the
  *                            full population, not just the current page.
- *   from, to               — customers.created_at range (ISO 8601). `to`
+ *   from, to               - customers.created_at range (ISO 8601). `to`
  *                            is exclusive, matching metrics.js's convention.
- *   country                 — exact match, customers.country
- *   salesOwner               — exact match; the literal value "unassigned"
+ *   country                 - exact match, customers.country
+ *   salesOwner               - exact match; the literal value "unassigned"
  *                              matches customers.sales_owner IS NULL
- *   accessStatus              — exact match, customers.access_status
- *   plan                       — exact match, subscriptions.plan_type
- *   currency                    — exact match, subscriptions.currency
- *   campaignSource                — matches EITHER latest_utm_source or
+ *   accessStatus              - exact match, customers.access_status
+ *   plan                       - exact match, subscriptions.plan_type
+ *   currency                    - exact match, subscriptions.currency
+ *   campaignSource                - matches EITHER latest_utm_source or
  *                                    first_utm_source (case-insensitive)
- *   paymentStatus                   — exact match, subscriptions.status
- *   trialOrPaid                       — 'trial' (customers.lifecycle='trial')
+ *   paymentStatus                   - exact match, subscriptions.status
+ *   trialOrPaid                       - 'trial' (customers.lifecycle='trial')
  *                                       or 'paid' (lifecycle in
  *                                       converted/retained)
- *   cancellationStatus                  — 'requested' (an open
+ *   cancellationStatus                  - 'requested' (an open
  *                                          cancellation_requests row exists)
  *                                          or 'none'
- *   groupName                             — exact match, assigned Studdy
+ *   groupName                             - exact match, assigned Studdy
  *                                           group (account_assignments mirror)
- *   stage                                  — exact match against the derived
+ *   stage                                  - exact match against the derived
  *                                            lifecycle.stage string
- *   page                                    — 1-based page number, default 1.
+ *   page                                    - 1-based page number, default 1.
  *                                            Invalid/non-numeric/negative/
  *                                            non-integer values fall back to
  *                                            1, never a crash or a garbage page.
- *   pageSize                                 — must be exactly 50 or 100;
+ *   pageSize                                 - must be exactly 50 or 100;
  *                                              any other value (including
  *                                              missing) falls back to 50.
  *                                              Deliberately not "whatever
- *                                              number the client asks for" —
+ *                                              number the client asks for" -
  *                                              see the CRM-3A pagination
  *                                              requirement this satisfies.
  *
- * Every value returned here is already safe for an admin CRM view — no
+ * Every value returned here is already safe for an admin CRM view - no
  * Studdy password/credential (those live only on `leads`/`studdy_accounts`
  * and are never read by this endpoint).
  */
@@ -61,7 +61,7 @@ export function parsePageSize(raw) {
 }
 
 // (page - 1) * pageSize is passed to Postgres as an int4 OFFSET
-// (max ~2.147 billion) — an absurdly large page number (a typo, a
+// (max ~2.147 billion) - an absurdly large page number (a typo, a
 // scraping attempt, whatever) must degrade to "no results on this
 // page" like any other out-of-range page, never a raw 500 from an
 // integer-overflow error at the database. 10,000,000 is far beyond

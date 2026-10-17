@@ -85,7 +85,7 @@ export default function SubjectSelector() {
 
             {/* Video */}
             <LazyVideo
-              label={`${active.label} — subject preview`}
+              label={`${active.label} - subject preview`}
               spec={VIDEO_SPECS.subjectPreview}
               className="w-full rounded-2xl"
               aspectRatio="4/3"

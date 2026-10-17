@@ -1,6 +1,6 @@
 /**
- * CRM-2B — renders a by_currency object (gross/refund/net revenue) as one
- * line per currency. Never sums across currencies — that would blend
+ * CRM-2B - renders a by_currency object (gross/refund/net revenue) as one
+ * line per currency. Never sums across currencies - that would blend
  * USD/GBP/INR/AED into a meaningless number, which api/_lib/metrics.js
  * deliberately never does either.
  */
