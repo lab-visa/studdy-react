@@ -25,7 +25,8 @@ export default async function handler(req, res, deps = {}) {
   try {
     if (req.method === 'GET') {
       const { data: accounts, error } = await supabase.from('studdy_accounts')
-        .select('id, group_name, studdy_email, studdy_url, max_capacity, active_customer_count, created_at').order('group_name');
+        .select('id, group_name, studdy_email, studdy_url, max_capacity, active_customer_count, created_at')
+        .order('created_at', { ascending: false }).order('group_name', { ascending: false }); // newest first
       if (error) throw error;
       const { data: india, error: iErr } = await supabase.from('india_orders')
         .select('order_id, customer_name, customer_phone, customer_email, plan, access_end, group_name, ref_code').not('group_name', 'is', null);
@@ -54,7 +55,10 @@ export default async function handler(req, res, deps = {}) {
       });
       const capacity = rows.reduce((s, r) => s + (r.capacity || 0), 0);
       const used = rows.reduce((s, r) => s + r.used, 0);
-      return res.status(200).json({ rows, totals: { logins: rows.length, capacity, used, free: Math.max(0, capacity - used) }, lowSeats: LOW_SEATS });
+      /* Suggest the next name: highest "Group N" + 1 (falls back to count + 1). */
+      const nums = rows.map((r) => /^group\s*(\d+)$/i.exec(r.groupName || '')?.[1]).filter(Boolean).map(Number);
+      const nextName = `Group ${(nums.length ? Math.max(...nums) : rows.length) + 1}`;
+      return res.status(200).json({ rows, nextName, totals: { logins: rows.length, capacity, used, free: Math.max(0, capacity - used) }, lowSeats: LOW_SEATS });
     }
 
     if (req.method === 'POST') {

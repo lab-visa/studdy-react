@@ -31,7 +31,7 @@ const MAX_ALLOCATION_ATTEMPTS = 5;
  * effect, since this queries the table fresh on every call. There is no
  * hardcoded fallback number: a row with a missing/invalid max_capacity is
  * skipped and logged as a data-integrity problem rather than silently
- * treated as some default. Groups are tried in group_name order - first
+ * treated as some default. Groups are tried in the order they were added (created_at, then name) - first
  * one with room wins, same priority as before.
  *
  * CONCURRENCY: a plain "read the count, then write count+1" is racy - two
@@ -60,6 +60,10 @@ export async function assignStuddyAccount(supabase) {
     const { data: groups, error } = await supabase
       .from('studdy_accounts')
       .select('*')
+      // Fill logins in the order they were added (oldest first), so
+      // "Group 10" never fills before "Group 2" just because of how
+      // names sort alphabetically.
+      .order('created_at', { ascending: true })
       .order('group_name', { ascending: true });
 
     if (error) throw error;

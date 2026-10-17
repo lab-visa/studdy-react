@@ -149,9 +149,24 @@ test('Studdy Logins: seats used/free and who is on each login; never a password'
   const dup = fakeRes();
   await studdyLogins(fakeReq({ method: 'POST', headers: admin, body: { groupName: 'Group 2', studdyEmail: 'g3@studdy.test', studdyPassword: 'pw-3', maxCapacity: 40 } }), dup, deps);
   assert.equal(dup.statusCode, 409);
+  const again = fakeRes();
+  await studdyLogins(fakeReq({ method: 'GET', headers: admin }), again, deps);
+  assert.equal(again._json.nextName, 'Group 3');
+  assert.equal(again._json.rows[0].groupName, 'Group 2'); // newest first
+
   const low = fakeRes();
   await studdyLogins(fakeReq({ method: 'PATCH', headers: admin, body: { id: g1.id, maxCapacity: 1 } }), low, deps);
   assert.equal(low.statusCode, 400);
+});
+
+test('new customers fill the OLDEST login first, not alphabetical ("Group 10" never before "Group 2")', async () => {
+  await pool.query(`INSERT INTO studdy_accounts (group_name, studdy_email, studdy_password, max_capacity, created_at) VALUES ('Group 10','g10@studdy.test','pw', 40, now() + interval '1 day')`);
+  const id = await newOrder({});
+  await sendWebhook(upiSuccess(id));
+  const { rows: [o] } = await pool.query('SELECT group_name FROM india_orders WHERE order_id=$1', [id]);
+  assert.equal(o.group_name, 'Group 1');
+  await pool.query(`UPDATE india_orders SET status='refunded' WHERE order_id=$1`, [id]);
+  await pool.query(`UPDATE studdy_accounts SET active_customer_count = active_customer_count - 1 WHERE group_name='Group 1'`);
 });
 
 test('Release seat (test clean-up): seat freed, order stays paid, dashboard shows access ended and never re-assigns', async () => {
