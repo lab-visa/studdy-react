@@ -1,13 +1,13 @@
 /**
- * CRM-2B — TypeScript shape of the GET /api/admin/metrics response.
+ * CRM-2B - TypeScript shape of the GET /api/admin/metrics response.
  *
- * Deliberately mirrors api/_lib/metrics.js's Metric Contract exactly —
+ * Deliberately mirrors api/_lib/metrics.js's Metric Contract exactly -
  * every field here is one the backend actually returns today. No field is
  * added "for later" and no field here is optional-but-secretly-required;
  * the dashboard must never assume a shape the API doesn't guarantee.
  *
  * `type` on every metric result is the SAME classification the backend
- * already computes (event_period / current_state / cohort) — the
+ * already computes (event_period / current_state / cohort) - the
  * dashboard reads this field to decide "does the selected date range
  * affect this number", it never re-derives that classification itself
  * (see MetricType usage in src/utils/metricsFormat.ts).

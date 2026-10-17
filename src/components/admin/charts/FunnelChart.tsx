@@ -1,12 +1,12 @@
 /**
- * CRM-2B (visual refinement) — acquisition funnel as a centered, tapered
+ * CRM-2B (visual refinement) - acquisition funnel as a centered, tapered
  * "stepped funnel" (each stage bar is centered and scaled to the
  * top-of-funnel count, so the silhouette actually reads as a funnel,
  * not just a bar chart). Gradient-filled per the Studdy brand direction.
  * Stage-to-stage conversion is only ever shown when mathematically
  * valid (stageConversionPct returns null, never a divide-by-zero, when
- * the previous stage is 0 — the badge is simply omitted then).
- * Pure divs, not SVG — resizes naturally at any width, no fixed
+ * the previous stage is 0 - the badge is simply omitted then).
+ * Pure divs, not SVG - resizes naturally at any width, no fixed
  * dimensions to break on mobile, and the same markup collapses cleanly
  * to a stacked list on narrow screens.
  */
@@ -28,7 +28,7 @@ export default function FunnelChart({ stages }: FunnelChartProps) {
   const srSummary = stages.map((s) => `${s.label}: ${new Intl.NumberFormat('en-US').format(s.count)}`).join(', ');
 
   return (
-    <div role="img" aria-label={`Acquisition funnel — ${srSummary}`} className="flex flex-col items-center gap-1 w-full">
+    <div role="img" aria-label={`Acquisition funnel - ${srSummary}`} className="flex flex-col items-center gap-1 w-full">
       {stages.map((stage, i) => {
         const widthPct = funnelBarWidthPct(stage.count, maxCount);
         const prevStage = i > 0 ? stages[i - 1] : null;

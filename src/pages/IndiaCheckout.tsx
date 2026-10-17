@@ -1,5 +1,5 @@
 /**
- * IndiaCheckout — /checkout as shown to visitors in India.
+ * IndiaCheckout - /checkout as shown to visitors in India.
  *
  * Pay first, Quarterly or Yearly, 7-day full refund, no free trial.
  *
@@ -137,7 +137,7 @@ export default function IndiaCheckout({ initialPlan }: { initialPlan: IndiaPlan 
               </div>
             </div>
 
-            {/* Buyer details — Cashfree needs them, and the mobile number is how
+            {/* Buyer details - Cashfree needs them, and the mobile number is how
               * we reach the family for onboarding and the 7-day refund. */}
             {field('Parent / student name', name, setName, { autoComplete: 'name', placeholder: 'Your full name' })}
             {field('Email', email, setEmail, { type: 'email', autoComplete: 'email', placeholder: 'you@example.com' })}

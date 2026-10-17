@@ -1,13 +1,13 @@
 /**
- * AdminHome.tsx — /admin route entry point.
+ * AdminHome.tsx - /admin route entry point.
  *
  * CRM-2B: the CRM-1B placeholder ("CRM setup in progress") is replaced by
  * the real Executive Command Center, but the actual security behavior is
- * unchanged from CRM-1B — this still confirms the session server-side via
+ * unchanged from CRM-1B - this still confirms the session server-side via
  * /api/admin/whoami before rendering ANY admin data, and still redirects
  * to /admin/login on no/expired/revoked session. Logout still calls
  * /api/admin/logout, which revokes the server-side session row (not just
- * a cookie clear) — see api/_lib/admin-auth.js's revokeSession().
+ * a cookie clear) - see api/_lib/admin-auth.js's revokeSession().
  *
  * A second 401 while the dashboard is open (CommandCenter's own fetch to
  * /api/admin/metrics, e.g. the session expiring mid-visit) is handled the

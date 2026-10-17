@@ -1,5 +1,5 @@
 /**
- * Hero.tsx — V3.2 crash-safe + Bunny Stream
+ * Hero.tsx - V3.2 crash-safe + Bunny Stream
  *
  * Screen calibration (unchanged):
  *   --screen-top:    2.4%
@@ -18,11 +18,11 @@ import { useMarket } from '../context/MarketContext';
 import { INDIA_REFUND_DAYS } from '../data/india';
 gsap.registerPlugin(ScrollTrigger);
 
-/* ── Hero laptop loop — direct Bunny MP4 ───────────────────────── */
+/* ── Hero laptop loop - direct Bunny MP4 ───────────────────────── */
 const LAPTOP_MP4_720P  = 'https://vz-b523719a-f10.b-cdn.net/f4df16a6-0fbe-4f97-9f24-91aa14337e24/play_720p.mp4';
 const LAPTOP_MP4_1080P = 'https://vz-b523719a-f10.b-cdn.net/f4df16a6-0fbe-4f97-9f24-91aa14337e24/play_1080p.mp4';
 
-/* ── Full Demo modal — direct Bunny MP4 (FIX 1: native video) ── */
+/* ── Full Demo modal - direct Bunny MP4 (FIX 1: native video) ── */
 const FULL_DEMO_MP4_720P  = 'https://vz-b523719a-f10.b-cdn.net/9ddc752f-6ff6-49b2-9e84-cb7c5aa5a87c/play_720p.mp4';
 const FULL_DEMO_MP4_1080P = 'https://vz-b523719a-f10.b-cdn.net/9ddc752f-6ff6-49b2-9e84-cb7c5aa5a87c/play_1080p.mp4';
 
@@ -32,7 +32,7 @@ const CARDS = [
   { Icon: MessageSquare, title: 'Ask anything', sub: 'Interrupt with any question'    },
 ];
 
-/* ─── Laptop stage (looping muted preview — unchanged) ─── */
+/* ─── Laptop stage (looping muted preview - unchanged) ─── */
 function LaptopStage() {
   const videoRef   = useRef<HTMLVideoElement>(null);
   const mountedRef = useRef(true);
@@ -122,18 +122,18 @@ function LaptopStage() {
         {muted ? 'Click to unmute' : 'Click to mute'}
       </button>
 
-      {/* FIX (Sep 2026): this was a raw 5.24MB PNG at 4477x2712px — displayed
+      {/* FIX (Sep 2026): this was a raw 5.24MB PNG at 4477x2712px - displayed
        * nowhere near that size, and downloaded in full on every first visit
        * (no cache). Replaced with a 1800px-wide WebP (~69KB, ~98.7% smaller,
        * visually checked for artifacts before shipping) with the original
        * PNG kept as a <picture> fallback for browsers that somehow don't
        * support WebP. width/height are the WebP's real intrinsic pixel
-       * dimensions (not the rendered size — the CSS below still scales it
+       * dimensions (not the rendered size - the CSS below still scales it
        * to 100% of its container) so the browser can reserve the correct
        * aspect ratio before the image loads, instead of shifting layout
        * once it arrives. fetchPriority="high" because this is the single
-       * largest above-the-fold visual — almost certainly the page's LCP
-       * element — so it should not compete with lower-priority requests. */}
+       * largest above-the-fold visual - almost certainly the page's LCP
+       * element - so it should not compete with lower-priority requests. */}
       <picture>
         <source srcSet="/images/Laptop.webp" type="image/webp" />
         <img src="/images/Laptop.png" alt="Studdy running on a laptop"
@@ -146,7 +146,7 @@ function LaptopStage() {
   );
 }
 
-/* ─── Watch Full Demo modal — FIX 1: native HTML5 video ─────────────────────
+/* ─── Watch Full Demo modal - FIX 1: native HTML5 video ─────────────────────
  * Replaced the Bunny iframe with a native <video> element so the final frame
  * is correctly centred with objectFit:contain and the warm off-white background.
  * On close: pause + reset currentTime before unmount.
@@ -230,7 +230,7 @@ function DemoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           </button>
         </div>
 
-        {/* Native video — cover fills wrapper, no white strip */}
+        {/* Native video - cover fills wrapper, no white strip */}
         <div className="fd-player-wrap">
           <video
             ref={videoRef}
@@ -380,7 +380,7 @@ export default function Hero() {
             </h1>
             <p style={{ fontSize: 'clamp(15px,1.6vw,18px)', color: 'var(--soft)', lineHeight: 1.65, maxWidth: isIndia ? '640px' : '560px', margin: '0 auto' }}>
               {isIndia
-                ? 'Your personal AI tutor, awake at 11 pm when nobody else is. Ask by voice, text or a photo of the question — from Class 1 homework to JEE, NEET and CUET prep, college semesters and new skills — and watch Studdy solve it step by step on a live whiteboard. CBSE, ICSE, IB and every State Board.'
+                ? 'Your personal AI tutor, awake at 11 pm when nobody else is. Ask by voice, text or a photo of the question - from Class 1 homework to JEE, NEET and CUET prep, college semesters and new skills - and watch Studdy solve it step by step on a live whiteboard. CBSE, ICSE, IB and every State Board.'
                 : 'Ask anything. Learn through live visual explanations. Interrupt anytime to ask follow-up questions until it finally makes sense.'}
             </p>
           </div>

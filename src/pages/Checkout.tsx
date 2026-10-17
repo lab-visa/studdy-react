@@ -1,5 +1,5 @@
 /**
- * Checkout.tsx — Stripe Payment Link checkout
+ * Checkout.tsx - Stripe Payment Link checkout
  *
  * Flow:
  * 1. Detect country via IP → set region + currency
@@ -23,7 +23,7 @@ import RegionPicker from '../components/RegionPicker';
 
 type Plan = 'monthly' | 'yearly';
 
-/* utm_source stays read directly from this page's own URL, unchanged —
+/* utm_source stays read directly from this page's own URL, unchanged -
  * out of scope for the CRM-2A campaign-attribution fix (see tracking.ts).
  * utm_campaign (campaign IDENTITY) is read via getCampaignCode() below
  * instead of from this page's URL directly, so it survives navigation
@@ -40,14 +40,14 @@ export default function Checkout() {
   /* If the visitor picked a region and/or a plan on the homepage Pricing
    * section (before clicking "Start Free Trial"), honor those choices
    * here instead of silently resetting them. Only an explicit "monthly"
-   * from that click overrides the default — every other entry point
+   * from that click overrides the default - every other entry point
    * (header, footer, final CTA, direct link) still opens on Yearly, per
    * Vish (Aug 2026). */
   const passedState  = location.state as { region?: Region; plan?: Plan } | null;
   const passedRegion = passedState?.region ?? null;
   const passedPlan: Plan = passedState?.plan === 'monthly' ? 'monthly' : 'yearly';
 
-  /* Country comes from the shared MarketContext (Oct 2026) — detected once
+  /* Country comes from the shared MarketContext (Oct 2026) - detected once
    * for the whole site, and changed by the same dropdown everywhere. */
   const { region, setRegion, detectedRegion, isIndia, ready } = useMarket();
   const [plan,    setPlan]    = useState<Plan>(passedPlan);
@@ -72,7 +72,7 @@ export default function Checkout() {
     ? `${rd.symbol}${(parseFloat(rd.yearly.amount) / 12).toFixed(2)}/mo`
     : null;
 
-  /* Redirect to Stripe Payment Link — works immediately, no extra setup.
+  /* Redirect to Stripe Payment Link - works immediately, no extra setup.
    * The link always comes straight from REGION_DATA (single source of
    * truth in config.ts) so a region can never show "Start Free Trial" as
    * enabled (hasStripe true) while secretly having nowhere to send the
@@ -83,25 +83,25 @@ export default function Checkout() {
 
     const link = planData.paymentLink;
     if (link) {
-      /* Log this click — don't block the redirect waiting for it */
+      /* Log this click - don't block the redirect waiting for it */
       trackEvent('trial_clicked');
 
       /* Append UTM + our lead_id (as Stripe's client_reference_id) to the link.
-       * client_reference_id is a built-in Stripe field — it rides along through
+       * client_reference_id is a built-in Stripe field - it rides along through
        * checkout and comes back on the completed session, so the webhook can
        * match this payment back to the exact lead who started it.
        * utm_campaign now comes from the persisted, first-landing-captured
-       * campaign code (tracking.ts) rather than this page's own URL only —
+       * campaign code (tracking.ts) rather than this page's own URL only -
        * see the getUtmSource()/import comment above. */
       const utmSource = getUtmSource();
       const utmCampaign = getCampaignCode() ?? 'none';
       const leadId = getLeadId();
 
-      /* CRM-3A — persist this lead's full first/latest-touch attribution
+      /* CRM-3A - persist this lead's full first/latest-touch attribution
        * snapshot (all UTM fields + any GHL identifiers), if any was ever
        * captured (src/utils/attribution.ts). Fire-and-forget: this must
        * never delay or block the Stripe redirect below. Only sent when
-       * there's actually something to record — a visitor who never
+       * there's actually something to record - a visitor who never
        * arrived via a tagged link sends nothing, same "don't fabricate"
        * rule as utm_campaign's own ?? 'none' fallback above. */
       const { first, latest } = getAttributionSnapshot();
@@ -139,7 +139,7 @@ export default function Checkout() {
           ← Back
         </button>
 
-        {/* NOTE: no overflow-hidden here — the region picker below opens a
+        {/* NOTE: no overflow-hidden here - the region picker below opens a
          * dropdown panel that must be able to render outside this card's
          * bounds. The header banner gets its own top corner radius instead
          * of relying on the card clipping it. */}
@@ -182,7 +182,7 @@ export default function Checkout() {
                   ))}
                 </div>
 
-                {/* Region selector — one compact dropdown, same as Pricing */}
+                {/* Region selector - one compact dropdown, same as Pricing */}
                 <div className="mb-6">
                   <div className="text-[11px] font-black uppercase tracking-wide mb-2"
                     style={{ color: 'var(--soft)' }}>

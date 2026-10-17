@@ -1,5 +1,5 @@
 /**
- * IndiaPricing — the Pricing section as shown to visitors in India.
+ * IndiaPricing - the Pricing section as shown to visitors in India.
  *
  * India offer (Oct 2026, Vish): pay first, Quarterly or Yearly, 7-day full
  * refund, no free trial, no auto-debit. "Get Started" opens /checkout with
@@ -95,7 +95,7 @@ export default function IndiaPricing() {
           {card('quarterly')}
           {card('yearly')}
 
-          {/* Human tutor — comparison only */}
+          {/* Human tutor - comparison only */}
           <div className="rounded-2xl p-8 flex flex-col" style={{ border: '1.5px solid var(--border)', background: '#fff', opacity: 0.6 }}>
             <div className="text-[12px] font-black uppercase tracking-wide mb-3" style={{ color: 'var(--soft)' }}>Home tutor</div>
             <div className="font-black mb-1" style={{ fontSize: '32px', letterSpacing: '-1.2px' }}>{INDIA_TUTOR_PRICE}</div>
@@ -107,7 +107,7 @@ export default function IndiaPricing() {
                 </li>
               ))}
             </ul>
-            <button className="gost w-full justify-center opacity-50" disabled aria-label="Home tutor comparison — no action">
+            <button className="gost w-full justify-center opacity-50" disabled aria-label="Home tutor comparison - no action">
               Comparison only
             </button>
           </div>

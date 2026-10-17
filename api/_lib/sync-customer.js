@@ -1,18 +1,18 @@
 /**
  * Mirrors real Stripe activity into the NEW CRM tables (customers,
- * subscriptions, payment_events) — running ALONGSIDE the existing
+ * subscriptions, payment_events) - running ALONGSIDE the existing
  * `leads`-table sync in sync-checkout-session.js, never replacing it.
  *
  * Studdy account/seat ASSIGNMENT itself is still fully decided by the
- * legacy `active_customer_count` allocator in sync-checkout-session.js —
+ * legacy `active_customer_count` allocator in sync-checkout-session.js -
  * that remains the sole credential authority. This file's job for
  * allocation is only to MIRROR that decision into the new, concurrency-safe
  * ledger (account_assignments), for CRM/reporting purposes, via
- * mirrorLegacyAllocation() below — see that function's comment for the
+ * mirrorLegacyAllocation() below - see that function's comment for the
  * exact bridge design and why it never independently allocates.
  *
  * Every function here is wrapped in try/catch by its caller
- * (api/stripe-webhook.js) — if anything in here fails, the existing
+ * (api/stripe-webhook.js) - if anything in here fails, the existing
  * `leads` row (and the customer's dashboard/checkout) is never affected.
  * Worst case, a customer's new-CRM row is a few seconds late instead of
  * something breaking for a real paying customer.
@@ -33,7 +33,7 @@ async function findCustomerByStripeCustomerId(supabase, stripeCustomerId) {
 /**
  * BRIDGE (temporary, until a dedicated future cutover phase): mirrors the
  * SAME Studdy account the legacy allocator already chose into
- * account_assignments — it never independently picks an account. Legacy
+ * account_assignments - it never independently picks an account. Legacy
  * (assignStuddyAccount() in sync-checkout-session.js, via leads.group_name
  * -> get-session.js) remains the sole system that decides which real
  * Studdy credentials a customer receives. This function only records that
@@ -41,7 +41,7 @@ async function findCustomerByStripeCustomerId(supabase, stripeCustomerId) {
  * stops being able to silently disagree with reality.
  *
  * Reads leads.group_name fresh, by this exact session's stripe_session_id
- * — by the time this runs, syncCheckoutSession() has already finished and
+ * - by the time this runs, syncCheckoutSession() has already finished and
  * already written that row (see stripe-webhook.js's call order), so this
  * is always reading the just-made decision, never a stale one.
  *
@@ -56,7 +56,7 @@ async function findCustomerByStripeCustomerId(supabase, stripeCustomerId) {
  *     a CRM-record accuracy issue, not a credential-delivery issue.
  * The database's own partial unique index
  * (account_assignments_one_active_per_customer) is the final race-proof
- * safety net for two concurrent webhook deliveries racing each other —
+ * safety net for two concurrent webhook deliveries racing each other -
  * handled below by catching that exact constraint violation (23505)
  * rather than assuming the pre-check alone is enough.
  */
@@ -75,7 +75,7 @@ async function mirrorLegacyAllocation(supabase, { customerId, sessionId }) {
   const groupName = leadRow?.group_name;
   if (!groupName) {
     console.error(
-      `mirrorLegacyAllocation: no legacy group_name for customer ${customerId} (session ${sessionId}) — ` +
+      `mirrorLegacyAllocation: no legacy group_name for customer ${customerId} (session ${sessionId}) - ` +
       `legacy allocator found no free account, or this lead hasn't synced yet. Skipping mirror, not ` +
       `inventing an allocation.`
     );
@@ -95,7 +95,7 @@ async function mirrorLegacyAllocation(supabase, { customerId, sessionId }) {
 
   if (!account) {
     console.error(
-      `mirrorLegacyAllocation: DATA INTEGRITY — legacy group_name "${groupName}" (customer ${customerId}, ` +
+      `mirrorLegacyAllocation: DATA INTEGRITY - legacy group_name "${groupName}" (customer ${customerId}, ` +
       `session ${sessionId}) does not match any row in studdy_accounts. Skipping mirror.`
     );
     return;
@@ -115,10 +115,10 @@ async function mirrorLegacyAllocation(supabase, { customerId, sessionId }) {
 
   if (existingActive) {
     if (existingActive.studdy_account_id === account.id) {
-      return; // already mirrored correctly — idempotent no-op (e.g. webhook retry)
+      return; // already mirrored correctly - idempotent no-op (e.g. webhook retry)
     }
     console.error(
-      `mirrorLegacyAllocation: RECONCILIATION MISMATCH — customer ${customerId} already has an active ` +
+      `mirrorLegacyAllocation: RECONCILIATION MISMATCH - customer ${customerId} already has an active ` +
       `account_assignments row for a different account than legacy's current group_name "${groupName}". ` +
       `Not overwriting; legacy stays authoritative for actual credential delivery. Run the reconciliation ` +
       `query to review.`
@@ -133,7 +133,7 @@ async function mirrorLegacyAllocation(supabase, { customerId, sessionId }) {
   if (!insertError) return;
 
   if (insertError.code === '23505') {
-    /* A concurrent webhook delivery raced us and inserted first — re-check
+    /* A concurrent webhook delivery raced us and inserted first - re-check
      * what it recorded, same idempotent/mismatch logic as above, just
      * resolved via the database's own unique constraint instead of our
      * earlier read (which is inherently racy on its own). */
@@ -146,7 +146,7 @@ async function mirrorLegacyAllocation(supabase, { customerId, sessionId }) {
 
     if (raceWinner && raceWinner.studdy_account_id !== account.id) {
       console.error(
-        `mirrorLegacyAllocation: RECONCILIATION MISMATCH (detected via concurrent insert race) — customer ` +
+        `mirrorLegacyAllocation: RECONCILIATION MISMATCH (detected via concurrent insert race) - customer ` +
         `${customerId} already has an active assignment for a different account than legacy's current ` +
         `group_name "${groupName}". Not overwriting.`
       );
@@ -158,7 +158,7 @@ async function mirrorLegacyAllocation(supabase, { customerId, sessionId }) {
 }
 
 /**
- * checkout.session.completed — the moment a trial actually starts (or,
+ * checkout.session.completed - the moment a trial actually starts (or,
  * rarely, someone pays immediately with no trial). This is the ONLY place
  * a brand-new customers row gets created, and creating it is what
  * generates their Paid ID (customers.paid_id defaults to
@@ -180,11 +180,11 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
   const billingAddress = session.customer_details?.address;
   const trackingId = session.client_reference_id || null;
 
-  /* CRM-3A — campaign attribution. Looks up the lead_attribution row the
+  /* CRM-3A - campaign attribution. Looks up the lead_attribution row the
    * browser wrote at the "Start Free Trial" click (api/track-attribution.js),
    * keyed by the SAME trackingId already used for source_lead_id above.
    * No matching row (e.g. a pre-CRM-3A link, or a link with no UTM tag
-   * ever seen) is a normal, expected case — every attribution field below
+   * ever seen) is a normal, expected case - every attribution field below
    * simply stays null, exactly like source_lead_id/attribution_method
    * already degrade to 'none' when there's no tracking id at all. */
   const attribution = trackingId ? await findLeadAttribution(supabase, trackingId) : null;
@@ -200,7 +200,7 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
     source_lead_id: existing?.source_lead_id || trackingId,
     attribution_method: existing?.attribution_method || (trackingId ? 'tracking_id' : 'none'),
     attribution_confidence: existing?.attribution_confidence || (trackingId ? 'exact' : 'none'),
-    /* First-touch: existing?.field || value — set once, on this
+    /* First-touch: existing?.field || value - set once, on this
      * customer's very first sync, and never overwritten by a later
      * resync (identical pattern to attribution_method/source_lead_id
      * immediately above). */
@@ -212,7 +212,7 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
     first_ghl_contact_id: existing?.first_ghl_contact_id || attribution?.first_ghl_contact_id || null,
     first_ghl_campaign_id: existing?.first_ghl_campaign_id || attribution?.first_ghl_campaign_id || null,
     first_attribution_at: existing?.first_attribution_at || attribution?.first_touched_at || null,
-    /* Latest-touch: free to move forward on a later resync — prefers the
+    /* Latest-touch: free to move forward on a later resync - prefers the
      * freshest lead_attribution row, falling back to whatever this
      * customer already had if the ledger has nothing (e.g. a resync via
      * api/refresh-lead.js after the ledger row was never written). */
@@ -234,11 +234,11 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
   } else {
     const { data: inserted, error } = await supabase
       .from('customers')
-      /* sales_owner is deliberately NOT set here — it defaults to NULL
+      /* sales_owner is deliberately NOT set here - it defaults to NULL
        * ("Unassigned"/"Self-service", per CRM-3A's Sales Owner
        * foundation) for every self-service WhatsApp/website customer.
        * Only a future manual admin action (api/admin/customer-sales-owner.js)
-       * ever sets it — never inferred from checkout data. */
+       * ever sets it - never inferred from checkout data. */
       .insert({ ...customerFields, lifecycle: 'trial', access_status: 'active' })
       .select('id')
       .single();
@@ -247,14 +247,14 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
   }
 
   /* BRIDGE (temporary): mirror whichever account the legacy allocator just
-   * chose into the new account_assignments ledger — never independently
+   * chose into the new account_assignments ledger - never independently
    * allocate one here. See mirrorLegacyAllocation() above for the full
    * design. allocate_studdy_seat() (the independent RPC this replaced) is
    * intentionally left defined in the database, untouched, for the real
-   * future cutover — it is simply not called from this live path anymore.
+   * future cutover - it is simply not called from this live path anymore.
    *
-   * Deliberately called on EVERY checkout.session.completed sync — for a
-   * brand-new customer AND for one that already existed in this table —
+   * Deliberately called on EVERY checkout.session.completed sync - for a
+   * brand-new customer AND for one that already existed in this table -
    * not gated to only the "just created" branch above. mirrorLegacyAllocation()
    * is already fully idempotent/mismatch-safe (see its own comment), so
    * re-running it costs nothing when a mirror already exists correctly.
@@ -263,7 +263,7 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
    * delivery (network blip, etc.) but the customers row itself was
    * created successfully, a Stripe webhook retry of the same event would
    * find the customer already exists the second time around and would
-   * never attempt the mirror again — silently leaving that customer's
+   * never attempt the mirror again - silently leaving that customer's
    * account_assignments row missing forever. Calling this unconditionally
    * makes a transient first-attempt failure self-healing on the very next
    * retry/resync, without ever risking an incorrect overwrite (still
@@ -297,10 +297,10 @@ export async function syncCustomerFromCheckoutSession(supabase, session) {
 }
 
 /**
- * invoice.payment_succeeded — a real payment moved. Flips the customer
+ * invoice.payment_succeeded - a real payment moved. Flips the customer
  * from "trial" to actually paying, and logs the payment_event (keyed on
- * Stripe's own event id, so if Stripe re-delivers the same webhook twice —
- * which it does sometimes by design — we never double-count it).
+ * Stripe's own event id, so if Stripe re-delivers the same webhook twice -
+ * which it does sometimes by design - we never double-count it).
  */
 export async function recordPaymentSucceeded(supabase, event) {
   const invoice = event.data.object;
@@ -313,7 +313,7 @@ export async function recordPaymentSucceeded(supabase, event) {
     .eq('stripe_subscription_id', subId)
     .maybeSingle();
 
-  if (!subscription) return; // customer not in the new tables yet — nothing to update
+  if (!subscription) return; // customer not in the new tables yet - nothing to update
 
   await supabase
     .from('subscriptions')
@@ -348,7 +348,7 @@ export async function recordPaymentSucceeded(supabase, event) {
   });
 }
 
-/** invoice.payment_failed — card declined. Starts the grace period. */
+/** invoice.payment_failed - card declined. Starts the grace period. */
 export async function recordPaymentFailed(supabase, event) {
   const invoice = event.data.object;
   const subId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
@@ -370,7 +370,7 @@ export async function recordPaymentFailed(supabase, event) {
     /* CODE-REVIEW FIX (round 2, "complete failed-payment ledger
      * fields"): the attempted amount/currency are now retained for
      * operational visibility (e.g. "how much did this failed attempt
-     * total"), NOT for revenue — grossRevenue()/netRevenue() in
+     * total"), NOT for revenue - grossRevenue()/netRevenue() in
      * metrics.js only ever sum rows explicitly filtered to
      * event_type='invoice.payment_succeeded', so a failed row having a
      * numeric amount can never leak into a revenue total. amount_due is
@@ -399,13 +399,13 @@ function stripeTimestampToIso(unixSeconds) {
  * The authoritative "when was this subscription cancelled" instant,
  * for the subscriptions.cancelled_at column. Stripe's Subscription
  * object carries its OWN `canceled_at` (when cancellation was decided/
- * requested — Stripe's own US spelling) and `ended_at` (when access
- * actually stopped) fields — both far more precise than event.created
+ * requested - Stripe's own US spelling) and `ended_at` (when access
+ * actually stopped) fields - both far more precise than event.created
  * (merely when Stripe happened to emit THIS webhook, which can lag the
  * real moment on a delayed or redelivered event). Precedence: Stripe's
  * own canceled_at first, then its own ended_at, and only if the
  * Subscription object genuinely carries neither does this fall back to
- * event.created — never to wall-clock "now", and never to updated_at.
+ * event.created - never to wall-clock "now", and never to updated_at.
  */
 function subscriptionCancelledAt(sub, event) {
   return stripeTimestampToIso(sub?.canceled_at) || stripeTimestampToIso(sub?.ended_at) || eventOccurredAt(event);
@@ -414,10 +414,10 @@ function subscriptionCancelledAt(sub, event) {
 /**
  * The authoritative "when did access actually stop" instant, for the
  * subscriptions.ended_at column. Mirrors subscriptionCancelledAt()'s
- * precedence but with ended_at/canceled_at swapped — Stripe's own
+ * precedence but with ended_at/canceled_at swapped - Stripe's own
  * ended_at is the truest source for THIS column specifically, falling
  * back to canceled_at (the two are often the same instant, but not
- * always — e.g. a subscription cancelled well before its scheduled
+ * always - e.g. a subscription cancelled well before its scheduled
  * period end) and only then to event.created.
  */
 function subscriptionEndedAt(sub, event) {
@@ -425,15 +425,15 @@ function subscriptionEndedAt(sub, event) {
 }
 
 /**
- * customer.subscription.deleted — subscription actually ended.
+ * customer.subscription.deleted - subscription actually ended.
  *
  * cancelled_at/ended_at each prefer Stripe's OWN Subscription-object
  * fields (subscriptionCancelledAt()/subscriptionEndedAt() above) over
  * event.created, which is used only as a last-resort fallback if the
- * Subscription object genuinely carries neither — this is the
+ * Subscription object genuinely carries neither - this is the
  * authoritative "when did this actually happen" timestamp the Activity
  * Timeline's cancellation entry displays (the subscription_cancelled
- * branch of search_customer_activity_timeline(), migration 0018 —
+ * branch of search_customer_activity_timeline(), migration 0018 -
  * never re-derived there, only read). Idempotent under Stripe's occasional
  * duplicate webhook delivery: the SAME event object always yields the
  * SAME computed timestamps on a retry (Stripe's own fields are
@@ -467,45 +467,45 @@ export async function recordSubscriptionEnded(supabase, event) {
 }
 
 /**
- * CRM-3A — customer.subscription.updated -> the new subscriptions table.
+ * CRM-3A - customer.subscription.updated -> the new subscriptions table.
  *
  * Genuine gap this closes: before this function existed, NOTHING synced
  * customer.subscription.updated into the new subscriptions table at
- * all — the legacy leads-table handler in stripe-webhook.js only ever
+ * all - the legacy leads-table handler in stripe-webhook.js only ever
  * reacted to a pause (sub.status === 'paused'), so subscriptions.status
  * (for anything other than trial-start/payment-succeeded/payment-failed/
  * deleted), cancel_at_period_end, cancel_at, current_period_start, and
- * current_period_end — all real columns since migration 0006 — were
+ * current_period_end - all real columns since migration 0006 - were
  * never once written by any code path. Without this, "Cancelling at
  * period end" and "Payment due today" can never be proven from real data
  * (see CRM-3A pre-coding report, point 3).
  *
  * Deliberately does NOT create a subscriptions row if one doesn't already
- * exist — that would invent a subscription this codebase has no other
+ * exist - that would invent a subscription this codebase has no other
  * evidence for. A brand-new subscriptions row is created in exactly one
  * place: syncCustomerFromCheckoutSession() above, at
  * checkout.session.completed, which always fires before Stripe can ever
  * send a subscription.updated for the same subscription.
  *
  * Does NOT touch customers.lifecycle/access_status or free/release any
- * Studdy seat — that side-effect logic stays solely with
+ * Studdy seat - that side-effect logic stays solely with
  * recordSubscriptionEnded() (customer.subscription.deleted), which is its
  * own distinct Stripe event and already handles it. A subscription.updated
- * that happens to carry status:'canceled' (edge case — Stripe usually
+ * that happens to carry status:'canceled' (edge case - Stripe usually
  * also sends a matching .deleted) only updates this table's own status
- * column (plus cancelled_at/ended_at — see below) here; it can never
+ * column (plus cancelled_at/ended_at - see below) here; it can never
  * re-trigger churn/seat-release logic that belongs to .deleted alone.
  *
  * CHATGPT REVIEW FIX (round 2, "cancellation timestamp precedence"):
  * if this .updated event happens to carry status:'canceled', its
- * cancelled_at/ended_at are ALSO persisted here now — but ONLY from
+ * cancelled_at/ended_at are ALSO persisted here now - but ONLY from
  * Stripe's own genuine sub.canceled_at/sub.ended_at fields (same
  * precedence as recordSubscriptionEnded()'s subscriptionCancelledAt()/
  * subscriptionEndedAt()). Deliberately NO event.created fallback on
  * THIS path, unlike .deleted: if the Subscription object genuinely
  * carries neither field here, the columns are left untouched rather
  * than inventing an approximate date from an event that isn't itself
- * the authoritative cancellation event — recordSubscriptionEnded()
+ * the authoritative cancellation event - recordSubscriptionEnded()
  * (.deleted) remains the primary source; this is a defensive
  * completeness improvement for the rarer case .deleted is delayed,
  * missed, or arrives after this .updated already ran, never a
@@ -531,10 +531,10 @@ export async function syncSubscriptionUpdated(supabase, event) {
     .eq('stripe_subscription_id', sub.id)
     .maybeSingle();
 
-  if (!subscription) return; // no subscriptions row yet — nothing to update, never invent one here
+  if (!subscription) return; // no subscriptions row yet - nothing to update, never invent one here
 
   /* Stripe API versions from 2025 onward moved current_period_start/end
-   * off the Subscription object onto each subscription item — same
+   * off the Subscription object onto each subscription item - same
    * fallback order as api/_lib/status.js's resolveNextBilling(). */
   const item = sub?.items?.data?.[0];
   const currentPeriodStart = item?.current_period_start ?? sub?.current_period_start;
@@ -566,20 +566,20 @@ export async function syncSubscriptionUpdated(supabase, event) {
 }
 
 /**
- * CRM-2A — payment_events ledger completeness (refunds/disputes).
+ * CRM-2A - payment_events ledger completeness (refunds/disputes).
  *
- * `payment_claims` (api/stripe-webhook.js) is untouched by any of this —
+ * `payment_claims` (api/stripe-webhook.js) is untouched by any of this -
  * it remains solely the atomic at-most-once idempotency gate for the
  * legacy total_months_paid increment. These three functions only extend
  * the SAME best-effort, dedup-on-stripe_event_id `payment_events` ledger
  * that recordPaymentSucceeded()/recordPaymentFailed() above already
  * write to, so refunds and disputes stop being single-slot-overwrite
  * fields on `leads` ONLY (which they still also remain, unchanged, for
- * backward compatibility — this is additive, not a replacement).
+ * backward compatibility - this is additive, not a replacement).
  *
  * Amount convention, per design review: every payment_events.amount is
  * the raw, positive/absolute Stripe amount (Stripe itself never returns
- * a negative `amount` for a refund or a dispute) — no sign games. There
+ * a negative `amount` for a refund or a dispute) - no sign games. There
  * is deliberately no generic `sum(payment_events.amount)` anywhere;
  * metric functions (api/_lib/metrics.js) always scope by `event_type`
  * explicitly (e.g. gross_revenue sums only 'invoice.payment_succeeded'
@@ -589,18 +589,18 @@ export async function syncSubscriptionUpdated(supabase, event) {
  * Each function resolves the new-CRM customer_id from the Stripe
  * customer id the caller already has in hand (stripe-webhook.js's
  * findLeadByChargeId() already fetched the underlying charge to find the
- * matching `leads` row, which itself carries `stripe_customer_id` — so no
+ * matching `leads` row, which itself carries `stripe_customer_id` - so no
  * second Stripe API call is needed here). If no matching `customers` row
  * exists yet (e.g. a legacy pre-CRM-1 customer), the ledger write is
- * skipped — exactly the same "don't invent a row, just skip" rule
+ * skipped - exactly the same "don't invent a row, just skip" rule
  * `mirrorLegacyAllocation()` already follows above.
  */
 
-/** refund.created — a refund was issued (e.g. Vish refunding someone manually in Stripe). */
+/** refund.created - a refund was issued (e.g. Vish refunding someone manually in Stripe). */
 export async function recordRefund(supabase, event, { stripeCustomerId }) {
   const refund = event.data.object;
   const customer = await findCustomerByStripeCustomerId(supabase, stripeCustomerId);
-  if (!customer) return; // no new-CRM customer row for this Stripe customer yet — nothing to ledger
+  if (!customer) return; // no new-CRM customer row for this Stripe customer yet - nothing to ledger
 
   await logPaymentEvent(supabase, event, {
     customer_id: customer.id,
@@ -612,7 +612,7 @@ export async function recordRefund(supabase, event, { stripeCustomerId }) {
   });
 }
 
-/** charge.dispute.created — customer or bank raised a dispute/chargeback. */
+/** charge.dispute.created - customer or bank raised a dispute/chargeback. */
 export async function recordDisputeCreated(supabase, event, { stripeCustomerId }) {
   const dispute = event.data.object;
   const customer = await findCustomerByStripeCustomerId(supabase, stripeCustomerId);
@@ -628,18 +628,18 @@ export async function recordDisputeCreated(supabase, event, { stripeCustomerId }
 }
 
 /**
- * charge.dispute.closed — a dispute already flagged is now resolved
+ * charge.dispute.closed - a dispute already flagged is now resolved
  * (won/lost/warning_closed/etc). `amount` mirrors the original disputed
  * amount (Stripe's dispute.closed payload carries the same `amount` as
- * the corresponding dispute.created payload for the same dispute id) —
+ * the corresponding dispute.created payload for the same dispute id) -
  * the outcome itself lives in `status` and in the full Stripe object
  * already captured verbatim in `raw_metadata` by logPaymentEvent().
  *
  * Correlation with the matching charge.dispute.created row is by
- * Stripe's own stable dispute id — available at `raw_metadata->>'id'` on
+ * Stripe's own stable dispute id - available at `raw_metadata->>'id'` on
  * BOTH rows, since `logPaymentEvent()` stores `event.data.object`
  * (the dispute object itself, whose own `id` field, format `dp_...`, is
- * identical across the created and closed events for the same dispute —
+ * identical across the created and closed events for the same dispute -
  * distinct from `raw_metadata->>'charge'`, the underlying charge id).
  */
 export async function recordDisputeClosed(supabase, event, { stripeCustomerId }) {
@@ -659,14 +659,14 @@ export async function recordDisputeClosed(supabase, event, { stripeCustomerId })
 /**
  * CODE-REVIEW FIX (round 2, "use Stripe event time for
  * payment_events.occurred_at"): Stripe's own `event.created` (unix
- * seconds — the moment Stripe says the event actually occurred) is the
+ * seconds - the moment Stripe says the event actually occurred) is the
  * authoritative occurred_at, NOT webhook processing time. Processing time
  * can lag behind the real event (retries, delivery delays, a later
  * backfill/replay) and would otherwise corrupt every date-scoped metric
  * that reads payment_events.occurred_at: revenue-by-day, first-payment
  * date, trial_to_paid_14d, refund date, dispute date, any period
  * comparison. Falls back to current time ONLY defensively, if
- * event.created is missing or not a valid positive number — this should
+ * event.created is missing or not a valid positive number - this should
  * never happen for a real Stripe delivery, but must never throw/break
  * the webhook if it somehow does. Historical rows already written with
  * processing-time timestamps are NOT backfilled by this change.
@@ -688,7 +688,7 @@ async function logPaymentEvent(supabase, event, fields) {
     raw_metadata: event.data.object,
     ...fields,
   });
-  /* stripe_event_id is unique — Stripe's occasional duplicate delivery of
+  /* stripe_event_id is unique - Stripe's occasional duplicate delivery of
    * the exact same event hits this conflict (Postgres code 23505) and is
    * silently ignored here, rather than double-counting a payment. */
   if (error && error.code !== '23505') throw error;

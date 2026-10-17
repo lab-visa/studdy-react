@@ -1,7 +1,7 @@
 /**
- * CRM-2B (visual refinement) — payment-event outcome donut: successful
+ * CRM-2B (visual refinement) - payment-event outcome donut: successful
  * vs. failed payment EVENTS (counts), for the selected period. This is
- * event-COUNT data, not a revenue figure — never described as "lost
+ * event-COUNT data, not a revenue figure - never described as "lost
  * revenue" (failed_payment carries no dollar meaning here; actual
  * failed-payment amounts, where stored, live in the ledger, not this
  * chart). An honest empty state renders when both counts are zero.
@@ -24,7 +24,7 @@ export default function PaymentOutcomeSection({ metrics }: PaymentOutcomeSection
   return (
     <SectionCard
       title="Payment outcomes"
-      description="Payment-event counts for the selected period — not a revenue figure"
+      description="Payment-event counts for the selected period - not a revenue figure"
     >
       <DonutChart
         title="Successful vs. failed payment events"

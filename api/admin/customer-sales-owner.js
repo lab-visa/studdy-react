@@ -2,17 +2,17 @@
  * PATCH /api/admin/customer-sales-owner
  * body: { customerId, salesOwner }
  *
- * CRM-3A Sales Owner foundation — the one write endpoint for the new
+ * CRM-3A Sales Owner foundation - the one write endpoint for the new
  * nullable customers.sales_owner column. Deliberately minimal: a single
  * admin manually setting or clearing a free-text owner name. No team
  * accounts, no permissions, no round-robin assignment, no validation
- * against a fixed roster — all explicitly out of this round's scope.
+ * against a fixed roster - all explicitly out of this round's scope.
  * `salesOwner: null` (or an empty/whitespace-only string) clears it back
  * to Unassigned.
  *
  * Auth: requireAdminSession, same as every other /api/admin/* handler.
  * CSRF: isSameOriginRequest, matching the existing pattern for the only
- * other state-changing admin endpoint today (api/admin/logout.js) — this
+ * other state-changing admin endpoint today (api/admin/logout.js) - this
  * is the first admin endpoint that WRITES CRM data, so the same
  * defense-in-depth is applied here from the start.
  */

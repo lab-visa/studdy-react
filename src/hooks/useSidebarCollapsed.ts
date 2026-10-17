@@ -1,5 +1,5 @@
 /**
- * CRM-2B (shell refinement) — desktop sidebar collapsed/expanded state.
+ * CRM-2B (shell refinement) - desktop sidebar collapsed/expanded state.
  * Persists per-browser via localStorage (never sent anywhere, never
  * affects any other visitor), mirroring useAdminTheme.ts's pattern.
  *
@@ -18,7 +18,7 @@ function readStoredCollapsed(): boolean | null {
     if (v === '0') return false;
     return null;
   } catch {
-    // Private browsing / storage blocked — fall back to expanded.
+    // Private browsing / storage blocked - fall back to expanded.
     return null;
   }
 }
@@ -32,7 +32,7 @@ export function useSidebarCollapsed(): { collapsed: boolean; toggleCollapsed: ()
       try {
         window.localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
       } catch {
-        // Best-effort only — the toggle still applies for this page view.
+        // Best-effort only - the toggle still applies for this page view.
       }
       return next;
     });

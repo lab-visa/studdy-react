@@ -1,8 +1,8 @@
 /**
- * CRM-2B — Command Center: the Executive Command Center page. Fetches
+ * CRM-2B - Command Center: the Executive Command Center page. Fetches
  * GET /api/admin/metrics (the existing, unmodified CRM-2A endpoint),
  * manages the reporting-period + cohort controls, and composes every
- * dashboard section from the one response. Read-only — this page never
+ * dashboard section from the one response. Read-only - this page never
  * writes anything back to the API.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -49,7 +49,7 @@ export default function CommandCenter({ onSessionExpired }: CommandCenterProps) 
   const cohortHasSelection = Boolean(cohortFrom && cohortTo);
   const cohortIsUsable = !cohortHasSelection || isValidCustomRange(cohortFrom, cohortTo);
 
-  // One stable key describing "what should currently be fetched" — the
+  // One stable key describing "what should currently be fetched" - the
   // effect below re-fetches exactly when this changes, and never on a
   // timer. Deliberately excludes the invalid states above so an
   // in-progress/invalid custom range never triggers a request.
@@ -151,7 +151,7 @@ export default function CommandCenter({ onSessionExpired }: CommandCenterProps) 
 
       {error && data && (
         <p role="alert" className="text-[12.5px] font-bold" style={{ color: 'var(--warn-text)' }}>
-          Last refresh failed — showing the most recently loaded data. {error}
+          Last refresh failed - showing the most recently loaded data. {error}
         </p>
       )}
 

@@ -1,12 +1,12 @@
 /**
- * India order fulfilment — the ONE place that turns a Cashfree-confirmed
+ * India order fulfilment - the ONE place that turns a Cashfree-confirmed
  * payment into: status 'paid', access dates, and an assigned Studdy seat.
  *
  * Called from both the Cashfree webhook and the dashboard's status check
  * (whichever gets there first). Safe to call any number of times, and
  * concurrently:
  *   - 'paid' is only ever set from a Cashfree response we fetched or a
- *     signature-verified webhook — never from the browser.
+ *     signature-verified webhook - never from the browser.
  *   - The seat is claimed by whoever wins a conditional UPDATE on
  *     fulfilment_claimed_at; the other caller sees "pending" and its
  *     dashboard retries a few seconds later. A claim older than
@@ -30,7 +30,7 @@ export async function loadOrder(supabase, orderId) {
 
 /**
  * Record a confirmed payment (idempotent). `payment` = { cfPaymentId,
- * paymentMethod, paidAt } — all optional. Returns the fresh row.
+ * paymentMethod, paidAt } - all optional. Returns the fresh row.
  */
 export async function markOrderPaid(supabase, orderId, payment = {}) {
   const order = await loadOrder(supabase, orderId);
@@ -100,7 +100,7 @@ export async function assignSeatIfNeeded(supabase, orderId) {
 
   const account = await assignStuddyAccount(supabase);
   if (!account) {
-    console.error(`india order ${orderId}: paid but no free Studdy seat — add a studdy_accounts row or raise max_capacity.`);
+    console.error(`india order ${orderId}: paid but no free Studdy seat - add a studdy_accounts row or raise max_capacity.`);
     /* Release the claim so a later retry (after capacity is added) can assign. */
     await supabase.from('india_orders').update({ fulfilment_claimed_at: null }).eq('order_id', orderId);
     return loadOrder(supabase, orderId);

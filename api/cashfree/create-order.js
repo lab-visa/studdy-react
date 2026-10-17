@@ -7,7 +7,7 @@
  * order, and returns the payment_session_id the browser needs to open
  * Cashfree's payment page.
  *
- * The AMOUNT comes only from INDIA_PLANS on the server — the browser just
+ * The AMOUNT comes only from INDIA_PLANS on the server - the browser just
  * names a plan. Nothing here marks anything as paid; that happens only in
  * the webhook / india-session after Cashfree itself confirms it.
  */

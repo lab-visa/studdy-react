@@ -59,7 +59,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     /*
-     * DIAGNOSTIC LOGGING — captures everything needed to identify
+     * DIAGNOSTIC LOGGING - captures everything needed to identify
      * the exact crash source on any device or OS.
      * Do not remove until the mobile crash is fully confirmed fixed.
      */
@@ -130,14 +130,14 @@ function ScrollRestoration() {
 }
 
 function AppRoutes() {
-  /* Fire once per visit — anonymous counter only, no row created for this
+  /* Fire once per visit - anonymous counter only, no row created for this
    * visitor unless/until they actually start a trial (Phase 3, Aug 2026).
-   * Skipped on /admin — that's Vish opening his own CRM every day, not a
+   * Skipped on /admin - that's Vish opening his own CRM every day, not a
    * marketing visitor, and would otherwise quietly inflate "site opens". */
   useEffect(() => {
     if (!window.location.pathname.startsWith('/admin')) {
       trackEvent('opened');
-      /* CRM-3A — purely local (localStorage) first/latest-touch capture,
+      /* CRM-3A - purely local (localStorage) first/latest-touch capture,
        * never a network call by itself. See src/utils/attribution.ts. */
       captureAttributionTouch();
       captureRefCode();

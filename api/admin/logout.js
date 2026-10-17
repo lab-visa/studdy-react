@@ -2,7 +2,7 @@
  * POST /api/admin/logout
  *
  * Genuine server-side session revocation (admin_sessions.revoked_at),
- * not just a cookie clear — a revoked session is rejected by
+ * not just a cookie clear - a revoked session is rejected by
  * requireAdminSession() immediately, even if the old cookie value is
  * somehow replayed.
  */
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('admin logout error:', err);
     /* Still clear the cookie client-side even if the revoke write
-     * failed — never leave the browser holding a cookie it believes is
+     * failed - never leave the browser holding a cookie it believes is
      * valid without at least attempting server-side revocation, but
      * also never block the user from clearing their own browser state. */
   }

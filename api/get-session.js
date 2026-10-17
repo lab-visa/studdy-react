@@ -3,11 +3,11 @@
  * Fetches the customer's data for the dashboard.
  *
  * Primary source: Supabase (the `leads` row the Stripe webhook wrote when
- * this payment completed) — that's where the REAL assigned Studdy account
+ * this payment completed) - that's where the REAL assigned Studdy account
  * lives, and it stays correct even if their status changes later.
  *
  * Studdy login shown is looked up LIVE from studdy_accounts by group_name,
- * not read off the frozen copy on the lead row — so if Vish changes a
+ * not read off the frozen copy on the lead row - so if Vish changes a
  * group's email/password/URL once in studdy_accounts, every customer in
  * that group sees the new value immediately, with no per-customer editing.
  *
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
   const supabase = getSupabase();
 
-  /* 1. Try Supabase first — this is the real, authoritative record */
+  /* 1. Try Supabase first - this is the real, authoritative record */
   try {
     const { data: lead } = await supabase
       .from('leads')
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (lead) {
-      /* Live lookup — current credentials for whichever group they're in,
+      /* Live lookup - current credentials for whichever group they're in,
        * not the snapshot taken the day they signed up. */
       let studdyEmail = lead.studdy_email || '';
       let studdyPassword = lead.studdy_password || '';
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
     /* fall through to the Stripe fallback below */
   }
 
-  /* 2. Not in Supabase yet — ask Stripe directly (temporary, until the
+  /* 2. Not in Supabase yet - ask Stripe directly (temporary, until the
    *    webhook catches up) so the customer still sees their dashboard. */
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -103,7 +103,7 @@ export default async function handler(req, res) {
 
     /* Only a checkout the customer actually finished counts. An open or
      * expired session (someone who started checkout and walked away) gets
-     * nothing — not even subscription details. */
+     * nothing - not even subscription details. */
     if (!session || session.status !== 'complete') {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
       nextBilling: fmtDate(nextBilling),
       trialEnds: fmtDate(trialEnd),
       daysLeftInTrial: daysUntil(trialEnd),
-      /* Never a shared/placeholder login — see the security note above. */
+      /* Never a shared/placeholder login - see the security note above. */
       studdyEmail: '',
       studdyPassword: '',
       studdyUrl: 'https://studdyai.com',

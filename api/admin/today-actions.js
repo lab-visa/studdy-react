@@ -1,16 +1,16 @@
 /**
  * GET /api/admin/today-actions
  *
- * CRM-3A build item 6 — "Today's Actions" foundation. Every date/boundary
+ * CRM-3A build item 6 - "Today's Actions" foundation. Every date/boundary
  * here is Asia/Kolkata (reporting-timezone.js), per the explicit
  * requirement that all dates and operational timing display in IST.
  *
  * Sections, each labeled with what kind of fact it is (never blurred):
- *   trials_ending_today        — CALCULATED (trial_end vs today, IST)
- *   payments_expected_today    — CALCULATED (current_period_end vs today, IST)
- *   failed_payments            — STORED (subscriptions.status='past_due')
- *   cancellation_requests      — STORED (open cancellation_requests rows)
- *   access_removal_pending     — MANUAL task flag: true when access has
+ *   trials_ending_today        - CALCULATED (trial_end vs today, IST)
+ *   payments_expected_today    - CALCULATED (current_period_end vs today, IST)
+ *   failed_payments            - STORED (subscriptions.status='past_due')
+ *   cancellation_requests      - STORED (open cancellation_requests rows)
+ *   access_removal_pending     - MANUAL task flag: true when access has
  *                                 ended and an active/reserved
  *                                 account_assignments seat still requires
  *                                 release, clears once none remains (see
@@ -19,26 +19,26 @@
  *                                 operational seat-release record, not
  *                                 the customer's real-world ability to
  *                                 log into the shared external Studdy
- *                                 account — still a review flag, never a
+ *                                 account - still a review flag, never a
  *                                 fabricated completion status.
- *   password_change_tasks      — FOUNDATION ONLY. There is no automatic
+ *   password_change_tasks      - FOUNDATION ONLY. There is no automatic
  *                                 password-changing integration (explicitly
  *                                 out of this round's scope) and no field
  *                                 anywhere records "this customer's Studdy
- *                                 password needs rotating" — this section
+ *                                 password needs rotating" - this section
  *                                 always returns an empty list with that
  *                                 note, rather than inventing a signal.
- *   overdue                    — cancellation requests open more than 2
+ *   overdue                    - cancellation requests open more than 2
  *                                 days, and grace-period customers past the
  *                                 configured failed_payment_grace_days
- *                                 (settings table, migration 0008) — an
+ *                                 (settings table, migration 0008) - an
  *                                 approximation, caveated in the response,
  *                                 since customers.updated_at is reused for
  *                                 other writes too, not a dedicated
  *                                 "grace started at" column.
- *   checkout_started            — a lead_attribution row (created at the
+ *   checkout_started            - a lead_attribution row (created at the
  *                                 "Start Free Trial" click) with no
- *                                 matching customers row yet — the one
+ *                                 matching customers row yet - the one
  *                                 real per-lead "checkout started, not yet
  *                                 converted" signal (see migration 0016's
  *                                 own comment). Scoped to the last 7 days
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
       }
     }
 
-    /* checkout_started — lead_attribution rows with no matching customer,
+    /* checkout_started - lead_attribution rows with no matching customer,
      * from the last CHECKOUT_STARTED_LOOKBACK_DAYS days. Left-join done in
      * JS (small volume, same convention as the rest of this endpoint). */
     const lookbackDay = reportingDayFor(new Date(now.getTime() - CHECKOUT_STARTED_LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
@@ -175,7 +175,7 @@ export default async function handler(req, res) {
       },
       password_change_tasks: {
         items: [],
-        note: 'Foundation only — no automatic password-changing integration exists (explicitly out of CRM-3A scope), and no stored field indicates a password-rotation need. Always empty until a future round adds a real signal.',
+        note: 'Foundation only - no automatic password-changing integration exists (explicitly out of CRM-3A scope), and no stored field indicates a password-rotation need. Always empty until a future round adds a real signal.',
       },
       overdue: {
         cancellation_requests: overdueCancellations,
@@ -185,7 +185,7 @@ export default async function handler(req, res) {
       checkout_started: {
         items: checkoutStarted,
         lookback_days: CHECKOUT_STARTED_LOOKBACK_DAYS,
-        note: 'Leads that clicked "Start Free Trial" (lead_attribution row exists) with no matching customer yet — checkout started but not completed/converted.',
+        note: 'Leads that clicked "Start Free Trial" (lead_attribution row exists) with no matching customer yet - checkout started but not completed/converted.',
       },
     });
   } catch (err) {

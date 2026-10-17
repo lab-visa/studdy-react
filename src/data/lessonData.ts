@@ -1,5 +1,5 @@
 /**
- * lessonData.ts — 36/36 videos mapped.
+ * lessonData.ts - 36/36 videos mapped.
  *
  * CDN: vz-b523719a-f10.b-cdn.net  (Library 712849)
  * MP4 format: https://vz-b523719a-f10.b-cdn.net/{VIDEO_ID}/play_720p.mp4

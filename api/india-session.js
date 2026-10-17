@@ -2,11 +2,11 @@
  * GET /api/india-session?order_id=SLIN_...
  *
  * Data for an India customer's dashboard (the return_url Cashfree sends
- * them to after paying). The long random order_id is the private link —
+ * them to after paying). The long random order_id is the private link -
  * same design as the Stripe session_id dashboard link.
  *
  * If our row isn't 'paid' yet (webhook still on its way), this asks
- * Cashfree directly and fulfils the order if Cashfree says PAID — so the
+ * Cashfree directly and fulfils the order if Cashfree says PAID - so the
  * customer gets their login within seconds either way. Studdy login
  * details are only ever returned for a paid order with an assigned seat.
  */

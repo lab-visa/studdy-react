@@ -1,13 +1,13 @@
 /**
- * AdminLogin.tsx — CRM-1B V1 admin login.
+ * AdminLogin.tsx - CRM-1B V1 admin login.
  *
  * Name + 4-digit PIN only. No client-side-only gating: this page never
- * decides access by itself — it just calls /api/admin/login, which is
+ * decides access by itself - it just calls /api/admin/login, which is
  * the only place a session is actually granted (server-side, cookie-
  * based). On success, redirects to /admin, which itself re-verifies the
  * session server-side via /api/admin/whoami before showing anything.
  *
- * Deliberately new — not a reuse of the old local-only admin UI, which
+ * Deliberately new - not a reuse of the old local-only admin UI, which
  * was never pushed to GitHub and used a different (shared-password)
  * auth design entirely.
  */
@@ -33,7 +33,7 @@ export default function AdminLogin() {
         body: JSON.stringify({ name, pin }),
       });
       if (!res.ok) {
-        // Deliberately generic — the server already returns the same
+        // Deliberately generic - the server already returns the same
         // message for unknown name / wrong PIN / locked out / inactive.
         setError('Invalid login');
         return;

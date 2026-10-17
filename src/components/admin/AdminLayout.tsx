@@ -1,18 +1,18 @@
 /**
- * CRM-2B — Studdy CRM application shell: responsive sidebar (desktop
+ * CRM-2B - Studdy CRM application shell: responsive sidebar (desktop
  * fixed, mobile slide-over), top bar, and content area. Session
- * verification and logout wiring live one level up (AdminHome.tsx) —
+ * verification and logout wiring live one level up (AdminHome.tsx) -
  * this component is presentation-only so it can wrap any future admin
  * page, not just Command Center.
  *
  * Visual refinement: the root element carries `admin-shell` +
- * `data-theme` — see src/index.css's scoped light/dark tokens and
+ * `data-theme` - see src/index.css's scoped light/dark tokens and
  * src/hooks/useAdminTheme.ts. This is the ONLY part of the app with
  * dark-mode support; the public marketing site is unaffected.
  *
  * Shell refinement: the desktop sidebar collapses to an icon-only rail
  * (see src/hooks/useSidebarCollapsed.ts for the persisted preference).
- * This is desktop-only — the mobile slide-over below always renders
+ * This is desktop-only - the mobile slide-over below always renders
  * Sidebar expanded (no `collapsed` prop passed) regardless of the
  * desktop preference, per "do not force the desktop collapsed sidebar
  * onto mobile."
@@ -52,10 +52,10 @@ export default function AdminLayout({
 
   return (
     <div className="admin-shell min-h-screen flex" data-theme={theme} style={{ background: 'var(--dim)', color: 'var(--ink)' }}>
-      {/* Desktop sidebar — collapsible between SIDEBAR_EXPANDED_WIDTH
+      {/* Desktop sidebar - collapsible between SIDEBAR_EXPANDED_WIDTH
           (full labels, section headings, "Later" badges) and
           SIDEBAR_COLLAPSED_WIDTH (icon-only rail, tooltip on hover/
-          focus — see Sidebar.tsx). Width is set inline (not swapped
+          focus - see Sidebar.tsx). Width is set inline (not swapped
           Tailwind classes) so the `transition-[width]` below animates
           it smoothly; the global prefers-reduced-motion rule in
           index.css zeroes that duration automatically for anyone who
@@ -64,7 +64,7 @@ export default function AdminLayout({
           negative offset, so `overflow-hidden` lives on the INNER
           content wrapper (which keeps the brief expand transition from
           letting full-width labels spill past a still-narrow rail),
-          never on the aside itself — an overflow-hidden aside would
+          never on the aside itself - an overflow-hidden aside would
           clip the toggle button along with everything else. */}
       <aside
         className="hidden lg:flex lg:flex-col shrink-0 sticky top-0 h-screen relative transition-[width] duration-200 ease-in-out"
@@ -94,7 +94,7 @@ export default function AdminLayout({
         </button>
       </aside>
 
-      {/* Mobile slide-over sidebar — always expanded; the desktop
+      {/* Mobile slide-over sidebar - always expanded; the desktop
           collapsed preference never applies here. */}
       {mobileNavOpen && (
         <div className="lg:hidden fixed inset-0 z-40">
@@ -144,7 +144,7 @@ export default function AdminLayout({
 }
 
 function BrandHeader({ compact = false, collapsed = false }: { compact?: boolean; collapsed?: boolean }) {
-  // Collapsed rail (76px) can't fit the full "studdy CRM" wordmark —
+  // Collapsed rail (76px) can't fit the full "studdy CRM" wordmark -
   // fall back to a small monogram rather than truncating or wrapping it.
   if (collapsed) {
     return (

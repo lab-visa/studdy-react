@@ -10,7 +10,7 @@ export function captureRefCode(): void {
     const raw = new URLSearchParams(window.location.search).get('ref');
     if (raw && /^[A-Za-z0-9_-]{2,40}$/.test(raw)) localStorage.setItem(KEY, raw.toUpperCase());
   } catch {
-    /* private browsing etc. — referral capture must never break the site */
+    /* private browsing etc. - referral capture must never break the site */
   }
 }
 

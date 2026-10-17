@@ -1,8 +1,8 @@
 /**
- * CRM-2B — admin sidebar navigation.
+ * CRM-2B - admin sidebar navigation.
  *
  * Only Command Center has a real route today, so every other item is
- * rendered as a disabled control with a "Later" badge — never a Link to
+ * rendered as a disabled control with a "Later" badge - never a Link to
  * a route that doesn't exist (App.tsx registers no route for any of
  * them yet). Active-state styling comes from the current route, not
  * from local component state, so it stays correct if this ever renders
@@ -10,14 +10,14 @@
  *
  * CRM-2B navigation-architecture refinement: items render grouped
  * under visible section labels (Workspace / Analytics / Intelligence /
- * Administration) so the full planned CRM is legible today — this is
+ * Administration) so the full planned CRM is legible today - this is
  * presentation only, `navConfig.ts` is still the single source of truth
  * and no new routes or data are introduced here.
  *
  * CRM-2B shell refinement: an optional `collapsed` prop switches every
  * row to an icon-only rendering (labels, section headings and "Later"
  * badges hidden) for the desktop sidebar's collapsed state. This prop
- * is desktop-only — AdminLayout never passes `collapsed` to the mobile
+ * is desktop-only - AdminLayout never passes `collapsed` to the mobile
  * slide-over's <Sidebar>, which always renders expanded regardless of
  * the desktop preference. In collapsed mode every row keeps its full
  * name available to assistive tech via `aria-label` (the icon alone
@@ -35,7 +35,7 @@ interface SidebarProps {
   currentPath: string;
   /** Called after a nav click on mobile, so the slide-over sidebar closes. */
   onNavigate?: () => void;
-  /** Icon-only rendering for the desktop collapsed state. Default false (always expanded — used by the mobile slide-over). */
+  /** Icon-only rendering for the desktop collapsed state. Default false (always expanded - used by the mobile slide-over). */
   collapsed?: boolean;
 }
 
@@ -88,11 +88,11 @@ function NavRow({
         // keyboard user tabbing through the collapsed sidebar can reach
         // every icon and trigger its tooltip/aria-label, per "hovering
         // OR focusing an icon in collapsed mode must show its complete
-        // name". Harmless in expanded mode too — the row is still
+        // name". Harmless in expanded mode too - the row is still
         // inert (no onClick/onKeyDown), just discoverable.
         tabIndex={0}
         title={collapsed ? undefined : 'Later'}
-        aria-label={collapsed ? `${item.label} — coming later` : undefined}
+        aria-label={collapsed ? `${item.label} - coming later` : undefined}
         onMouseEnter={collapsed ? tooltip.show : undefined}
         onMouseLeave={collapsed ? tooltip.hide : undefined}
         onFocus={collapsed ? tooltip.show : undefined}
@@ -120,7 +120,7 @@ function NavRow({
             </span>
           </>
         )}
-        <RowTooltip label={`${item.label} — Later`} tooltip={tooltip} active={collapsed} />
+        <RowTooltip label={`${item.label} - Later`} tooltip={tooltip} active={collapsed} />
       </div>
     );
   }
@@ -131,7 +131,7 @@ function NavRow({
       href={item.path}
       onClick={(e) => {
         // Command Center is the only active route today, and it's
-        // already where /admin renders — a real navigation would be a
+        // already where /admin renders - a real navigation would be a
         // full reload of the same page. Keep the click a no-op
         // scroll-to-top instead, and still fire onNavigate so a mobile
         // slide-over closes.
@@ -169,7 +169,7 @@ function NavRow({
 // right edge (a plain CSS `overflow: hidden` ancestor clips ANY
 // absolutely-positioned descendant that pokes outside it, including
 // one meant to visually float past the sidebar's border). Purely
-// decorative — `aria-hidden` — because the row's own `aria-label`
+// decorative - `aria-hidden` - because the row's own `aria-label`
 // already gives assistive tech the full name regardless of hover/
 // focus, so nothing depends on this portal actually mounting.
 
@@ -205,9 +205,9 @@ function RowTooltip({ label, tooltip, active }: { label: string; tooltip: RowToo
         transform: 'translateY(-50%)',
         // Hardcoded, not var(--ink)/var(--surface): this portal renders
         // to document.body, OUTSIDE .admin-shell, so the scoped theme
-        // custom properties (defined only within .admin-shell — see
+        // custom properties (defined only within .admin-shell - see
         // index.css) aren't in scope here and would silently resolve to
-        // the wrong (or, for --surface, no) value — a dark-on-dark
+        // the wrong (or, for --surface, no) value - a dark-on-dark
         // invisible tooltip in light mode. A fixed dark bubble regardless
         // of the page theme is also the more common tooltip convention
         // (VS Code, GitHub, etc. all do this) so it's the right choice

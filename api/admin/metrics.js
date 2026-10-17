@@ -1,27 +1,27 @@
 /**
  * GET /api/admin/metrics
  *
- * CRM-2A — protected, read-only reporting endpoint. Every number returned
+ * CRM-2A - protected, read-only reporting endpoint. Every number returned
  * here comes from api/_lib/metrics.js, the one authoritative place each
- * metric's definition lives — this handler does no calculation of its own
+ * metric's definition lives - this handler does no calculation of its own
  * beyond wiring query params through and assembling the response.
  *
- * Auth: identical pattern to api/admin/reconciliation.js —
+ * Auth: identical pattern to api/admin/reconciliation.js -
  * requireAdminSession() gates every request; an unauthenticated caller
  * gets 401 with no data.
  *
  * Query params (all optional, ISO 8601 date/datetime strings):
- *   from, to           — event-period window applied to every
+ *   from, to           - event-period window applied to every
  *                         event-period metric below.
- *   cohortFrom, cohortTo — cohort window for trial_to_paid_14d. If
+ *   cohortFrom, cohortTo - cohort window for trial_to_paid_14d. If
  *                         omitted, trial_to_paid_14d is left out of the
  *                         response entirely (never computed with a
  *                         guessed range) rather than defaulting silently.
  *
- * No dashboard UI reads this yet — CRM-2A ships the foundation only, per
+ * No dashboard UI reads this yet - CRM-2A ships the foundation only, per
  * the approved scope. Field selection here is deliberately explicit and
  * narrow: no raw Stripe/Studdy secrets, no card data, no Studdy
- * passwords, no service-role exposure — every value is either a count, a
+ * passwords, no service-role exposure - every value is either a count, a
  * currency-labeled sum, or an already-safe identifier (customer_id,
  * dispute_id, group_name), matching reconciliation.js's own safety bar.
  */

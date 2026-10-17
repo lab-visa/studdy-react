@@ -1,5 +1,5 @@
 /**
- * /partner?t=<token> — a sales partner's private earnings page: their
+ * /partner?t=<token> - a sales partner's private earnings page: their
  * link, the next payout (10th of each month for last month's sales), and
  * earnings for This month / Last month / All time / a custom date range,
  * with sales listed (customer details masked).
@@ -14,7 +14,7 @@ interface Data { name: string; code: string; status: string; sales: Sale[]; mont
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-/** YYYY-MM-DD in India time — matches how the server assigns sales to months. */
+/** YYYY-MM-DD in India time - matches how the server assigns sales to months. */
 const istDate = (d: Date | string) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 const longDay = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 type RangeKey = 'this' | 'last' | 'all' | 'custom';

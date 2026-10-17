@@ -1,7 +1,7 @@
 /**
  * GET /api/admin/customer-detail?id=<customers.id>
  *
- * CRM-3A — full single-customer view for the Customer & Subscription
+ * CRM-3A - full single-customer view for the Customer & Subscription
  * pipeline: identity, plan/billing, campaign attribution (first + latest
  * touch), Sales Owner, lifecycle (stored/calculated/manual, via
  * api/_lib/lifecycle.js), and an activity timeline in IST, merged and
@@ -10,8 +10,8 @@
  * header comment for the full design).
  *
  * "Expected payment amount and currency" is not a column anywhere in the
- * new-CRM tables (subscriptions has currency but no amount column — see
- * migration 0006) — it is read, read-only, from the legacy `leads` row
+ * new-CRM tables (subscriptions has currency but no amount column - see
+ * migration 0006) - it is read, read-only, from the legacy `leads` row
  * for the same stripe_customer_id (already populated there by the
  * existing checkout/payment sync), exactly the same safe cross-read
  * pattern api/_lib/sync-customer.js's mirrorLegacyAllocation() already
@@ -22,7 +22,7 @@
  * order('requested_at')`, no limit/range) just to populate a
  * `cancellation.history` response field that the frontend
  * (CustomerDetailDrawer.tsx) never actually rendered. That query is now
- * removed along with the field — it was exactly the kind of uncapped
+ * removed along with the field - it was exactly the kind of uncapped
  * plain PostgREST select this round's server-side-pagination work is
  * meant to eliminate, and it had no consumer. `cancellation.open_request`
  * is unaffected: it comes from withLifecycle()'s already-bounded,
@@ -39,11 +39,11 @@ import { formatIstDateTime } from '../_lib/reporting-timezone.js';
  * 2 removed the silent TIMELINE_ROW_CAP=500 but still fetched every
  * payment_events/cancellation_requests/account_assignments row for this
  * customer into Node on every request and paginated the merged array in
- * memory — that in-memory fetch-everything step (buildActivityTimeline(),
+ * memory - that in-memory fetch-everything step (buildActivityTimeline(),
  * buildCancellationEntry(), and the parallel full-table queries that fed
  * them) is now GONE. This endpoint asks migration 0018's
  * search_customer_activity_timeline() Postgres function for exactly one
- * bounded, already-merged, already-sorted page of events per request —
+ * bounded, already-merged, already-sorted page of events per request -
  * the API layer never holds more than timelinePageSize rows in memory at
  * once, and pagination is cursor/keyset-based (timelineCursorSortAt +
  * timelineCursorEventKey), not OFFSET or an in-memory page slice. See
@@ -61,11 +61,11 @@ export function parseTimelinePageSize(raw) {
 
 /**
  * A malformed or partial cursor (only one of the pair given, an
- * unparseable timestamp, an empty key) is treated as NO cursor at all —
- * start over from the newest event — never a crash. This is
+ * unparseable timestamp, an empty key) is treated as NO cursor at all -
+ * start over from the newest event - never a crash. This is
  * belt-and-braces with the SAME defensive handling
  * search_customer_activity_timeline() itself does for a partial cursor
- * (see 0018's own header comment) — a well-behaved API layer should
+ * (see 0018's own header comment) - a well-behaved API layer should
  * never actually send a malformed cursor, but neither layer trusts the
  * other alone to be the only caller.
  */
@@ -120,14 +120,14 @@ export default async function handler(req, res) {
 
     // See the billing.next_expected_payment_label comment below: whether
     // this date is actually forward-looking depends on WHICH source it
-    // came from, not merely "does a date exist" — subscription.current_period_end
+    // came from, not merely "does a date exist" - subscription.current_period_end
     // stops being forward-looking the moment the subscription is cancelled,
     // while the legacy-lead fallback (used only when there's no synced
     // subscription at all yet) is never historical by definition.
     const nextPaymentDate = subscription?.current_period_end || legacyLead?.next_billing_date || null;
     const isHistoricalPayment = Boolean(subscription?.current_period_end) && subscription?.status === 'cancelled';
 
-    // Genuine server-side, cursor-paginated Activity Timeline — see
+    // Genuine server-side, cursor-paginated Activity Timeline - see
     // migration 0018_customer_activity_timeline.sql's own header
     // comment. This call never fetches more than timelinePageSize rows;
     // the merge/sort/pagination of every source table (payment_events,
@@ -156,7 +156,7 @@ export default async function handler(req, res) {
     const timelineTotalCount = timelineRows.length ? Number(timelineRows[0].total_count) : 0;
     const timelineHasMore = timelineRows.length ? Boolean(timelineRows[0].has_more) : false;
     // has_previous is knowable purely from whether THIS request carried
-    // a (valid) cursor — a request with no cursor is always the first
+    // a (valid) cursor - a request with no cursor is always the first
     // page, one with a cursor is always some later page.
     const timelineHasPrevious = timelineCursorSortAt !== null && timelineCursorEventKey !== null;
     const lastEntry = timelineEntries.length ? timelineEntries[timelineEntries.length - 1] : null;
@@ -232,7 +232,7 @@ export default async function handler(req, res) {
           }
         : null,
       billing: {
-        /* Read-only cross-reference to the legacy funnel record — see
+        /* Read-only cross-reference to the legacy funnel record - see
          * module comment. Never written back. */
         expected_amount: legacyLead?.amount ?? null,
         expected_currency: legacyLead?.currency ?? subscription?.currency ?? null,
@@ -240,11 +240,11 @@ export default async function handler(req, res) {
         next_expected_payment_date_ist: formatIstDateTime(nextPaymentDate),
         /* PRODUCTION BUG FIX (Sep 2026): this date used to always be
          * labeled "Next expected payment" in the UI, even for a cancelled
-         * subscription — where subscription.current_period_end is a real,
+         * subscription - where subscription.current_period_end is a real,
          * correctly-stored Stripe field, but is the END OF THE LAST PERIOD
          * THE CUSTOMER ACTUALLY PAID FOR, not a forward-looking date;
          * there is no next payment coming. The date itself is genuinely
-         * useful (kept, never hidden or blanked to "—" — this codebase's
+         * useful (kept, never hidden or blanked to "-" - this codebase's
          * stored/calculated/manual discipline argues against throwing
          * away a real fact), so only the LABEL changes: historical once
          * the subscription is actually cancelled, forward-looking
@@ -269,13 +269,13 @@ export default async function handler(req, res) {
       timeline_total_count: timelineTotalCount,
       timeline_has_previous: timelineHasPrevious,
       timeline_has_next: timelineHasMore,
-      // Opaque to the frontend — pass BOTH fields back verbatim as
+      // Opaque to the frontend - pass BOTH fields back verbatim as
       // timelineCursorSortAt/timelineCursorEventKey to fetch the next
       // page. null when there is no next page. Built from the RAW RPC
-      // row's own sort_at (the internal ordering key, always non-null —
+      // row's own sort_at (the internal ordering key, always non-null -
       // see 0018's own header comment), not the possibly-null display
       // `occurred_at`, so a next-page request is correct even when the
-      // last row on this page is a "Cancelled — exact date unavailable"
+      // last row on this page is a "Cancelled - exact date unavailable"
       // entry.
       timeline_next_cursor:
         timelineHasMore && lastEntry ? { sort_at: lastEntry.sort_at, event_key: lastEntry.event_key } : null,

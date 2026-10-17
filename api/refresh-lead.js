@@ -3,7 +3,7 @@
  *
  * Admin-only, one-off tool: re-syncs a single customer's Supabase row from
  * Stripe's current data, using the exact same logic the live webhook uses
- * — WITHOUT a new payment, new subscription, or new Studdy seat being
+ * - WITHOUT a new payment, new subscription, or new Studdy seat being
  * claimed. Built for exactly one situation: you shipped a code fix and
  * want an already-existing test/customer row to reflect it immediately,
  * instead of waiting for the next real Stripe event or asking someone to
@@ -11,7 +11,7 @@
  *
  * Protected by a shared secret (ADMIN_SYNC_KEY, set in Vercel) so this
  * can't be triggered by a random visitor who happens to see a session_id
- * in a URL — only someone who also knows the key.
+ * in a URL - only someone who also knows the key.
  */
 import Stripe from 'stripe';
 import { getSupabase } from './_lib/supabase.js';

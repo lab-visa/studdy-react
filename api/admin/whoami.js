@@ -3,7 +3,7 @@
  *
  * Used by the /admin placeholder page to check whether the current
  * cookie represents a currently-valid, server-verified session before
- * showing anything — direct navigation to /admin with no/expired/revoked
+ * showing anything - direct navigation to /admin with no/expired/revoked
  * session yields no admin data, only a 401.
  */
 import { getSupabase } from '../_lib/supabase.js';

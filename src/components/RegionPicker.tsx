@@ -1,5 +1,5 @@
 /**
- * RegionPicker.tsx — a single compact dropdown for choosing a
+ * RegionPicker.tsx - a single compact dropdown for choosing a
  * country/region, used on both the homepage Pricing section and the
  * Checkout page so they behave identically.
  *
@@ -44,7 +44,7 @@ export default function RegionPicker({ region, onChange, detectedRegion }: Props
   /* Keep the panel fully on-screen. It's centered under the button by
    * default; if that would push it past the left or right edge (common
    * on phones, since the button isn't always centered on screen), nudge
-   * it back in by just enough — instead of letting the edge get clipped. */
+   * it back in by just enough - instead of letting the edge get clipped. */
   useLayoutEffect(() => {
     if (!open) { setShift(0); return; }
 

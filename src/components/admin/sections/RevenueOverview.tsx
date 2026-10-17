@@ -1,8 +1,8 @@
 /**
- * CRM-2B — Section 3: payment & revenue overview, always by ORIGINAL
- * currency — gross, refunds and net are three separate CurrencyBreakdown
+ * CRM-2B - Section 3: payment & revenue overview, always by ORIGINAL
+ * currency - gross, refunds and net are three separate CurrencyBreakdown
  * blocks, never summed into one number. Visual refinement: one small
- * gross/refund/net comparison chart PER CURRENCY (CurrencyCompareBars) —
+ * gross/refund/net comparison chart PER CURRENCY (CurrencyCompareBars) -
  * never a pie chart, and never a cross-currency total, per the CRM-2B
  * visual-refinement brief.
  */
@@ -25,7 +25,7 @@ export default function RevenueOverview({ metrics }: RevenueOverviewProps) {
   return (
     <SectionCard
       title="Payments & revenue"
-      description="By original transaction currency for the selected period — currencies are never combined"
+      description="By original transaction currency for the selected period - currencies are never combined"
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
         <div>

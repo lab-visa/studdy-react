@@ -1,9 +1,9 @@
 /**
- * CRM-2B — trial_to_paid_14d cohort selector. Deliberately separate from
+ * CRM-2B - trial_to_paid_14d cohort selector. Deliberately separate from
  * RangeControls: this is a COHORT window (customers who started trial in
  * this range), not an event-period filter, and per the CRM-2A metric
  * contract it must never be silently defaulted or derived from the main
- * date range — the user must explicitly pick or confirm it, every time.
+ * date range - the user must explicitly pick or confirm it, every time.
  */
 import { lastMatureCohortMonth, isValidCustomRange } from '../../utils/reportingRange';
 

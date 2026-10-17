@@ -1,11 +1,11 @@
 /**
- * CRM-3A — campaign attribution capture, backend half.
+ * CRM-3A - campaign attribution capture, backend half.
  *
  * The browser owns capturing first-touch (once) and latest-touch
- * (refreshed on every fresh tagged visit) locally — see
+ * (refreshed on every fresh tagged visit) locally - see
  * src/utils/attribution.ts. This file only persists what the browser
  * hands it, at exactly one moment: the "Start Free Trial" click
- * (api/track-attribution.js), never for a mere page visit — matching the
+ * (api/track-attribution.js), never for a mere page visit - matching the
  * existing rule in api/track-event.js.
  *
  * Idempotency / never-overwrite-first-touch design:
@@ -13,12 +13,12 @@
  *     first_* and latest_* from what the browser sent.
  *   - An existing row -> UPDATE latest_* ONLY. first_* columns are never
  *     even included in the UPDATE payload, so they cannot be touched by
- *     this call under any circumstance — not "don't overwrite if
+ *     this call under any circumstance - not "don't overwrite if
  *     already set", but "physically not part of this SQL statement".
  * A concurrent double-click race (two inserts for the same brand-new
  * lead_id) is resolved by the table's own primary key (lead_id) via a
  * 23505 catch below, re-read, then treated as the "existing row" update
- * path — the same idempotency shape already used by
+ * path - the same idempotency shape already used by
  * mirrorCancellationRequest() in api/cancel-request.js.
  */
 
@@ -38,7 +38,7 @@ function normalizeField(value, maxLen) {
  * into the exact column values lead_attribution/customers expect.
  * Accepts either camelCase (utmSource) or already-snake_case (utm_source)
  * keys so the same helper can be reused for request-body parsing and for
- * internal reuse — unknown/extra keys are ignored.
+ * internal reuse - unknown/extra keys are ignored.
  */
 export function normalizeTouch(touch) {
   const t = touch || {};
@@ -55,7 +55,7 @@ export function normalizeTouch(touch) {
   };
 }
 
-/** True if a normalized touch object has at least one non-null field — an all-null touch is not worth writing a row for. */
+/** True if a normalized touch object has at least one non-null field - an all-null touch is not worth writing a row for. */
 export function touchHasAnyField(normalized) {
   return Object.values(normalized).some((v) => v !== null);
 }
@@ -77,10 +77,10 @@ const MAX_LEAD_ID_LENGTH = 200;
 
 /**
  * Persists one click's attribution snapshot. `first`/`latest` are raw
- * (unnormalized) touch objects from the request body — normalized here,
+ * (unnormalized) touch objects from the request body - normalized here,
  * never trusted from the caller. Returns the resulting row, or null if
  * leadId is missing/invalid or neither touch carries any real data (a
- * no-op, not an error — matches track-event.js's "never break the caller,
+ * no-op, not an error - matches track-event.js's "never break the caller,
  * degrade silently" convention).
  */
 export async function captureAttribution(supabase, { leadId, first, latest, now = new Date() }) {
@@ -127,7 +127,7 @@ export async function captureAttribution(supabase, { leadId, first, latest, now 
 
   if (insertError.code === '23505') {
     /* Lost a race against a near-simultaneous duplicate click for the
-     * same lead_id — an existing row now exists (just not from this
+     * same lead_id - an existing row now exists (just not from this
      * call). Correct, expected outcome: fall through to the update path,
      * same shape as mirrorCancellationRequest()'s race handling. */
     return updateLatestTouch(supabase, normalizedLeadId, normalizedLatest, nowIso);
@@ -158,7 +158,7 @@ async function updateLatestTouch(supabase, leadId, normalizedLatest, nowIso) {
   return data;
 }
 
-/** Looks up a lead's attribution row, if any — used by sync-customer.js at checkout.session.completed. */
+/** Looks up a lead's attribution row, if any - used by sync-customer.js at checkout.session.completed. */
 export async function findLeadAttribution(supabase, leadId) {
   const normalizedLeadId = normalizeField(leadId, MAX_LEAD_ID_LENGTH);
   if (!normalizedLeadId) return null;

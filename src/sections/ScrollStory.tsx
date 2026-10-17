@@ -1,8 +1,8 @@
 /**
- * ScrollStory.tsx — Section 4
+ * ScrollStory.tsx - Section 4
  *
  * Desktop: CSS sticky stage + IntersectionObserver sentinels (110vh each)
- * Mobile:  Completely separate component — simple sticky + sentinels (90svh)
+ * Mobile:  Completely separate component - simple sticky + sentinels (90svh)
  *          Uses 9:16 vertical videos. No shared state with desktop.
  */
 import { useEffect, useRef, useState, useCallback, forwardRef } from 'react';
@@ -27,7 +27,7 @@ const P = 'autoplay=true&muted=true&loop=true&playsinline=true&preload=true&cont
 const eUrl = (id: string) => `https://player.mediadelivery.net/embed/${LIB}/${id}?${P}`;
 
 const SLIDES: Slide[] = [
-  { id:1,  bunnyId:'820e122c-064f-4b71-8b6d-d0d1874b1e27', mobileBunnyId:'242d7ca2-1f1f-49a5-9af6-2c2a0e33bbf0', eyebrow:'THE STRUGGLE',       headline:'It starts with one difficult question.',                            description:'Late at night, homework continues — but understanding does not always come easily.',                                               overlayStrength:0.55 },
+  { id:1,  bunnyId:'820e122c-064f-4b71-8b6d-d0d1874b1e27', mobileBunnyId:'242d7ca2-1f1f-49a5-9af6-2c2a0e33bbf0', eyebrow:'THE STRUGGLE',       headline:'It starts with one difficult question.',                            description:'Late at night, homework continues - but understanding does not always come easily.',                                               overlayStrength:0.55 },
   { id:2,  bunnyId:'151be9e3-b812-4bf0-a921-d2e53c239c00', mobileBunnyId:'ce8e510d-a51f-4bfa-afa2-cc0a7de29873', eyebrow:'WHEN LEARNING STOPS', headline:'Then frustration takes over.',                                      description:'The answer may be somewhere in the book. What is missing is someone who can explain it clearly.',                                  overlayStrength:0.55 },
   { id:3,  bunnyId:'c37db453-eaf2-4aaa-97f3-3a40048f5a3a', mobileBunnyId:'22dfa7fc-f235-4c1c-bbc8-01634b089eba', eyebrow:'A DIFFERENT WAY',     headline:'So he asks Studdy.',                                              description:'One question opens a personal learning experience built around how he understands best.',                                           overlayStrength:0.5  },
   { id:4,  bunnyId:'06fd86f2-c358-4207-a135-0403f1aab46f', mobileBunnyId:'b302c616-81f8-4ff7-8d9e-f68869799af6', eyebrow:'VISUAL EXPLANATIONS',  headline:'The lesson comes alive.',                                         description:'Studdy explains step by step using voice, drawings, diagrams and an interactive whiteboard.',                                      overlayStrength:0.45 },
@@ -154,12 +154,12 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
 
   return (
     <>
-      {/* FIX (Sep 2026): 100vh is unreliable on mobile Safari specifically —
+      {/* FIX (Sep 2026): 100vh is unreliable on mobile Safari specifically -
        * it's sized against a viewport state that doesn't match what's
        * actually visible while the address bar is showing/hiding, so this
        * pinned section could render taller than the real visible screen on
        * first load. 100dvh ("dynamic viewport height") tracks the actual
-       * current viewport instead and is what this needs — supported by
+       * current viewport instead and is what this needs - supported by
        * every browser this site otherwise already assumes (same modern-
        * browser-only bar as WebP with no fallback, used elsewhere in this
        * codebase). */}
@@ -212,7 +212,7 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
    - User can always scroll up past Slide 1 or down past Slide 10
    ══════════════════════════════════════════════════════════════ */
 /* ══════════════════════════════════════════════════════════════
-   MOBILE STORY — native <video> implementation
+   MOBILE STORY - native <video> implementation
 
    Uses direct Bunny MP4 URLs instead of iframes.
    This gives us:
@@ -229,33 +229,33 @@ function DesktopStory({ onTrial }: { onTrial: () => void }) {
    - IntersectionObserver (threshold 0.6) drives active index
    -
    - FIX (Sep 2026): this section used to ALSO force-snap the scroll
-   - position to the nearest slide — CSS scroll-snap-type on the
+   - position to the nearest slide - CSS scroll-snap-type on the
    - wrapper plus a JS scrollend/300ms-debounce handler that measured
    - each slide's distance from the top of the screen and called
    - scrollIntoView() to correct it. That distance calculation reads
    - window.innerHeight, which is NOT stable inside in-app browsers
-   - such as WhatsApp's — their own chrome (a mini address bar) grows
+   - such as WhatsApp's - their own chrome (a mini address bar) grows
    - and shrinks as you scroll, exactly like mobile Safari's dynamic
    - toolbar. Every time that chrome finished animating, the snap
    - logic recomputed against a new innerHeight and yanked the page
-   - to a different slide, which itself fired another scroll event —
+   - to a different slide, which itself fired another scroll event -
    - a feedback loop, confirmed via screen recording: smooth while
    - actively scrolling, jumping the instant you stopped or reversed
    - direction (exactly when that chrome resizes). Real Safari/Chrome
    - don't have this animating-chrome behavior, so the bug never
-   - showed there — only through the WhatsApp in-app browser.
+   - showed there - only through the WhatsApp in-app browser.
    - Fix: removed all forced snapping (both the CSS scroll-snap-type
    - and the JS scrollIntoView correction) and left scrolling
    - completely natural. The IntersectionObserver below still drives
    - which slide is "active" (for video play/pause and text opacity)
-   - purely from what's actually visible — it needs no snapping to
+   - purely from what's actually visible - it needs no snapping to
    - work correctly.
    ══════════════════════════════════════════════════════════════ */
 
 const CDN = 'https://vz-b523719a-f10.b-cdn.net';
 const mp4Mobile = (id: string) => `${CDN}/${id}/play_720p.mp4`;
 
-/* Mobile video IDs — 9:16 vertical videos */
+/* Mobile video IDs - 9:16 vertical videos */
 const MOBILE_MP4S: string[] = [
   mp4Mobile('242d7ca2-1f1f-49a5-9af6-2c2a0e33bbf0'),  // Scene 1
   mp4Mobile('ce8e510d-a51f-4bfa-afa2-cc0a7de29873'),  // Scene 2
@@ -315,7 +315,7 @@ const MobileSlide = forwardRef<HTMLElement, {
         contain: 'layout paint',
       }}
     >
-      {/* Native video — object-fit:cover fills screen perfectly */}
+      {/* Native video - object-fit:cover fills screen perfectly */}
       {shouldMount ? (
         <video
           ref={videoRef}
@@ -408,7 +408,7 @@ function MobileStory({ onTrial }: { onTrial: () => void }) {
   const activeRef    = useRef(0);
 
   const [active,     setActive]     = useState(0);
-  /* Only active + next mounted — max 2 videos decoding at once */
+  /* Only active + next mounted - max 2 videos decoding at once */
   const [mountedSet, setMountedSet] = useState<Set<number>>(
     () => new Set([0, 1])
   );

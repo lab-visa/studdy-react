@@ -1,9 +1,9 @@
 /**
- * MarketContext — one shared "which country is this visitor in" answer for
+ * MarketContext - one shared "which country is this visitor in" answer for
  * the whole site.
  *
  * India (region 'in') gets its own offer: pay first (Quarterly / Yearly),
- * "Get Started" buttons and a 7-day refund — no free trial. Every other
+ * "Get Started" buttons and a 7-day refund - no free trial. Every other
  * region keeps the existing Stripe free-trial flow, completely unchanged.
  *
  * If the visitor picks a different country in the Pricing or Checkout

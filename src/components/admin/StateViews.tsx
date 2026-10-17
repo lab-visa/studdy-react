@@ -1,5 +1,5 @@
 /**
- * CRM-2B — shared loading / error / empty presentational states for the
+ * CRM-2B - shared loading / error / empty presentational states for the
  * Command Center, so each is defined once instead of re-implemented per
  * section.
  */

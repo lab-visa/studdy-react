@@ -8,7 +8,7 @@
  * the response. The admin can pause anyone later from Admin → Sales
  * Partners. One registration per mobile number; a repeat registration
  * does NOT reveal the existing links (anyone could type someone else's
- * number) — they're told to message us instead.
+ * number) - they're told to message us instead.
  */
 import { getSupabase } from '../_lib/supabase.js';
 import { normalizeIndianPhone } from '../_lib/cashfree.js';
@@ -55,7 +55,7 @@ export default async function handler(req, res, deps = {}) {
       if (existing) {
         return res.status(409).json({ error: 'This mobile number is already registered. Message us on WhatsApp and we will resend your links.' });
       }
-      continue; // code collision — try a new code
+      continue; // code collision - try a new code
     }
     console.error('partners/apply error:', error);
     return res.status(500).json({ error: 'Could not register. Please try again.' });

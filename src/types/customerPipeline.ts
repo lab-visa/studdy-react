@@ -1,8 +1,8 @@
 /**
- * CRM-3A — TypeScript shapes for the Customer & Subscription pipeline
+ * CRM-3A - TypeScript shapes for the Customer & Subscription pipeline
  * endpoints (api/admin/customers.js, customer-detail.js, today-actions.js).
  * Mirrors api/_lib/lifecycle.js's deriveCustomerLifecycle() output exactly
- * — stored/calculated/flags kept as three distinct objects here too, never
+ * - stored/calculated/flags kept as three distinct objects here too, never
  * flattened into one ambiguous status string.
  */
 
@@ -91,17 +91,17 @@ export interface ActivityTimelineEntry {
   reason?: string | null;
   occurred_at: string | null;
   occurred_at_ist: string | null;
-  /** Stable, genuinely unique per-entry key (migration 0018) — the
+  /** Stable, genuinely unique per-entry key (migration 0018) - the
    *  underlying row's own id (payment_events.id, cancellation_requests.id,
    *  account_assignments.id, subscriptions.id, lead_attribution.lead_id)
    *  or, for a customer-row-derived entry, customers.id plus a fixed
-   *  suffix. Use this as the React list key instead of the array index —
+   *  suffix. Use this as the React list key instead of the array index -
    *  see CustomerDetailDrawer.tsx. */
   event_key: string;
 }
 
 /** Opaque keyset/cursor token for the NEXT Activity Timeline page
- *  (migration 0018's search_customer_activity_timeline) — pass both
+ *  (migration 0018's search_customer_activity_timeline) - pass both
  *  fields back verbatim as timelineCursorSortAt/timelineCursorEventKey. */
 export interface ActivityTimelineCursor {
   sort_at: string;
@@ -148,7 +148,7 @@ export interface CustomerDetailResponse {
     next_expected_payment_date: string | null;
     next_expected_payment_date_ist: string | null;
     /** "Final billing period end" once the subscription is actually
-     *  cancelled, "Next expected payment" otherwise — render this label,
+     *  cancelled, "Next expected payment" otherwise - render this label,
      *  never a hardcoded one, since the same date field stops being
      *  forward-looking once cancelled (see customer-detail.js). Neutral
      *  wording ("end", not "ended") deliberately says nothing about

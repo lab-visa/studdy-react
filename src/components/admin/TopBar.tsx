@@ -1,5 +1,5 @@
 /**
- * CRM-2B — admin top bar: mobile menu toggle, page title/subtitle slot,
+ * CRM-2B - admin top bar: mobile menu toggle, page title/subtitle slot,
  * logged-in administrator identity, light/dark toggle, logout.
  */
 import { Menu, LogOut, Sun, Moon } from 'lucide-react';

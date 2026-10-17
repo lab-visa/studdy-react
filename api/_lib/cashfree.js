@@ -1,11 +1,11 @@
 /**
- * Cashfree Payment Gateway — minimal server-side client (REST, API version
+ * Cashfree Payment Gateway - minimal server-side client (REST, API version
  * 2023-08-01). No SDK dependency: three calls are all we use.
  *
  * Env (set in Vercel, never in code):
- *   CASHFREE_APP_ID      — x-client-id
- *   CASHFREE_SECRET_KEY  — x-client-secret (also the webhook signing key)
- *   CASHFREE_ENV         — 'sandbox' (test) or 'production' (live). Anything
+ *   CASHFREE_APP_ID      - x-client-id
+ *   CASHFREE_SECRET_KEY  - x-client-secret (also the webhook signing key)
+ *   CASHFREE_ENV         - 'sandbox' (test) or 'production' (live). Anything
  *                          other than exactly 'production' is treated as
  *                          sandbox, so a typo can never charge real money.
  */
@@ -13,7 +13,7 @@ import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 
 export const CASHFREE_API_VERSION = '2023-08-01';
 
-/* Authoritative India prices — the browser only says WHICH plan; the
+/* Authoritative India prices - the browser only says WHICH plan; the
  * amount always comes from here, so nobody can change the price by
  * editing the page. Keep in sync with src/data/india.ts (display only). */
 export const INDIA_PLANS = {

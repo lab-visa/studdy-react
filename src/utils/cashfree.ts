@@ -1,7 +1,7 @@
 /**
  * Loads Cashfree's checkout script (once) and opens the payment page for
  * a payment_session_id created by /api/cashfree/create-order.
- * https://sdk.cashfree.com/js/v3/cashfree.js — the official v3 web SDK.
+ * https://sdk.cashfree.com/js/v3/cashfree.js - the official v3 web SDK.
  */
 type CashfreeInstance = { checkout: (opts: { paymentSessionId: string; redirectTarget?: string }) => Promise<unknown> };
 declare global {

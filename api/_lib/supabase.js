@@ -1,7 +1,7 @@
 /**
  * Shared Supabase admin client for all serverless functions.
  *
- * Uses the SERVICE ROLE key — this bypasses Row Level Security,
+ * Uses the SERVICE ROLE key - this bypasses Row Level Security,
  * which is correct here because these functions only ever run on
  * our own server (never in the browser). Never import this file
  * or use this key anywhere in src/ (the frontend).

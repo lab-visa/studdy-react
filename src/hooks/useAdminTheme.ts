@@ -1,7 +1,7 @@
 /**
- * CRM-2B (visual refinement) — light/dark theme state for the admin
+ * CRM-2B (visual refinement) - light/dark theme state for the admin
  * shell only. Defaults to the viewer's OS preference; an explicit toggle
- * persists to localStorage (per-browser, per-viewer — never sent
+ * persists to localStorage (per-browser, per-viewer - never sent
  * anywhere, never affects any other visitor). Never touches the public
  * marketing site, which has no dark mode and isn't in scope here.
  */
@@ -16,7 +16,7 @@ function readStoredTheme(): AdminTheme | null {
     const v = window.localStorage.getItem(STORAGE_KEY);
     return v === 'light' || v === 'dark' ? v : null;
   } catch {
-    // Private browsing / storage blocked — fall back to system preference.
+    // Private browsing / storage blocked - fall back to system preference.
     return null;
   }
 }
@@ -33,7 +33,7 @@ export function useAdminTheme(): { theme: AdminTheme; toggleTheme: () => void } 
   const [theme, setTheme] = useState<AdminTheme>(() => readStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light'));
 
   useEffect(() => {
-    // Only follow the OS live if the viewer never explicitly chose —
+    // Only follow the OS live if the viewer never explicitly chose -
     // once they toggle, that choice sticks regardless of OS changes.
     if (readStoredTheme() !== null) return;
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
@@ -48,7 +48,7 @@ export function useAdminTheme(): { theme: AdminTheme; toggleTheme: () => void } 
       try {
         window.localStorage.setItem(STORAGE_KEY, next);
       } catch {
-        // Best-effort only — theme still applies for this page view.
+        // Best-effort only - theme still applies for this page view.
       }
       return next;
     });

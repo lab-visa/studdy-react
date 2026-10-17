@@ -1,9 +1,9 @@
 /**
- * CRM-3A — client-side campaign-attribution capture.
+ * CRM-3A - client-side campaign-attribution capture.
  *
  * Deliberately separate from tracking.ts's lead-id/campaign-code capture
  * (which feeds the anonymous site_traffic_daily counters and the Stripe
- * Payment Link's own utm_source/utm_campaign params) — this module's job
+ * Payment Link's own utm_source/utm_campaign params) - this module's job
  * is to build the FULL first-touch/latest-touch attribution snapshot
  * (all five UTM fields + GHL identifiers, once GHL supplies them) that
  * gets sent to /api/track-attribution at the "Start Free Trial" click
@@ -11,7 +11,7 @@
  *
  * Capture rule, mirroring tracking.ts's existing "capture once, persist
  * forever" pattern for campaign code:
- *   - A URL carrying no utm_* or ghl_* param at all is a no-op — whatever
+ *   - A URL carrying no utm_* or ghl_* param at all is a no-op - whatever
  *     was already persisted (if anything) is left exactly as-is, so
  *     browsing the site after arriving via a tagged link never erases
  *     captured attribution ("existing links without UTMs must continue
@@ -22,7 +22,7 @@
  *   - "First touch" is seeded from that same snapshot only the very
  *     first time this browser ever sees one, and is never touched again
  *     after that by this module.
- * Nothing here talks to the network — see Checkout.tsx for where the
+ * Nothing here talks to the network - see Checkout.tsx for where the
  * persisted snapshot is actually sent, and only then.
  */
 
@@ -56,13 +56,13 @@ function writeStoredTouch(key: string, touch: AttributionTouch) {
   try {
     localStorage.setItem(key, JSON.stringify(touch));
   } catch {
-    /* ignore — private browsing etc. */
+    /* ignore - private browsing etc. */
   }
 }
 
 /**
  * Pure: reads utm_* and ghl_* params from a URLSearchParams-compatible search
- * string. Returns null when none of the tracked params are present — a
+ * string. Returns null when none of the tracked params are present - a
  * plain/untagged URL carries no attribution signal to capture.
  */
 export function parseTouchFromSearch(search: string, pathname: string, touchedAt: string): AttributionTouch | null {
@@ -94,7 +94,7 @@ export function parseTouchFromSearch(search: string, pathname: string, touchedAt
 }
 
 /**
- * Call once per page load (see App.tsx). Purely local — never touches the
+ * Call once per page load (see App.tsx). Purely local - never touches the
  * network or creates any database row by itself.
  */
 export function captureAttributionTouch(now: Date = new Date()): void {
@@ -110,7 +110,7 @@ export function captureAttributionTouch(now: Date = new Date()): void {
 
 /**
  * Whatever has been persisted so far. Both may be null if this visitor
- * has never arrived via a tagged link — the caller (Checkout.tsx) skips
+ * has never arrived via a tagged link - the caller (Checkout.tsx) skips
  * sending anything to the backend in that case, exactly like
  * getCampaignCode() returning null degrades to 'none' today.
  */

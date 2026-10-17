@@ -8,7 +8,7 @@ export const subjects = [
   {
     id:'science', label:'Science', word:'SCIENCE', accent:'#8C79E0',
     prompt:'Why does a volcano erupt?',
-    desc:'Scientific processes made visible — diagrams drawn live as the concept is explained.',
+    desc:'Scientific processes made visible - diagrams drawn live as the concept is explained.',
     outcomes:['Real whiteboard diagrams','Cross-curriculum coverage','Any grade level'],
   },
   {
@@ -47,10 +47,10 @@ export interface DemoQuestion {
 }
 
 export const DEMO_QUESTIONS: DemoQuestion[] = [
-  { id:'photosynthesis', q:'Explain photosynthesis visually',      tab:'school',  videoLabel:'Biology — Photosynthesis explanation' },
-  { id:'english',        q:'Improve this English answer',           tab:'school',  videoLabel:'English — Answer improvement' },
-  { id:'python',         q:'Debug this Python code',                tab:'college', videoLabel:'Coding — Python debugging walkthrough' },
-  { id:'engineering',    q:'Explain this engineering concept',      tab:'college', videoLabel:'Engineering — Concept explained' },
-  { id:'excel',          q:'Build an Excel commission formula',     tab:'work',    videoLabel:'Excel — Commission formula walkthrough' },
-  { id:'email',          q:'Improve this professional email',       tab:'work',    videoLabel:'Writing — Email improvement' },
+  { id:'photosynthesis', q:'Explain photosynthesis visually',      tab:'school',  videoLabel:'Biology - Photosynthesis explanation' },
+  { id:'english',        q:'Improve this English answer',           tab:'school',  videoLabel:'English - Answer improvement' },
+  { id:'python',         q:'Debug this Python code',                tab:'college', videoLabel:'Coding - Python debugging walkthrough' },
+  { id:'engineering',    q:'Explain this engineering concept',      tab:'college', videoLabel:'Engineering - Concept explained' },
+  { id:'excel',          q:'Build an Excel commission formula',     tab:'work',    videoLabel:'Excel - Commission formula walkthrough' },
+  { id:'email',          q:'Improve this professional email',       tab:'work',    videoLabel:'Writing - Email improvement' },
 ];

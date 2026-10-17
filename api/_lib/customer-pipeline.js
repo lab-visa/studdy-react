@@ -1,5 +1,5 @@
 /**
- * CRM-3A — shared join + lifecycle-derivation layer for the Customer &
+ * CRM-3A - shared join + lifecycle-derivation layer for the Customer &
  * Subscription pipeline endpoints (api/admin/customers.js,
  * customer-detail.js, today-actions.js). One place builds the
  * customer -> {subscription, open cancellation request, dispute/refund
@@ -8,17 +8,17 @@
  *
  * Style matches api/admin/reconciliation.js and api/_lib/metrics.js
  * exactly: plain supabase-js queries + JS-side join/aggregation, each
- * query capped and the cap reported to the caller — no new Postgres
+ * query capped and the cap reported to the caller - no new Postgres
  * function, no migration beyond the additive columns/table in 0016.
  * Current production data volume (dozens of customers) is well inside
  * this cap; a future volume increase past it becomes visible via the
  * reported cap, never silent.
  *
- * PRODUCTION BUG FIX (Sep 2026 — "Today's Actions still reports 1 Access
+ * PRODUCTION BUG FIX (Sep 2026 - "Today's Actions still reports 1 Access
  * removal pending" for a customer already fully offboarded): also fetches
  * whether each customer still has an unreleased (`active`/`reserved`)
  * account_assignments row, and threads it through to
- * deriveCustomerLifecycle() as hasUnreleasedAssignment — see that
+ * deriveCustomerLifecycle() as hasUnreleasedAssignment - see that
  * function's own comment for why access_removal_pending must be gated on
  * this, not on customers.access_status alone.
  */
@@ -62,7 +62,7 @@ export async function fetchLifecycleInputs(supabase, customerIds) {
      * clears once access ends. account_assignments.status/released_at
      * (migration 0007) is the real, already-existing, per-customer
      * confirmation that the manual seat-removal task was actually done
-     * — the same field migration 0018's Activity Timeline already reads
+     * - the same field migration 0018's Activity Timeline already reads
      * for its "Access released" entry. A customer still has the removal
      * task open exactly when a `status in ('active','reserved')` row
      * still exists for them; once none does (released, or never
@@ -84,7 +84,7 @@ export async function fetchLifecycleInputs(supabase, customerIds) {
   const unreleasedAssignmentCustomerIds = new Set((unreleasedAssignmentRes.data || []).map((a) => a.customer_id));
 
   /* Open dispute = a charge.dispute.created row whose dispute id
-   * (raw_metadata->>'id') has no matching charge.dispute.closed row —
+   * (raw_metadata->>'id') has no matching charge.dispute.closed row -
    * identical correlation to api/_lib/metrics.js's openDispute(). */
   const closedDisputeIds = new Set((disputeClosedRes.data || []).map((r) => r.raw_metadata?.id).filter(Boolean));
   const disputedCustomerIds = new Set(
@@ -150,7 +150,7 @@ export async function withLifecycle(supabase, customers, { now = new Date() } = 
     // Dead in practice (fetchLifecycleInputs always populates every id
     // from a non-empty `customers` array), kept only as a defensive
     // fallback. hasUnreleasedAssignment defaults true here to match
-    // deriveCustomerLifecycle()'s own fail-safe default — no signal
+    // deriveCustomerLifecycle()'s own fail-safe default - no signal
     // means "assume still pending," never "assume done."
     const input = inputs.get(customer.id) || {
       subscription: null,

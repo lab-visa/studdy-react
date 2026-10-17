@@ -1,14 +1,14 @@
 /**
  * GET /api/admin/reconciliation
  *
- * CRM-1 Objective 4 — read-only, on-demand diagnostic. No new table for
+ * CRM-1 Objective 4 - read-only, on-demand diagnostic. No new table for
  * detection: every check below reads only already-existing tables and
  * returns counts plus safe identifiers (lead_id / paid_id / customer_id /
- * stripe_event_id — never raw PII: no name, email, phone, card, or
+ * stripe_event_id - never raw PII: no name, email, phone, card, or
  * Studdy credential is ever read or returned by this endpoint).
  *
  * This endpoint DETECTS gaps only. It never writes, repairs, increments,
- * deletes, or retries anything — recovery is manual, separately reviewed
+ * deletes, or retries anything - recovery is manual, separately reviewed
  * and approved, exactly as instructed.
  *
  * Implemented as plain read queries against existing tables (fetch +
@@ -26,7 +26,7 @@ import { OPEN_CANCELLATION_STATUSES } from '../_lib/cancellation.js';
 const RECONCILIATION_ROW_CAP = 2000;
 const PAYMENT_CLAIM_STALE_MINUTES = 10;
 
-/** Check #1 — a real legacy customer (has both Stripe ids) with no matching customers row. */
+/** Check #1 - a real legacy customer (has both Stripe ids) with no matching customers row. */
 export async function checkMissingCustomers(supabase) {
   const { data: realLeads, error: leadsError } = await supabase
     .from('leads')
@@ -50,7 +50,7 @@ export async function checkMissingCustomers(supabase) {
   return { check: 'MISSING_CUSTOMER_ROW', count: flagged.length, items: flagged };
 }
 
-/** Check #2 — a customers row with no matching subscriptions row. */
+/** Check #2 - a customers row with no matching subscriptions row. */
 export async function checkMissingSubscriptions(supabase) {
   const { data: customers, error: customersError } = await supabase
     .from('customers')
@@ -73,11 +73,11 @@ export async function checkMissingSubscriptions(supabase) {
 }
 
 /**
- * Check #3 — allocation mirror missing or mismatched vs. the legacy
+ * Check #3 - allocation mirror missing or mismatched vs. the legacy
  * leads.group_name.
  *
  * CRM-2A correction: an active `account_assignments` mirror is only
- * EXPECTED for a customer whose access is still meant to be active — a
+ * EXPECTED for a customer whose access is still meant to be active - a
  * customer who has genuinely churned (customers.access_status='ended',
  * their seat correctly released by recordSubscriptionEnded()'s
  * release_studdy_seat() call) is SUPPOSED to have no active assignment.
@@ -85,7 +85,7 @@ export async function checkMissingSubscriptions(supabase) {
  * churned/ended customer is healthy, not a mirror gap. Only a customer
  * whose access_status is NOT 'ended' (i.e. access genuinely is or should
  * be active) is checked for a missing active mirror below. The
- * mismatched-group check is unaffected — a customer whose access is still
+ * mismatched-group check is unaffected - a customer whose access is still
  * active but whose mirror points at the wrong account is a real
  * discrepancy regardless.
  */
@@ -125,12 +125,12 @@ export async function checkAllocationMirror(supabase) {
   const flagged = [];
   for (const lead of realLeads || []) {
     const customer = customerByStripeId.get(lead.stripe_customer_id);
-    if (!customer) continue; // no customers row at all — that's check #1's gap, not this one's
+    if (!customer) continue; // no customers row at all - that's check #1's gap, not this one's
 
     const assignedAccountId = activeAssignmentByCustomer.get(customer.id);
     if (!assignedAccountId) {
       /* A churned/ended customer having no active assignment is expected
-       * and healthy (their seat was correctly released) — not a gap. */
+       * and healthy (their seat was correctly released) - not a gap. */
       if (customer.access_status === 'ended') continue;
       flagged.push({ lead_id: lead.lead_id, customer_id: customer.id, issue: 'no_active_assignment' });
       continue;
@@ -151,7 +151,7 @@ export async function checkAllocationMirror(supabase) {
 }
 
 /**
- * Check #4 — PAYMENT_CLAIM_INCOMPLETE.
+ * Check #4 - PAYMENT_CLAIM_INCOMPLETE.
  *
  * A payment_claims row older than PAYMENT_CLAIM_STALE_MINUTES with no
  * matching payment_events row for the same stripe_event_id.
@@ -161,11 +161,11 @@ export async function checkAllocationMirror(supabase) {
  * whether (A) the process crashed after the claim but before
  * leads.total_months_paid was incremented, or (B) the process crashed
  * after that increment but before payment_events was recorded. This
- * endpoint does not — and must not — attempt to distinguish A from B, or
+ * endpoint does not - and must not - attempt to distinguish A from B, or
  * claim the legacy increment is definitely missing. It flags the event
  * for MANUAL REVIEW only. It never automatically increments
  * total_months_paid, and never automatically deletes, releases, or
- * retries a payment_claims row — repair is a separate, manual, later
+ * retries a payment_claims row - repair is a separate, manual, later
  * decision.
  */
 export async function checkPaymentClaimIncomplete(supabase) {
@@ -197,13 +197,13 @@ export async function checkPaymentClaimIncomplete(supabase) {
   return {
     check: 'PAYMENT_CLAIM_INCOMPLETE',
     note:
-      'Deterministic evidence that processing is incomplete for this event. Does NOT prove whether the crash was before or after the legacy total_months_paid increment. Manual review only — never auto-repaired, never auto-incremented, the payment_claims row is never auto-deleted/released/retried.',
+      'Deterministic evidence that processing is incomplete for this event. Does NOT prove whether the crash was before or after the legacy total_months_paid increment. Manual review only - never auto-repaired, never auto-incremented, the payment_claims row is never auto-deleted/released/retried.',
     count: flagged.length,
     items: flagged,
   };
 }
 
-/** Check #5 — a dashboard cancellation request never mirrored into cancellation_requests. */
+/** Check #5 - a dashboard cancellation request never mirrored into cancellation_requests. */
 export async function checkCancellationMirror(supabase) {
   const { data: leadsWithCancel, error: leadsError } = await supabase
     .from('leads')
@@ -231,7 +231,7 @@ export async function checkCancellationMirror(supabase) {
   const flagged = [];
   for (const lead of leadsWithCancel || []) {
     const customerId = customerIdBySessionId.get(lead.stripe_session_id);
-    if (!customerId) continue; // no customers row at all — check #1's gap, not this one's
+    if (!customerId) continue; // no customers row at all - check #1's gap, not this one's
     if (!customersWithOpenRequest.has(customerId)) {
       flagged.push({ lead_id: lead.lead_id, customer_id: customerId, cancel_requested_at: lead.cancel_requested_at });
     }
