@@ -19,7 +19,7 @@ export const INDIA_PLANS: Record<IndiaPlan, {
   perMonth: string;        // effective monthly price, for comparison
   months: number;
 }> = {
-  quarterly: { label: 'Quarterly', amount: 10,  display: '₹10',  period: 'for 3 months',  perMonth: '₹10 test', months: 3 }, // TEMPORARY ₹10 TEST - restore 7999 / '₹7,999' / '₹2,666/month'
+  quarterly: { label: 'Quarterly', amount: 7999,  display: '₹7,999',  period: 'for 3 months',  perMonth: '₹2,666/month', months: 3 },
   yearly:    { label: 'Yearly',    amount: 14999, display: '₹14,999', period: 'for 12 months', perMonth: '₹1,250/month', months: 12 },
 };
 

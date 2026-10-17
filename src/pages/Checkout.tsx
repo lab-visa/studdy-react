@@ -51,7 +51,8 @@ export default function Checkout() {
    * for the whole site, and changed by the same dropdown everywhere. */
   const { region, setRegion, detectedRegion, isIndia, ready } = useMarket();
   const [plan,    setPlan]    = useState<Plan>(passedPlan);
-  const indiaPlan: IndiaPlan = (location.state as { plan?: string } | null)?.plan === 'quarterly' ? 'quarterly' : 'yearly';
+  /* India plan from the homepage (state) or a link like /checkout?plan=quarterly (WhatsApp follow-ups). */
+  const indiaPlan: IndiaPlan = ((location.state as { plan?: string } | null)?.plan ?? new URLSearchParams(location.search).get('plan')) === 'quarterly' ? 'quarterly' : 'yearly';
 
   /* An explicit region carried over from the Pricing section wins. */
   useEffect(() => {

@@ -63,6 +63,7 @@ export function paymentFieldsFromWebhook(event) {
 export async function markOrderPaid(supabase, orderId, payment = {}) {
   const order = await loadOrder(supabase, orderId);
   if (!order) return null;
+  if (order.status === 'test') return order; // admin marked it a test order - never touch again
   if (order.status === 'paid' || order.status === 'refunded') {
     /* Already paid (e.g. the dashboard confirmed it first): still keep the
        richer webhook details if we didn't have them yet. */
@@ -106,7 +107,7 @@ function paymentColumns(payment, order) {
 /** A failed / abandoned attempt: count it and keep Cashfree's reason. Never downgrades a paid order. */
 export async function markOrderFailed(supabase, orderId, payment = {}) {
   const order = await loadOrder(supabase, orderId);
-  if (!order || order.status === 'paid' || order.status === 'refunded') return;
+  if (!order || order.status === 'paid' || order.status === 'refunded' || order.status === 'test') return;
   const { error } = await supabase
     .from('india_orders')
     .update({

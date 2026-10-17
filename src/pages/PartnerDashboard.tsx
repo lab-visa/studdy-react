@@ -556,7 +556,10 @@ export default function PartnerDashboard() {
                         <div className="min-w-0">
                           <div className="font-bold text-[14px] truncate">{s.customer}</div>
                           <div className="text-[12px]" style={{ color: 'var(--soft)' }}>
-                            {day(s.paid_at)} · {s.plan === 'yearly' ? 'Yearly' : 'Quarterly'} {inr(s.amount)} · {s.state === 'refunded' ? 'refunded' : `paid on ${day(s.payout_on)}`}
+                            {day(s.paid_at)} · {s.plan === 'yearly' ? 'Yearly' : 'Quarterly'} {inr(s.amount)} · {s.state === 'refunded' ? 'refunded' : (() => {
+                              const po = data.payouts.find(p => p.month === istDate(s.paid_at).slice(0, 7));
+                              return po ? `paid ${day(po.paid_on)} · UTR ${po.utr}` : `payout on ${day(s.payout_on)}`;
+                            })()}
                           </div>
                         </div>
                       </div>
