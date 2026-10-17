@@ -21,6 +21,7 @@ const CustomerSubscription = lazy(() => import('./pages/admin/CustomerSubscripti
 const AdminPartners   = lazy(() => import('./pages/admin/AdminPartners'));
 const PartnersPage    = lazy(() => import('./pages/Partners'));
 const PartnerDashboard = lazy(() => import('./pages/PartnerDashboard'));
+const ThankYou        = lazy(() => import('./pages/ThankYou'));
 
 function LoadingFallback() {
   return (
@@ -164,6 +165,7 @@ function AppRoutes() {
           <Route path="/admin/partners"  element={<AdminPartners />} />
           <Route path="/partners"        element={<PartnersPage />} />
           <Route path="/partner"         element={<PartnerDashboard />} />
+          <Route path="/thank-you"       element={<ThankYou />} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>
