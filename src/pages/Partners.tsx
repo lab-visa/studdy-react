@@ -55,7 +55,7 @@ const FAQ = [
   { q: 'Is there any fee to join?', a: 'No. Joining is completely free and we will never ask you for money.' },
   { q: 'Who can I sell to?', a: 'Anyone who wants to learn: school students and their parents, students preparing for boards, JEE, NEET or CUET, college and PG students, and working professionals learning new skills.' },
   { q: 'How do you know a sale is mine?', a: 'Every purchase made through your personal link is credited to you automatically, and shows up on your dashboard. A customer can also type your partner code at checkout.' },
-  { q: 'When and how am I paid?', a: 'On the 10th of every month, for all of the previous month’s sales, by bank transfer. Add your bank details and PAN in your dashboard before your first payout.' },
+  { q: 'When and how am I paid?', a: 'On the 10th of every month, for all of the previous month’s sales, by bank transfer. Add your bank details, PAN and masked Aadhaar (for KYC) in your dashboard before your first payout.' },
   { q: 'What if a customer asks for a refund?', a: 'Customers can ask for a full refund within 7 days. No commission is paid on a refunded sale. Payouts happen after that window, so what you see as payable is final.' },
   { q: 'Is TDS deducted?', a: 'Yes, as required by Indian tax law. Every payout statement shows the amount, the TDS and the net amount paid.' },
   { q: 'Can I do this alongside my job or studies?', a: 'Yes. There are no fixed hours and no targets. Many partners share their link in the evenings or on weekends.' },

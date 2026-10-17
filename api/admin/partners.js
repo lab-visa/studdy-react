@@ -2,7 +2,9 @@
  * /api/admin/partners  (admin only)
  *
  * GET   → every application/partner, newest first, with sales + earnings.
- * PATCH → body { id, action: 'approve'|'reject'|'pause'|'resume'|'reset_pin'|'delete', notes?, pan?, payoutUpi? }
+ * PATCH → body { id, action: 'approve'|'reject'|'pause'|'resume'|'reset_pin'|'delete'|'doc_url'|'details_checked', notes?, pan?, payoutUpi? }
+ *         'doc_url' + kind ('pan'|'aadhaar_front'|'aadhaar_back') returns a 5-minute private link to that photo.
+ *         'details_checked' records that you compared the PAN photo with the bank name.
  *         'approve' gives the partner a referral code (created once, never changed).
  *         'reset_pin' sets a random temporary PIN (returned ONCE as tempPin,
  *           for the admin to send on WhatsApp), logs the partner out
@@ -14,6 +16,7 @@ import { getSupabase } from '../_lib/supabase.js';
 import { requireAdminSession, isSameOriginRequest } from '../_lib/admin-auth.js';
 import { computeEarnings, makePartnerCode } from '../_lib/partners.js';
 import { pinFields, temporaryPin, revokeAllPartnerSessions } from '../_lib/partner-auth.js';
+import { detailsComplete, storageOf, DOC_KINDS, DOC_LABELS } from '../_lib/partner-payouts.js';
 
 const ACTIONS = { approve: 'approved', reject: 'rejected', pause: 'paused', resume: 'approved' };
 
@@ -42,7 +45,12 @@ export default async function handler(req, res, deps = {}) {
           experience: p.experience, why_join: p.why_join, status: p.status, code: p.code,
           has_pin: Boolean(p.pin_hash), pin_must_change: Boolean(p.pin_must_change),
           locked: Boolean(p.locked_until && new Date(p.locked_until) > now), last_login_at: p.last_login_at,
-          sales_ever: orders.filter((o) => o.ref_code === p.code).length, pan: p.pan, payout_upi: p.payout_upi, notes: p.notes,
+          sales_ever: orders.filter((o) => o.ref_code === p.code).length, pan: p.pan,
+          bank_holder: p.bank_holder, bank_account: p.bank_account, bank_ifsc: p.bank_ifsc, bank_name: p.bank_name,
+          bank_branch: p.bank_branch, has_pan_photo: Boolean(p.pan_photo_path),
+          aadhaar_last4: p.aadhaar_last4, has_aadhaar_front: Boolean(p.aadhaar_front_path), has_aadhaar_back: Boolean(p.aadhaar_back_path),
+          aadhaar_consent_at: p.aadhaar_consent_at, details_complete: detailsComplete(p),
+          details_updated_at: p.payout_details_updated_at, details_checked_at: p.payout_details_checked_at, payout_upi: p.payout_upi, notes: p.notes,
           applied_at: p.applied_at, approved_at: p.approved_at,
           totals: e.totals, this_month: e.months[0] || null,
         };
@@ -61,7 +69,8 @@ export default async function handler(req, res, deps = {}) {
 
     const { id, action, notes, pan, payoutUpi } = req.body || {};
     if (!id) return res.status(400).json({ error: 'id is required' });
-    if (action && !ACTIONS[action] && action !== 'reset_pin' && action !== 'delete') return res.status(400).json({ error: 'Unknown action' });
+    const EXTRA = ['reset_pin', 'delete', 'doc_url', 'details_checked'];
+    if (action && !ACTIONS[action] && !EXTRA.includes(action)) return res.status(400).json({ error: 'Unknown action' });
 
     try {
       const { data: p, error } = await supabase.from('partners').select('*').eq('id', id).maybeSingle();
@@ -77,6 +86,22 @@ export default async function handler(req, res, deps = {}) {
         return res.status(200).json({ ok: true, tempPin });
       }
 
+      if (action === 'doc_url') {
+        const col = DOC_KINDS[req.body?.kind];
+        if (!col) return res.status(400).json({ error: 'Unknown document' });
+        if (!p[col]) return res.status(404).json({ error: `No ${DOC_LABELS[req.body.kind]} photo uploaded yet.` });
+        const { data, error: sErr } = await storageOf(supabase, deps).createSignedUrl(p[col], 300);
+        if (sErr) throw sErr;
+        return res.status(200).json({ url: data.signedUrl });
+      }
+
+      if (action === 'details_checked') {
+        const now = new Date().toISOString();
+        const { error: uErr } = await supabase.from('partners').update({ payout_details_checked_at: now, updated_at: now }).eq('id', id);
+        if (uErr) throw uErr;
+        return res.status(200).json({ ok: true });
+      }
+
       if (action === 'delete') {
         if (p.code) {
           const { count, error: cErr } = await supabase.from('india_orders')
@@ -86,6 +111,8 @@ export default async function handler(req, res, deps = {}) {
         }
         const { error: dErr } = await supabase.from('partners').delete().eq('id', id);
         if (dErr) throw dErr;
+        const docs = Object.values(DOC_KINDS).map((c) => p[c]).filter(Boolean);
+        if (docs.length) await storageOf(supabase, deps).remove(docs).catch(() => {});
         return res.status(200).json({ ok: true, deleted: true });
       }
 

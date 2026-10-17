@@ -6,6 +6,7 @@
  */
 import { getSupabase } from '../_lib/supabase.js';
 import { getLoggedInPartner } from '../_lib/partner-auth.js';
+import { publicDetails, getTdsRate } from '../_lib/partner-payouts.js';
 import { computeEarnings, COMMISSION, MONTHLY_BONUS, REFUND_WINDOW_DAYS, PAYOUT_DAY } from '../_lib/partners.js';
 
 export default async function handler(req, res, deps = {}) {
@@ -24,12 +25,20 @@ export default async function handler(req, res, deps = {}) {
     if (oErr) throw oErr;
 
     const earnings = computeEarnings(orders || [], deps.now || new Date());
+    const { data: payouts, error: pErr } = await supabase.from('partner_payouts')
+      .select('month, sales, commission, bonus, gross, tds_rate, tds, net, utr, paid_on')
+      .eq('partner_id', partner.id).order('month', { ascending: false });
+    if (pErr) throw pErr;
+    const tdsRate = await getTdsRate(supabase);
     return res.status(200).json({
       name: partner.name,
       phone: partner.phone,
       email: partner.email,
       code: partner.code,
       mustChangePin: Boolean(partner.pin_must_change),
+      payoutDetails: publicDetails(partner),
+      payouts: payouts || [],
+      tdsRate,
       status: partner.status,
       rules: { commission: COMMISSION, monthlyBonus: MONTHLY_BONUS, refundWindowDays: REFUND_WINDOW_DAYS, payoutDay: PAYOUT_DAY },
       ...earnings,
