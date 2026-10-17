@@ -10,8 +10,8 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import { useAdminSession, adminFetch } from '../../components/admin/useAdminSession';
 
 interface Customer { market: 'India' | 'International'; id: string; name: string | null; contact: string | null; plan: string | null; until: string | null; expired: boolean; partner?: string | null; status?: string }
-interface Login { id: string; groupName: string; studdyEmail: string | null; studdyUrl: string | null; capacity: number; used: number; free: number; customers: Customer[]; expiredHoldingSeat: number }
-interface Data { rows: Login[]; totals: { logins: number; capacity: number; used: number; free: number }; lowSeats: number }
+interface Login { id: string; createdAt: string; groupName: string; studdyEmail: string | null; studdyUrl: string | null; capacity: number; used: number; free: number; customers: Customer[]; expiredHoldingSeat: number }
+interface Data { rows: Login[]; nextName: string; totals: { logins: number; capacity: number; used: number; free: number }; lowSeats: number }
 
 export default function AdminStuddyLogins() {
   const location = useLocation();
@@ -20,6 +20,7 @@ export default function AdminStuddyLogins() {
   const [error, setError] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState('');
   const [form, setForm] = useState({ groupName: '', studdyEmail: '', studdyPassword: '', studdyUrl: 'https://studdyai.com/sign-in', maxCapacity: '40' });
 
   const load = useCallback(() => { adminFetch('/api/admin/studdy-logins').then(setData).catch(e => setError(e.message)); }, []);
@@ -51,7 +52,7 @@ export default function AdminStuddyLogins() {
   const low = data && data.totals.free < data.lowSeats;
 
   return (
-    <AdminLayout currentPath={location.pathname} pageTitle="Studdy Logins" pageSubtitle="Seats used and free on each Studdy login"
+    <AdminLayout currentPath={location.pathname} pageTitle="Studdy Logins" pageSubtitle="Seats used and free on each login. New customers fill the oldest login first."
       displayName={displayName} onLogout={logout} loggingOut={loggingOut}>
       {error && <div className="rounded-xl p-3 mb-4 text-[13px]" style={{ color: '#dc2626', border: '1px solid rgba(239,68,68,.3)' }}>{error}</div>}
       {low && (
@@ -72,7 +73,14 @@ export default function AdminStuddyLogins() {
       )}
 
       <div className="mb-4">
-        {!adding ? <button className={btn} style={{ background: 'var(--ink)', color: 'var(--dim)' }} onClick={() => setAdding(true)}>+ Add a Studdy login</button> : (
+        {!adding ? (
+          <div className="flex flex-wrap gap-2 items-center">
+            <button className={btn} style={{ background: 'var(--ink)', color: 'var(--dim)' }} onClick={() => { setForm(f => ({ ...f, groupName: data?.nextName || f.groupName })); setAdding(true); }}>+ Add a Studdy login</button>
+            {data && <span className="text-[12.5px]" style={{ color: 'var(--soft)' }}>Next name: <b style={{ color: 'var(--ink)' }}>{data.nextName}</b> · last added: <b style={{ color: 'var(--ink)' }}>{data.rows[0]?.groupName || '-'}</b></span>}
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a customer: name, phone or email"
+              className="ml-auto text-[13px] px-3 py-1.5 rounded-lg min-w-[260px]" style={ist} />
+          </div>
+        ) : (
           <form onSubmit={add} className="rounded-2xl p-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end" style={box}>
             <label className="text-[12px] font-bold" style={{ color: 'var(--soft)' }}>Name<input className={input} style={ist} value={form.groupName} onChange={e => setForm({ ...form, groupName: e.target.value })} placeholder="Group 2" /></label>
             <label className="text-[12px] font-bold" style={{ color: 'var(--soft)' }}>Studdy email<input className={input} style={ist} value={form.studdyEmail} onChange={e => setForm({ ...form, studdyEmail: e.target.value })} type="email" autoComplete="off" /></label>
@@ -86,6 +94,20 @@ export default function AdminStuddyLogins() {
 
       {!data ? <p style={{ color: 'var(--soft)' }}>Loading…</p> : (
         <div className="space-y-3">
+          {q.trim() && (() => {
+            const n = q.trim().toLowerCase();
+            const hits = data.rows.flatMap(l => l.customers.filter(c => [c.name, c.contact].some(v => (v || '').toLowerCase().includes(n))).map(c => ({ c, l })));
+            return (
+              <div className="rounded-2xl p-4" style={{ border: '1.5px solid var(--g3, #8C79E0)' }}>
+                <div className="font-black text-[14px] mb-2">{hits.length} customer(s) found</div>
+                {hits.map(({ c, l }) => (
+                  <div key={c.id} className="text-[13px] py-1" style={{ borderTop: '1px solid var(--border)' }}>
+                    <b>{c.name || '-'}</b> · {c.contact} · {c.market} → on <b>{l.groupName}</b> ({l.studdyEmail}){c.expired ? ' · access expired' : ''}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           {data.rows.map(l => {
             const pct = l.capacity ? Math.min(100, (l.used / l.capacity) * 100) : 100;
             const color = pct >= 100 ? '#dc2626' : pct >= 80 ? '#f59e0b' : '#16a34a';
@@ -94,7 +116,7 @@ export default function AdminStuddyLogins() {
                 <div className="flex flex-wrap justify-between gap-3 items-start">
                   <div>
                     <div className="font-black text-[15px]">{l.groupName}</div>
-                    <div className="text-[12.5px]" style={{ color: 'var(--soft)' }}>{l.studdyEmail} · {l.studdyUrl}</div>
+                    <div className="text-[12.5px]" style={{ color: 'var(--soft)' }}>{l.studdyEmail} · added {new Date(l.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
                   </div>
                   <div className="flex gap-2">
                     <button className={btn} style={box} onClick={() => setCap(l)}>Seat limit: {l.capacity}</button>
