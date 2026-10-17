@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, MessageCircle, ShieldCheck, RotateCcw, Mail, Sparkles, Clock, KeyRound, type LucideIcon } from 'lucide-react';
 import { INDIA_PLANS, INDIA_REFUND_DAYS } from '../data/india';
-import { SUPPORT_WHATSAPP_NUMBER, SUPPORT_EMAIL, LEGAL_ENTITY } from '../data/config';
+import { SUPPORT_WHATSAPP_NUMBER, SUPPORT_EMAIL } from '../data/config';
 import { track } from '../utils/analytics';
 
 const TRY_FIRST = [
@@ -125,7 +125,7 @@ export default function ThankYou() {
             Welcome to <span className="grad-text">Studdy Lab</span>. You’re in!
           </h1>
           <p className="mt-4 text-[16px] sm:text-[18px] leading-relaxed mx-auto max-w-[600px]" style={{ color: 'var(--soft)' }}>
-            Thank you for trusting us. Your AI tutor that explains every doubt, at any hour, is being set up for you right now.
+            Your {planName} plan is confirmed. We’re setting up your personal AI tutor now: any subject, any doubt, any time.
           </p>
         </section>
 
@@ -147,10 +147,10 @@ export default function ThankYou() {
                     <Icon size={18} strokeWidth={2.5} />
                   </span>
                   <div className="pt-1.5 min-w-0">
-                    <div className="font-black text-[15.5px]" style={{ color: 'var(--ink)' }}>
-                      {title}
-                      {state === 'now' && <span className="ml-2 align-middle text-[11px] font-black px-2 py-0.5 rounded-full" style={{ background: 'rgba(199,101,199,.12)', color: '#c4278c' }}>In progress</span>}
-                    </div>
+                    {state === 'now' && (
+                      <span className="inline-block whitespace-nowrap text-[10.5px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full mb-1" style={{ background: 'rgba(199,101,199,.12)', color: '#c4278c' }}>In progress</span>
+                    )}
+                    <div className="font-black text-[15.5px]" style={{ color: 'var(--ink)' }}>{title}</div>
                     <p className="text-[14px] mt-0.5 leading-relaxed" style={{ color: 'var(--soft)' }}>{line}</p>
                   </div>
                 </li>
@@ -211,7 +211,7 @@ export default function ThankYou() {
         </div>
 
         <p className="text-center text-[12px] mt-10" style={{ color: 'var(--soft)' }}>
-          Studdy Lab is a brand of {LEGAL_ENTITY}. · <Link to="/terms" className="underline">Terms</Link> · <Link to="/contact" className="underline">Contact</Link>
+          Built with ❤️ for learners everywhere. · <Link to="/terms" className="underline">Terms</Link> · <Link to="/contact" className="underline">Contact</Link>
         </p>
       </main>
 
