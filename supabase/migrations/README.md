@@ -31,6 +31,7 @@ This directory was not previously committed to GitHub (confirmed absent in CRM-0
 | 0024 | `partner_payouts.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Partner bank details + PAN photo path on `partners`, `partner_payouts` (paid months with TDS + UTR), `settings.partner_tds_rate` (10), private storage bucket `partner-docs`. Additive and idempotent. |
 | 0025 | `partner_aadhaar_kyc.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Partner KYC per CA: `aadhaar_last4` (DB-enforced 4 digits only, never the full number), masked Aadhaar front/back photo paths (private bucket), `aadhaar_consent_at`. Additive and idempotent. |
 | 0026 | `india_sales_admin.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Full Cashfree payment details on `india_orders` (amount received, UTR, method detail, message, raw verified payload, failed attempts) + `seat_released_at`, `refund_note`. Additive and idempotent. |
+| 0027 | `india_test_orders.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | `india_orders.marked_test_at`; "Mark as test order" sets status `test`, excluded from sales, commission, payouts and seats. Additive and idempotent. |
 
 ## Production execution order — migrations 0012–0019 are all applied
 

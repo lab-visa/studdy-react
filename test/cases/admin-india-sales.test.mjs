@@ -211,3 +211,66 @@ test('Mark refunded: commission drops to 0 in admin and the seat is freed', asyn
   assert.equal(ryan.kyc_status, 'none');
   assert.equal(ryan.orders.length, 2);
 });
+
+/* ---------- customer states (funnel) ---------- */
+import { classify } from '../../api/admin/india-sales.js';
+
+test('states: unpaid attempt then paid = ONE sale (retried hidden); never-paid = abandoned after 1 hour; same number paying twice = two sales + double warning', () => {
+  const NOW = new Date('2026-10-20T12:00:00Z');
+  const at = (h) => new Date(NOW - h * 3600000).toISOString();
+  const end = (days) => new Date(NOW.getTime() + days * 86400000).toISOString();
+  const orders = [
+    { order_id: 'a1', status: 'created', customer_phone: '9000000001', created_at: at(5) },                       // retried
+    { order_id: 'a2', status: 'paid', customer_phone: '9000000001', created_at: at(4.9), paid_at: at(4.9), group_name: 'G', access_end: end(90) },
+    { order_id: 'b1', status: 'failed', customer_phone: '9000000002', created_at: at(3) },                        // abandoned
+    { order_id: 'c1', status: 'created', customer_phone: '9000000003', created_at: at(0.2) },                     // still in checkout
+    { order_id: 'd1', status: 'paid', customer_phone: '9000000004', created_at: at(10), paid_at: at(10), group_name: 'G', access_end: end(90) },
+    { order_id: 'd2', status: 'paid', customer_phone: '9000000004', created_at: at(9), paid_at: at(9), group_name: 'G', access_end: end(365) },
+    { order_id: 'e1', status: 'paid', customer_phone: '9000000005', created_at: at(2000), paid_at: at(2000), group_name: 'G', access_end: end(3) }, // expiring
+    { order_id: 'f1', status: 'paid', customer_phone: '9000000006', created_at: at(3000), paid_at: at(3000), group_name: 'G', access_end: end(-1) }, // expired
+    { order_id: 'g1', status: 'paid', customer_phone: '9000000007', created_at: at(1), paid_at: at(1), group_name: null, access_end: end(90) },     // waiting
+    { order_id: 'h1', status: 'paid', customer_phone: '9000000008', created_at: at(1), paid_at: at(1), group_name: null, seat_released_at: at(0.5), access_end: end(90) },
+    { order_id: 'i1', status: 'test', customer_phone: '9000000009', created_at: at(1) },
+  ];
+  const { state, earlier, doubles } = classify(orders, NOW);
+  assert.deepEqual(Object.fromEntries(state), {
+    a1: 'retried', a2: 'active', b1: 'abandoned', c1: 'checkout', d1: 'active', d2: 'active',
+    e1: 'expiring', f1: 'expired', g1: 'waiting', h1: 'released', i1: 'test',
+  });
+  assert.equal(earlier.get('a2'), 1);
+  assert.deepEqual([...doubles].sort(), ['d1', 'd2']);
+});
+
+test('Mark as test order: out of sales, partner commission and seats; customer dashboard shows access ended', async () => {
+  const id = await newOrder({ ref: 'RYAN859' });
+  await sendWebhook(upiSuccess(id));
+  const beforeSeats = (await pool.query(`SELECT active_customer_count FROM studdy_accounts WHERE group_name='Group 1'`)).rows[0].active_customer_count;
+  const before = fakeRes();
+  await indiaSales(fakeReq({ method: 'GET', headers: admin, query: {} }), before, deps);
+
+  const r = fakeRes();
+  await indiaSales(fakeReq({ method: 'POST', headers: admin, body: { orderId: id, action: 'mark_test', note: '₹10 test' } }), r, deps);
+  assert.equal(r.statusCode, 200);
+  const { rows: [o] } = await pool.query('SELECT status, group_name, marked_test_at FROM india_orders WHERE order_id=$1', [id]);
+  assert.equal(o.status, 'test');
+  assert.equal(o.group_name, null);
+  assert.ok(o.marked_test_at);
+  assert.equal((await pool.query(`SELECT active_customer_count FROM studdy_accounts WHERE group_name='Group 1'`)).rows[0].active_customer_count, beforeSeats - 1);
+
+  const after = fakeRes();
+  await indiaSales(fakeReq({ method: 'GET', headers: admin, query: {} }), after, deps);
+  assert.equal(after._json.totals.sales, before._json.totals.sales - 1);
+  assert.equal(after._json.rows.some(x => x.orderId === id), false); // hidden by default
+  const tests = fakeRes();
+  await indiaSales(fakeReq({ method: 'GET', headers: admin, query: { state: 'test' } }), tests, deps);
+  assert.equal(tests._json.rows.some(x => x.orderId === id), true);
+
+  const dash = fakeRes();
+  await indiaSession(fakeReq({ query: { order_id: id } }), dash, deps);
+  assert.equal(dash._json.accessEnded, true);
+  assert.equal(dash._json.studdyPassword, '');
+
+  /* A late duplicate webhook can never turn it back into a sale. */
+  await sendWebhook(upiSuccess(id));
+  assert.equal((await pool.query('SELECT status FROM india_orders WHERE order_id=$1', [id])).rows[0].status, 'test');
+});

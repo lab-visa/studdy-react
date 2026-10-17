@@ -30,7 +30,7 @@ export default async function handler(req, res, deps = {}) {
     let order = await loadOrder(supabase, orderId);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    if (order.status !== 'paid' && order.status !== 'refunded') {
+    if (order.status !== 'paid' && order.status !== 'refunded' && order.status !== 'test') {
       try {
         const cfg = (deps.cashfreeConfig || cashfreeConfig)();
         const cf = await getCashfreeOrder(cfg, orderId, deps.fetch);
@@ -42,7 +42,7 @@ export default async function handler(req, res, deps = {}) {
       order = await assignSeatIfNeeded(supabase, orderId);
     }
 
-    if (order.status !== 'paid' && order.status !== 'refunded') {
+    if (order.status !== 'paid' && order.status !== 'refunded' && order.status !== 'test') {
       return res.status(200).json({
         market: 'in',
         paymentStatus: order.status === 'failed' ? 'failed' : 'pending',
@@ -74,7 +74,7 @@ export default async function handler(req, res, deps = {}) {
       name: order.customer_name || '',
       email: order.customer_email || '',
       plan: INDIA_PLANS[order.plan]?.label || order.plan,
-      status: order.status === 'refunded' ? 'Refunded' : order.seat_released_at ? 'Access ended' : 'Active',
+      status: order.status === 'refunded' ? 'Refunded' : order.status === 'test' || order.seat_released_at ? 'Access ended' : 'Active',
       amount: inr(order.amount),
       paidOn: fmtDate(order.paid_at),
       accessUntil: fmtDate(order.access_end),
@@ -88,7 +88,7 @@ export default async function handler(req, res, deps = {}) {
       latestInvoiceUrl: null,
       cancelRequestedAt: null,
       accessPending: order.status === 'paid' && !order.seat_released_at && (!studdyEmail || !studdyPassword),
-      accessEnded: order.status === 'refunded' || Boolean(order.seat_released_at),
+      accessEnded: order.status === 'refunded' || order.status === 'test' || Boolean(order.seat_released_at),
     });
   } catch (err) {
     console.error('india-session error:', err);

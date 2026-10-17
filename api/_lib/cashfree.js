@@ -17,7 +17,7 @@ export const CASHFREE_API_VERSION = '2023-08-01';
  * amount always comes from here, so nobody can change the price by
  * editing the page. Keep in sync with src/data/india.ts (display only). */
 export const INDIA_PLANS = {
-  quarterly: { amount: 10, months: 3, label: 'Quarterly (3 months)' }, // TEMPORARY ₹10 TEST (Oct 17, 2026) - restore 7999
+  quarterly: { amount: 7999, months: 3, label: 'Quarterly (3 months)' },
   yearly: { amount: 14999, months: 12, label: 'Yearly (12 months)' },
 };
 
