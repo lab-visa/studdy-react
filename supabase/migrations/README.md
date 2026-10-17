@@ -27,6 +27,7 @@ This directory was not previously committed to GitHub (confirmed absent in CRM-0
 | 0019 | `restrict_rls_auto_enable.sql` | **APPLIED — confirmed in production Sep 6, 2026** | Verified via read-only production query: `public.rls_auto_enable()`'s ACL is now `{postgres=X/postgres,service_role=X/postgres}` — EXECUTE is no longer granted to PUBLIC, `anon`, or `authenticated`, and remains granted to `service_role`/owner exactly as the migration specifies. No further action. |
 | 0021 | `india_orders.sql` | **APPLIED — run by Vish in production Oct 14, 2026** | Creates the `india_orders` table (one row per Cashfree order; RLS on, server-only). Partner earnings read from it. Additive and idempotent. |
 | 0022 | `partners.sql` | **APPLIED — run by Vish in production Oct 14, 2026 (partner sign-ups working)** | Creates the `partners` table (referral `code`, private `dashboard_token`, PAN/UPI). RLS on, server-only. Additive and idempotent. |
+| 0023 | `partner_login.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Partner login: PIN hash/salt, temporary-PIN flag, lockout columns on `partners`; new `partner_sessions` table (token hashes only). RLS on. Additive and idempotent. |
 
 ## Production execution order — migrations 0012–0019 are all applied
 

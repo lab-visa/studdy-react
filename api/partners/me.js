@@ -1,32 +1,20 @@
 /**
- * GET /api/partners/me?t=<dashboard_token>
+ * GET /api/partners/me   (needs the partner login cookie)
  *
- * A partner's private earnings page data. The long random token in their
- * link is the access key (same no-password design as the customer
- * dashboard). Customer details are masked - partners see first name,
+ * The logged-in partner's earnings page data. Customer details are masked - partners see first name,
  * last initial and the last 4 digits of the phone only.
  */
 import { getSupabase } from '../_lib/supabase.js';
+import { getLoggedInPartner } from '../_lib/partner-auth.js';
 import { computeEarnings, COMMISSION, MONTHLY_BONUS, REFUND_WINDOW_DAYS, PAYOUT_DAY } from '../_lib/partners.js';
 
-const TOKEN_RE = /^[a-f0-9]{48}$/;
-
 export default async function handler(req, res, deps = {}) {
-  const token = req.query?.t;
-  if (typeof token !== 'string' || !TOKEN_RE.test(token)) return res.status(404).json({ error: 'Link not found' });
   res.setHeader('Cache-Control', 'private, no-store');
 
   const supabase = (deps.getSupabase || getSupabase)();
   try {
-    const { data: partner, error } = await supabase
-      .from('partners')
-      .select('*')
-      .eq('dashboard_token', token)
-      .maybeSingle();
-    if (error) throw error;
-    if (!partner || !partner.code || (partner.status !== 'approved' && partner.status !== 'paused')) {
-      return res.status(404).json({ error: 'Link not found' });
-    }
+    const partner = await getLoggedInPartner(req, supabase);
+    if (!partner || !partner.code) return res.status(401).json({ error: 'Please log in' });
 
     const { data: orders, error: oErr } = await supabase
       .from('india_orders')
@@ -38,7 +26,10 @@ export default async function handler(req, res, deps = {}) {
     const earnings = computeEarnings(orders || [], deps.now || new Date());
     return res.status(200).json({
       name: partner.name,
+      phone: partner.phone,
+      email: partner.email,
       code: partner.code,
+      mustChangePin: Boolean(partner.pin_must_change),
       status: partner.status,
       rules: { commission: COMMISSION, monthlyBonus: MONTHLY_BONUS, refundWindowDays: REFUND_WINDOW_DAYS, payoutDay: PAYOUT_DAY },
       ...earnings,
