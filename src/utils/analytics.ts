@@ -8,7 +8,9 @@ type EventName =
   | 'checkout_started'
   | 'checkout_completed'
   | 'dashboard_opened'
-  | 'whatsapp_support_click';
+  | 'whatsapp_support_click'
+  | 'payment_form_thank_you'
+  | 'thank_you_whatsapp_click';
 
 export function track(event: EventName, props?: Record<string, unknown>) {
   // Replace with GA4 / Meta Pixel calls when ready
