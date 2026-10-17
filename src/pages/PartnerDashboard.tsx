@@ -259,7 +259,7 @@ function PayoutDetailsForm({ details, onSaved }: { details: Details; onSaved: (d
             </div>
             <label className="flex gap-2.5 items-start mt-4 text-[12.5px] leading-snug" style={{ color: 'var(--soft)' }}>
               <input type="checkbox" checked={f.aadhaarConsent} onChange={e => setF(x => ({ ...x, aadhaarConsent: e.target.checked }))} className="mt-0.5 w-4 h-4 accent-[#8C79E0] flex-shrink-0" />
-              <span>I consent to Unischooly (Studdy Lab) collecting my masked Aadhaar card copy and the last 4 digits of my Aadhaar number, only for KYC and my partner agreement. It will not be shared or used for anything else.</span>
+              <span>I consent to Studdy Lab collecting my masked Aadhaar card copy and the last 4 digits of my Aadhaar number, only for KYC and my partner agreement. It will not be shared or used for anything else.</span>
             </label>
             <p className="text-[12px] mt-3" style={{ color: 'var(--soft)' }}>
               PAN is required by law for TDS (without it, TDS is 20%). We never ask for your full Aadhaar number.
