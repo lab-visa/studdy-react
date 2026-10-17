@@ -30,6 +30,10 @@ export default function IndiaCheckout({ initialPlan }: { initialPlan: IndiaPlan 
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /* Partner code: from their ?ref= link (already applied), or typed here. */
+  const [savedRef] = useState(() => getRefCode());
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [code, setCode] = useState('');
   const p = INDIA_PLANS[plan];
 
   const handleContinue = async () => {
@@ -48,7 +52,8 @@ export default function IndiaCheckout({ initialPlan }: { initialPlan: IndiaPlan 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan, name: name.trim(), email: email.trim(), phone: digits,
-          leadId: getLeadId(), campaign: getCampaignCode(), ref: getRefCode(),
+          leadId: getLeadId(), campaign: getCampaignCode(),
+          ref: code.trim() ? code.trim() : savedRef, refTyped: Boolean(code.trim()),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -139,9 +144,22 @@ export default function IndiaCheckout({ initialPlan }: { initialPlan: IndiaPlan 
 
             {/* Buyer details - Cashfree needs them, and the mobile number is how
               * we reach the family for onboarding and the 7-day refund. */}
-            {field('Parent / student name', name, setName, { autoComplete: 'name', placeholder: 'Your full name' })}
+            {field('Your name', name, setName, { autoComplete: 'name', placeholder: 'Your full name' })}
             {field('Email', email, setEmail, { type: 'email', autoComplete: 'email', placeholder: 'you@example.com' })}
             {field('Mobile (WhatsApp)', phone, setPhone, { type: 'tel', autoComplete: 'tel', inputMode: 'numeric', placeholder: '98765 43210' })}
+
+            {savedRef && !codeOpen ? (
+              <div className="flex items-center justify-between gap-2 mb-3 text-[12.5px]" style={{ color: 'var(--soft)' }}>
+                <span>Partner code <b style={{ color: 'var(--ink)' }}>{savedRef}</b> applied</span>
+                <button type="button" onClick={() => setCodeOpen(true)} className="underline font-semibold">Change</button>
+              </div>
+            ) : !codeOpen ? (
+              <button type="button" onClick={() => setCodeOpen(true)} className="mb-3 text-[12.5px] font-semibold underline" style={{ color: 'var(--soft)' }}>
+                Have a partner code?
+              </button>
+            ) : (
+              field('Partner code (optional)', code, v => setCode(v.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40)), { autoComplete: 'off', placeholder: 'e.g. ASHA482' })
+            )}
 
             {error && (
               <div className="rounded-xl p-3 mb-3 text-[13px]"

@@ -113,6 +113,28 @@ test('webhook signature: valid passes, tampered or missing fails', () => {
 
 /* ---------- create-order ---------- */
 
+test('partner code: unknown or own code is never credited; a wrong TYPED code is reported', async () => {
+  cfCalls = [];
+  await pool.query(`INSERT INTO partners (name, phone, email, status, code) VALUES ('Self', '9876543210', 's@example.com', 'approved', 'SELF001') ON CONFLICT DO NOTHING`);
+  const refOf = async (r) => (await pool.query('SELECT ref_code FROM india_orders WHERE order_id=$1', [r._json.orderId])).rows[0].ref_code;
+
+  const unknown = fakeRes();
+  await createOrder(req({ ...validBody, ref: 'NOBODY99' }), unknown, deps);
+  assert.equal(unknown.statusCode, 200);
+  assert.equal(await refOf(unknown), null);
+
+  const own = fakeRes();
+  await createOrder(req({ ...validBody, ref: 'self001' }), own, deps); // buyer phone 9876543210 = partner's own
+  assert.equal(own.statusCode, 200);
+  assert.equal(await refOf(own), null);
+
+  for (const ref of ['NOBODY99', 'SELF001', '!!']) {
+    const typed = fakeRes();
+    await createOrder(req({ ...validBody, ref, refTyped: true }), typed, deps);
+    assert.equal(typed.statusCode, 400, ref);
+  }
+});
+
 test('create-order rejects bad input with a clear 400', async () => {
   for (const body of [
     { ...validBody, plan: 'monthly' },
@@ -128,6 +150,7 @@ test('create-order rejects bad input with a clear 400', async () => {
 
 test('create-order uses the SERVER price, saves the order, and returns a payment session', async () => {
   cfCalls = [];
+  await pool.query(`INSERT INTO partners (name, phone, email, status, code) VALUES ('Rahul', '9811112222', 'r@example.com', 'approved', 'RAHUL01') ON CONFLICT DO NOTHING`);
   const res = fakeRes();
   await createOrder(req({ ...validBody, amount: 1, ref: 'rahul01' }), res, deps);
   assert.equal(res.statusCode, 200);
@@ -145,7 +168,7 @@ test('create-order uses the SERVER price, saves the order, and returns a payment
   assert.equal(rows[0].status, 'created');
   assert.equal(Number(rows[0].amount), 14999);
   assert.equal(rows[0].months, 12);
-  assert.equal(rows[0].ref_code, 'rahul01');
+  assert.equal(rows[0].ref_code, 'RAHUL01');
   assert.equal(rows[0].cf_order_id, '123');
 });
 

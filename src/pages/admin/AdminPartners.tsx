@@ -2,16 +2,21 @@
  * /admin/partners - sales partners. Partners self-register on /partners
  * and are active immediately; they log in with WhatsApp number + PIN.
  * Here you see their sales, reset a forgotten PIN (shown once, to send
- * on WhatsApp), add PAN/UPI, pause anyone, or delete someone with no sales.
+ * on WhatsApp), see bank details + PAN photo (private 5-minute link) and
+ * mark them checked, pay monthly payouts (Payouts tab), pause anyone, or
+ * delete someone with no sales.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
+import PartnerPayouts from '../../components/admin/PartnerPayouts';
 
 interface Partner {
   id: string; name: string; phone: string; email: string; city: string | null; occupation: string | null;
   experience: string | null; why_join: string | null; status: string; code: string | null;
   has_pin: boolean; pin_must_change: boolean; locked: boolean; last_login_at: string | null; sales_ever: number;
+  bank_holder: string | null; bank_account: string | null; bank_ifsc: string | null; bank_name: string | null; bank_branch: string | null;
+  has_pan_photo: boolean; details_complete: boolean; details_updated_at: string | null; details_checked_at: string | null;
   pan: string | null; payout_upi: string | null; notes: string | null; applied_at: string; approved_at: string | null;
   totals: { sales: number; earned: number; payable: number; pending: number; bonus: number };
 }
@@ -25,7 +30,7 @@ export default function AdminPartners() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [partners, setPartners] = useState<Partner[] | null>(null);
-  const [filter, setFilter] = useState<'all' | 'applied' | 'approved'>('approved');
+  const [filter, setFilter] = useState<'all' | 'applied' | 'approved' | 'payouts'>('approved');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
   const [tempPin, setTempPin] = useState<{ id: string; name: string; phone: string; pin: string } | null>(null);
@@ -87,6 +92,10 @@ export default function AdminPartners() {
             {' '}({(partners || []).filter(p => f === 'all' || p.status === f || (f === 'approved' && p.status === 'paused')).length})
           </button>
         ))}
+        <button onClick={() => setFilter('payouts')} className={btn}
+          style={{ background: filter === 'payouts' ? 'var(--ink)' : 'transparent', color: filter === 'payouts' ? 'var(--dim)' : 'var(--soft)', border: '1px solid var(--border)' }}>
+          Payouts{(partners || []).some(p => p.details_updated_at && !p.details_checked_at) ? ' •' : ''}
+        </button>
         <a href="/partners" target="_blank" rel="noopener noreferrer" className={btn} style={{ color: 'var(--soft)', border: '1px solid var(--border)' }}>Open public page ↗</a>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, phone, email, code, city"
           className="ml-auto text-[13px] px-3 py-1.5 rounded-lg min-w-[240px]" style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--ink)' }} />
@@ -103,7 +112,7 @@ export default function AdminPartners() {
         </div>
       )}
       {error && <div className="rounded-xl p-3 mb-4 text-[13px]" style={{ color: '#dc2626', border: '1px solid rgba(239,68,68,.3)' }}>{error}</div>}
-      {!partners ? <p style={{ color: 'var(--soft)' }}>Loading…</p> : shown.length === 0 ? (
+      {filter === 'payouts' ? <PartnerPayouts /> : !partners ? <p style={{ color: 'var(--soft)' }}>Loading…</p> : shown.length === 0 ? (
         <p className="text-[14px]" style={{ color: 'var(--soft)' }}>Nothing here yet.</p>
       ) : (
         <div className="space-y-3">
@@ -149,16 +158,34 @@ export default function AdminPartners() {
                   </div>
                 )}
                 {p.code && (
+                  <div className="mt-3 rounded-xl p-3 text-[12.5px]" style={{ background: 'var(--surface-soft, rgba(0,0,0,.03))', border: '1px solid var(--border)' }}>
+                    {p.bank_account ? (
+                      <div className="font-mono" style={{ color: 'var(--ink)' }}>
+                        {p.bank_holder} · A/c {p.bank_account} · {p.bank_ifsc}{p.bank_name ? ` · ${p.bank_name}` : ''}{p.payout_upi ? ` · UPI ${p.payout_upi}` : ''} · PAN {p.pan || '-'}
+                      </div>
+                    ) : <div style={{ color: '#b45309' }}><b>No bank details yet.</b> Payouts are held until they add them.</div>}
+                    <div className="mt-1" style={{ color: 'var(--soft)' }}>
+                      PAN photo: {p.has_pan_photo ? 'uploaded' : <b style={{ color: '#b45309' }}>missing</b>}
+                      {p.details_updated_at && <> · details {p.details_checked_at ? <b style={{ color: '#16a34a' }}>checked ✓</b> : <b style={{ color: '#b45309' }}>changed, not checked yet</b>}</>}
+                    </div>
+                  </div>
+                )}
+                {p.code && (
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => copy(p.id + 'l', link)}>{copied === p.id + 'l' ? 'Copied ✓' : `Copy sales link (${p.code})`}</button>
                     <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => resetPin(p)}>Reset PIN</button>
-                    <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => {
-                      const pan = window.prompt('PAN (for TDS)', p.pan || '');
-                      if (pan === null) return;
-                      const upi = window.prompt('UPI ID for payouts', p.payout_upi || '');
-                      if (upi === null) return;
-                      act(p.id, { pan, payoutUpi: upi });
-                    }}>PAN & UPI {p.pan ? '✓' : ''}</button>
+{p.has_pan_photo && (
+                      <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={async () => {
+                        const w = window.open('', '_blank');
+                        const d = await act(p.id, { action: 'pan_photo_url' });
+                        if (d?.url && w) w.location.href = d.url; else w?.close();
+                      }}>View PAN photo</button>
+                    )}
+                    {p.details_complete && !p.details_checked_at && (
+                      <button className={btn} style={{ background: '#16a34a', color: '#fff' }} onClick={() => {
+                        if (window.confirm(`Have you checked that the name on ${p.name}'s PAN photo matches the bank account holder "${p.bank_holder}"?`)) act(p.id, { action: 'details_checked' });
+                      }}>Mark details checked</button>
+                    )}
                     {p.sales_ever === 0 && (
                       <button className={btn} style={{ border: '1px solid rgba(239,68,68,.35)', color: '#dc2626' }} onClick={() => {
                         if (window.confirm(`Delete ${p.name} permanently? This cannot be undone.`)) act(p.id, { action: 'delete' });

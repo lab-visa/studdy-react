@@ -304,3 +304,141 @@ test('admin PAN check rejects a malformed PAN and saves a valid one', async () =
   assert.equal(good._json.partner.pan, 'ABCDE1234F');
   assert.equal(good._json.partner.payout_upi, 'priya@upi');
 });
+
+/* ---------- payout details, PAN photo, payouts ---------- */
+
+import payoutDetails from '../../api/partners/payout-details.js';
+import adminPayouts from '../../api/admin/partner-payouts.js';
+
+const uploads = [];
+const fakeStorage = { from: () => ({
+  upload: async (path) => { uploads.push(path); return { error: null }; },
+  remove: async () => ({ error: null }),
+  createSignedUrl: async (path, secs) => ({ data: { signedUrl: `https://signed.example/${path}?e=${secs}` }, error: null }),
+}) };
+const sdeps = () => ({ ...deps, storage: fakeStorage });
+const jpeg = 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from('ffd8ffe0', 'hex'), Buffer.alloc(3000, 7)]).toString('base64');
+const goodDetails = { action: 'save', holder: 'Priya Nair', account: '123456789012', account2: '123456789012', ifsc: 'sbin0001234', bankName: 'State Bank of India', upi: 'priya@okaxis', pan: 'abcde1234f' };
+
+async function priyaCookie() {
+  return cookieFrom(await post(auth, { action: 'login', phone: '9123456789', pin: '582039' }));
+}
+async function postDetails(body, cookie) {
+  const r = fakeRes();
+  await payoutDetails(fakeReq({ method: 'POST', headers: { ...H, cookie }, body }), r, sdeps());
+  return r;
+}
+
+test('payout details: validated, saved, and only shown back masked; no Aadhaar field exists', async () => {
+  const cookie = await priyaCookie();
+  for (const bad of [
+    { ...goodDetails, account2: '123456789013' }, { ...goodDetails, ifsc: 'SBIN1234' },
+    { ...goodDetails, pan: '1234' }, { ...goodDetails, upi: 'nope' }, { ...goodDetails, holder: 'P' },
+  ]) assert.equal((await postDetails(bad, cookie)).statusCode, 400, JSON.stringify(bad));
+
+  const ok = await postDetails(goodDetails, cookie);
+  assert.equal(ok.statusCode, 200, JSON.stringify(ok._json));
+  assert.equal(ok._json.details.account, '••••9012');
+  assert.equal(ok._json.details.pan, 'AB•••••34F');
+  assert.equal(ok._json.details.ifsc, 'SBIN0001234');
+  assert.equal(ok._json.details.complete, false); // PAN photo still missing
+  assert.equal(JSON.stringify(ok._json).includes('123456789012'), false);
+  assert.equal(JSON.stringify(ok._json).includes('ABCDE1234F'), false);
+
+  const cols = (await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name='partners'`)).rows.map(r => r.column_name);
+  assert.equal(cols.some(c => c.includes('aadhaar') || c.includes('aadhar')), false);
+});
+
+test('PAN photo: only real images accepted; stored privately; admin gets a 5-minute link', async () => {
+  const cookie = await priyaCookie();
+  assert.equal((await postDetails({ action: 'pan_photo', photo: 'data:image/jpeg;base64,AAAA' }, cookie)).statusCode, 400);
+  assert.equal((await postDetails({ action: 'pan_photo', photo: 'data:application/pdf;base64,' + Buffer.alloc(3000).toString('base64') }, cookie)).statusCode, 400);
+  const fake = 'data:image/jpeg;base64,' + Buffer.alloc(3000, 1).toString('base64'); // wrong magic bytes
+  assert.equal((await postDetails({ action: 'pan_photo', photo: fake }, cookie)).statusCode, 400);
+
+  const ok = await postDetails({ action: 'pan_photo', photo: jpeg }, cookie);
+  assert.equal(ok.statusCode, 200);
+  assert.equal(ok._json.details.complete, true);
+  assert.match(uploads.at(-1), /^pan\/[0-9a-f-]+\/\d+\.jpg$/);
+
+  const page = await getMe(cookie);
+  assert.equal(page._json.payoutDetails.complete, true);
+  assert.equal(page._json.payoutDetails.hasPanPhoto, true);
+
+  const headers = await adminCookie();
+  const { rows: [p] } = await pool.query(`SELECT id, payout_details_checked_at FROM partners WHERE phone='9123456789'`);
+  assert.equal(p.payout_details_checked_at, null);
+  const link = fakeRes();
+  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'pan_photo_url' } }), link, sdeps());
+  assert.match(link._json.url, /e=300$/);
+  const chk = fakeRes();
+  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'details_checked' } }), chk, sdeps());
+  assert.equal(chk.statusCode, 200);
+
+  /* Changing the bank account clears the admin's "checked" mark. */
+  await postDetails({ ...goodDetails, account: '999988887777', account2: '999988887777' }, cookie);
+  const { rows: [after] } = await pool.query(`SELECT payout_details_checked_at FROM partners WHERE id=$1`, [p.id]);
+  assert.equal(after.payout_details_checked_at, null);
+});
+
+test('payouts: list for a month with TDS, refuse an unfinished month, mark paid once, partner sees it', async () => {
+  const headers = await adminCookie();
+  const NOW2 = new Date('2026-10-20T06:00:00Z');
+  const pdeps = { ...sdeps(), now: NOW2 };
+  const { rows: [p] } = await pool.query(`SELECT id, code FROM partners WHERE phone='9123456789'`);
+  const ins = (paidAt, plan = 'yearly') => pool.query(
+    `INSERT INTO india_orders (order_id, plan, amount, months, customer_name, customer_phone, ref_code, status, paid_at)
+     VALUES ($1,$2,14999,12,'Meera S','9000011111',$3,'paid',$4)`,
+    [`SLIN_${randomUUID().replace(/-/g, '').slice(0, 30)}`, plan, p.code, paidAt]);
+  await ins('2026-09-05T06:00:00Z');
+  await ins('2026-09-18T06:00:00Z', 'quarterly');
+
+  const setRate = fakeRes();
+  await adminPayouts(fakeReq({ method: 'PUT', headers, body: { tdsRate: 2 } }), setRate, pdeps);
+  assert.equal(setRate.statusCode, 200);
+
+  const list = fakeRes();
+  await adminPayouts(fakeReq({ method: 'GET', headers, query: {} }), list, pdeps);
+  assert.equal(list._json.month, '2026-09');
+  assert.equal(list._json.payable, true);
+  const row = list._json.rows.find(r => r.partnerId === p.id);
+  assert.equal(row.gross, 3200);
+  assert.equal(row.tds, 64);
+  assert.equal(row.net, 3136);
+  assert.equal(row.bank.account, '999988887777'); // admin sees full details to pay
+
+  const early = fakeRes();
+  await adminPayouts(fakeReq({ method: 'POST', headers, body: { partnerId: p.id, month: '2026-10', utr: 'UTR123456', paidOn: '2026-10-20' } }), early, pdeps);
+  assert.equal(early.statusCode, 400);
+
+  const pay = fakeRes();
+  await adminPayouts(fakeReq({ method: 'POST', headers, body: { partnerId: p.id, month: '2026-09', utr: 'axis123456789', paidOn: '2026-10-10' } }), pay, pdeps);
+  assert.equal(pay.statusCode, 200, JSON.stringify(pay._json));
+  assert.equal(pay._json.payout.net, 3136);
+  assert.equal(pay._json.payout.utr, 'AXIS123456789');
+
+  const again = fakeRes();
+  await adminPayouts(fakeReq({ method: 'POST', headers, body: { partnerId: p.id, month: '2026-09', utr: 'AXIS999999', paidOn: '2026-10-10' } }), again, pdeps);
+  assert.equal(again.statusCode, 409);
+
+  const page = await getMe(await priyaCookie());
+  const hist = page._json.payouts.find(x => x.month === '2026-09');
+  assert.equal(hist.net, 3136);
+  assert.equal(hist.utr, 'AXIS123456789');
+  assert.equal(page._json.tdsRate, 2);
+});
+
+test('payouts: held when bank details or PAN photo are missing', async () => {
+  const headers = await adminCookie();
+  const fresh = await post(apply, { ...validApp, name: 'Neha Joshi', phone: '9822334455', email: 'neha@example.com' });
+  assert.equal(fresh.statusCode, 200);
+  const { rows: [n] } = await pool.query(`SELECT id, code FROM partners WHERE phone='9822334455'`);
+  await pool.query(
+    `INSERT INTO india_orders (order_id, plan, amount, months, customer_name, customer_phone, ref_code, status, paid_at)
+     VALUES ($1,'yearly',14999,12,'Om K','9000022222',$2,'paid','2026-09-09T06:00:00Z')`,
+    [`SLIN_${randomUUID().replace(/-/g, '').slice(0, 30)}`, n.code]);
+  const pay = fakeRes();
+  await adminPayouts(fakeReq({ method: 'POST', headers, body: { partnerId: n.id, month: '2026-09', utr: 'UTR7654321', paidOn: '2026-10-10' } }), pay, { ...sdeps(), now: new Date('2026-10-20T06:00:00Z') });
+  assert.equal(pay.statusCode, 400);
+  assert.match(pay._json.error, /missing/);
+});

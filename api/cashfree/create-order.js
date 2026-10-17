@@ -1,6 +1,10 @@
 /**
  * POST /api/cashfree/create-order
- * body: { plan: 'quarterly'|'yearly', name, email, phone, leadId?, campaign?, ref? }
+ * body: { plan: 'quarterly'|'yearly', name, email, phone, leadId?, campaign?, ref?, refTyped? }
+ *
+ * ref = partner code (from their ?ref= link, or typed in "Have a partner code?").
+ * Only an active partner's code is kept, and never the buyer's own code
+ * (no commission on self-purchase). A wrong TYPED code is reported back.
  *
  * India checkout, step 1. Validates the buyer's details, saves an
  * india_orders row (status 'created'), creates the matching Cashfree
@@ -28,7 +32,7 @@ function siteOrigin(req) {
 export default async function handler(req, res, deps = {}) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { plan, name, email, phone, leadId, campaign, ref } = req.body || {};
+  const { plan, name, email, phone, leadId, campaign, ref, refTyped } = req.body || {};
   const planCfg = INDIA_PLANS[plan];
   if (!planCfg) return res.status(400).json({ error: 'Please choose a plan.' });
 
@@ -48,6 +52,23 @@ export default async function handler(req, res, deps = {}) {
   }
 
   const supabase = (deps.getSupabase || getSupabase)();
+
+  let refCode = null;
+  const wanted = typeof ref === 'string' ? ref.trim().toUpperCase() : '';
+  if (/^[A-Z0-9_-]{2,40}$/.test(wanted)) {
+    const { data: partner } = await supabase.from('partners').select('code, phone, status').eq('code', wanted).maybeSingle();
+    if (partner && partner.status === 'approved' && partner.phone !== cleanPhone) refCode = partner.code;
+    else if (refTyped) {
+      return res.status(400).json({
+        error: partner && partner.phone === cleanPhone
+          ? 'You can’t use your own partner code for your own purchase. Please remove it to continue.'
+          : 'We couldn’t find that partner code. Please check it, or leave it empty.',
+      });
+    }
+  } else if (refTyped && wanted) {
+    return res.status(400).json({ error: 'We couldn’t find that partner code. Please check it, or leave it empty.' });
+  }
+
   const orderId = newOrderId();
   const origin = siteOrigin(req);
 
@@ -61,7 +82,7 @@ export default async function handler(req, res, deps = {}) {
     customer_phone: cleanPhone,
     lead_id: clip(leadId, 100),
     campaign_code: clip(campaign, 100),
-    ref_code: clip(ref, 40),
+    ref_code: refCode,
   });
   if (insErr) {
     console.error('create-order: insert failed', insErr);
