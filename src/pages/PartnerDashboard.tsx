@@ -2,7 +2,7 @@
  * /partner - a logged-in sales partner's dashboard (login: /partner/login).
  * Earnings (this month, bonus progress, next payout, sales with date filters),
  * Get paid (bank details, UPI, PAN + PAN photo, payout history) and a Share kit.
- * No Aadhaar is ever asked for.
+ * KYC: PAN + PAN photo, masked Aadhaar front/back + last 4 digits (never the full number).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -13,7 +13,7 @@ import Confetti from '../components/Confetti';
 
 interface Sale { order_id: string; paid_at: string; plan: string; amount: number; customer: string; commission: number; state: 'payable' | 'in_refund_window' | 'refunded'; clears_at: string; payout_on: string }
 interface Month { month: string; sales: number; refunded: number; commission: number; bonus: number; total: number; payable: number; pending: number }
-interface Details { complete: boolean; holder: string | null; account: string | null; ifsc: string | null; bankName: string | null; branch: string | null; upi: string | null; pan: string | null; hasPanPhoto: boolean; updatedAt: string | null }
+interface Details { complete: boolean; holder: string | null; account: string | null; ifsc: string | null; bankName: string | null; branch: string | null; upi: string | null; pan: string | null; hasPanPhoto: boolean; aadhaar: string | null; hasAadhaarFront: boolean; hasAadhaarBack: boolean; updatedAt: string | null }
 interface Payout { month: string; sales: number; commission: number; bonus: number; gross: number; tds_rate: number; tds: number; net: number; utr: string; paid_on: string }
 interface Data {
   name: string; phone: string; email: string; mustChangePin: boolean; code: string; status: string;
@@ -119,14 +119,61 @@ async function toJpegDataUrl(file: File): Promise<string> {
   }
 }
 
+type DocKind = 'pan' | 'aadhaar_front' | 'aadhaar_back';
+
+/* One KYC photo: shows status/preview and uploads a compressed JPEG. */
+function DocUpload({ kind, label, hint, has, onSaved, onError }: {
+  kind: DocKind; label: string; hint: string; has: boolean; onSaved: (d: Details) => void; onError: (m: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState('');
+  const ref = useRef<HTMLInputElement>(null);
+  const upload = async (file?: File) => {
+    if (!file) return;
+    onError('');
+    setBusy(true);
+    try {
+      const dataUrl = await toJpegDataUrl(file);
+      setPreview(dataUrl);
+      const r = await fetch('/api/partners/payout-details', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'photo', kind, photo: dataUrl }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Could not upload. Please try again.');
+      onSaved(d.details);
+    } catch (x) {
+      onError(x instanceof Error && x.message ? x.message : 'Could not read that photo. Please try another one.');
+      setPreview('');
+    } finally {
+      setBusy(false);
+      if (ref.current) ref.current.value = '';
+    }
+  };
+  return (
+    <div className="rounded-2xl p-3.5 flex items-center gap-3" style={{ background: 'var(--dim)' }}>
+      {preview ? <img src={preview} alt={`${label} preview`} className="w-20 h-[52px] object-cover rounded-lg flex-shrink-0" style={{ border: '1px solid var(--border)' }} /> : (
+        <div className="w-20 h-[52px] rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0"
+          style={{ background: has ? 'rgba(34,197,94,.1)' : '#fff', color: has ? '#16a34a' : 'var(--soft)', border: '1px dashed var(--border)' }}>
+          {has ? <><Check size={13} className="mr-0.5" /> Added</> : 'No photo'}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="font-bold text-[14px]">{label}</div>
+        <div className="text-[11.5px]" style={{ color: 'var(--soft)' }}>{hint}</div>
+      </div>
+      <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => upload(e.target.files?.[0])} />
+      <button type="button" onClick={() => ref.current?.click()} disabled={busy}
+        className="text-[12.5px] font-bold px-3.5 py-2 rounded-full inline-flex items-center gap-1.5 bg-white flex-shrink-0" style={{ border: '1px solid var(--border)' }}>
+        <Upload size={13} /> {busy ? 'Uploading…' : has ? 'Replace' : 'Upload'}
+      </button>
+    </div>
+  );
+}
+
 function PayoutDetailsForm({ details, onSaved }: { details: Details; onSaved: (d: Details) => void }) {
   const [editing, setEditing] = useState(!details.holder);
-  const [f, setF] = useState({ holder: details.holder || '', account: '', account2: '', ifsc: details.ifsc || '', bankName: details.bankName || '', branch: details.branch || '', upi: details.upi || '', pan: '' });
+  const [f, setF] = useState({ holder: details.holder || '', account: '', account2: '', ifsc: details.ifsc || '', bankName: details.bankName || '', branch: details.branch || '', upi: details.upi || '', pan: '', aadhaarLast4: '', aadhaarConsent: false });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const [preview, setPreview] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [docErr, setDocErr] = useState('');
 
   /* IFSC → bank and branch (free public lookup; manual entry still works if it fails). */
   useEffect(() => {
@@ -139,43 +186,25 @@ function PayoutDetailsForm({ details, onSaved }: { details: Details; onSaved: (d
     return () => { live = false; };
   }, [f.ifsc]);
 
-  const post = async (body: Record<string, unknown>) => {
-    const r = await fetch('/api/partners/payout-details', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || 'Could not save. Please try again.');
-    return d.details as Details;
-  };
-
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr('');
     setBusy(true);
-    try { onSaved(await post({ action: 'save', ...f })); setEditing(false); }
-    catch (x) { setErr(x instanceof Error ? x.message : 'Could not save.'); }
-    finally { setBusy(false); }
-  };
-
-  const upload = async (file?: File) => {
-    if (!file) return;
-    setErr('');
-    setPhotoBusy(true);
     try {
-      const dataUrl = await toJpegDataUrl(file);
-      setPreview(dataUrl);
-      onSaved(await post({ action: 'pan_photo', photo: dataUrl }));
-    } catch (x) {
-      setErr(x instanceof Error && x.message ? x.message : 'Could not read that photo. Please try another one.');
-      setPreview('');
-    } finally {
-      setPhotoBusy(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
+      const r = await fetch('/api/partners/payout-details', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save', ...f }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Could not save. Please try again.');
+      onSaved(d.details);
+      setEditing(false);
+    } catch (x) { setErr(x instanceof Error ? x.message : 'Could not save.'); }
+    finally { setBusy(false); }
   };
 
   const input = 'w-full rounded-xl px-4 py-3 text-[15px] outline-none bg-white';
   const st = { border: '1.5px solid var(--border)', color: 'var(--ink)' };
   const lab = 'block text-[11px] font-black uppercase tracking-wide mb-1.5';
-  const set = (k: keyof typeof f, fmt?: (v: string) => string) => (e: React.ChangeEvent<HTMLInputElement>) => setF(x => ({ ...x, [k]: fmt ? fmt(e.target.value) : e.target.value }));
+  const set = (k: 'holder' | 'account' | 'account2' | 'ifsc' | 'upi' | 'pan' | 'aadhaarLast4', fmt?: (v: string) => string) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => setF(x => ({ ...x, [k]: fmt ? fmt(e.target.value) : e.target.value }));
 
   return (
     <div className="space-y-4">
@@ -184,7 +213,7 @@ function PayoutDetailsForm({ details, onSaved }: { details: Details; onSaved: (d
           <div className="flex items-center gap-3">
             <span className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'var(--grad)' }}><Landmark size={20} color="#fff" /></span>
             <div>
-              <div className="font-black text-[17px]">Bank details</div>
+              <div className="font-black text-[17px]">Bank & KYC details</div>
               <div className="text-[12.5px]" style={{ color: 'var(--soft)' }}>Where we send your payout on the 10th</div>
             </div>
           </div>
@@ -196,6 +225,7 @@ function PayoutDetailsForm({ details, onSaved }: { details: Details; onSaved: (d
             {[
               ['Account holder', details.holder], ['Account number', details.account], ['IFSC', details.ifsc],
               ['Bank', [details.bankName, details.branch].filter(Boolean).join(' · ') || '-'], ['UPI ID', details.upi || 'Not added'], ['PAN', details.pan],
+              ['Aadhaar', details.aadhaar || '-'],
             ].map(([k, v]) => (
               <div key={k} className="rounded-2xl p-3.5" style={{ background: 'var(--dim)' }}>
                 <div className="text-[10.5px] font-black uppercase tracking-wide" style={{ color: 'var(--soft)' }}>{k}</div>
@@ -220,14 +250,24 @@ function PayoutDetailsForm({ details, onSaved }: { details: Details; onSaved: (d
                 <input className={input} style={st} value={f.upi} onChange={set('upi', v => v.trim())} placeholder="name@okaxis" autoComplete="off" /></label>
               <label><span className={lab} style={{ color: 'var(--soft)' }}>PAN</span>
                 <input className={`${input} uppercase tracking-wider`} style={st} value={f.pan} onChange={set('pan', v => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))} placeholder={details.pan ? `Saved ${details.pan}` : 'ABCDE1234F'} autoComplete="off" /></label>
+              <label className="sm:col-span-2"><span className={lab} style={{ color: 'var(--soft)' }}>Aadhaar: last 4 digits only</span>
+                <div className="flex items-center rounded-xl bg-white" style={st}>
+                  <span className="pl-4 pr-2 text-[15px] font-bold tracking-widest" style={{ color: 'var(--soft)' }}>XXXX XXXX</span>
+                  <input className="w-24 py-3 pr-4 text-[15px] font-bold tracking-widest outline-none bg-transparent" value={f.aadhaarLast4}
+                    onChange={set('aadhaarLast4', v => v.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" autoComplete="off" placeholder="1234" />
+                </div></label>
             </div>
+            <label className="flex gap-2.5 items-start mt-4 text-[12.5px] leading-snug" style={{ color: 'var(--soft)' }}>
+              <input type="checkbox" checked={f.aadhaarConsent} onChange={e => setF(x => ({ ...x, aadhaarConsent: e.target.checked }))} className="mt-0.5 w-4 h-4 accent-[#8C79E0] flex-shrink-0" />
+              <span>I consent to Unischooly (Studdy Lab) collecting my masked Aadhaar card copy and the last 4 digits of my Aadhaar number, only for KYC and my partner agreement. It will not be shared or used for anything else.</span>
+            </label>
             <p className="text-[12px] mt-3" style={{ color: 'var(--soft)' }}>
-              PAN is required by law for TDS (without it, TDS is 20%). We never ask for Aadhaar.
-              {details.holder && ' To change anything, re-enter your account number and PAN.'}
+              PAN is required by law for TDS (without it, TDS is 20%). We never ask for your full Aadhaar number.
+              {details.holder && ' To change anything, re-enter your account number, PAN and Aadhaar digits.'}
             </p>
             {err && <div role="alert" className="rounded-xl p-3 mt-3 text-[13px]" style={{ background: 'rgba(239,68,68,.06)', color: '#dc2626' }}>{err}</div>}
             <div className="flex gap-2 mt-5">
-              <button className="gbtn px-6 py-3 text-[14.5px]" disabled={busy}>{busy ? 'Saving…' : 'Save bank details'}</button>
+              <button className="gbtn px-6 py-3 text-[14.5px]" disabled={busy}>{busy ? 'Saving…' : 'Save details'}</button>
               {details.holder && <button type="button" onClick={() => setEditing(false)} className="px-4 text-[13.5px] font-bold" style={{ color: 'var(--soft)' }}>Cancel</button>}
             </div>
           </form>
@@ -238,25 +278,22 @@ function PayoutDetailsForm({ details, onSaved }: { details: Details; onSaved: (d
         <div className="flex items-center gap-3 mb-4">
           <span className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(140,121,224,.12)' }}><ShieldCheck size={20} style={{ color: 'var(--g3)' }} /></span>
           <div>
-            <div className="font-black text-[17px]">PAN card photo</div>
-            <div className="text-[12.5px]" style={{ color: 'var(--soft)' }}>So we can match your PAN name with your bank account. Kept private.</div>
+            <div className="font-black text-[17px]">KYC documents</div>
+            <div className="text-[12.5px]" style={{ color: 'var(--soft)' }}>Clear photos, kept private. Only our accounts team can view them.</div>
           </div>
         </div>
-        <div className="flex items-center gap-4 flex-wrap">
-          {preview ? <img src={preview} alt="PAN card preview" className="w-28 h-[72px] object-cover rounded-xl" style={{ border: '1px solid var(--border)' }} /> : (
-            <div className="w-28 h-[72px] rounded-xl flex items-center justify-center text-[12px] font-bold"
-              style={{ background: details.hasPanPhoto ? 'rgba(34,197,94,.1)' : 'var(--dim)', color: details.hasPanPhoto ? '#16a34a' : 'var(--soft)', border: '1px dashed var(--border)' }}>
-              {details.hasPanPhoto ? <><Check size={14} className="mr-1" /> Uploaded</> : 'No photo'}
-            </div>
-          )}
-          <div>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => upload(e.target.files?.[0])} />
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={photoBusy}
-              className="gost text-[13.5px] px-5 py-2.5 inline-flex items-center gap-2"><Upload size={15} /> {photoBusy ? 'Uploading…' : details.hasPanPhoto ? 'Replace photo' : 'Upload photo'}</button>
-            <div className="text-[11.5px] mt-1.5" style={{ color: 'var(--soft)' }}>Front side, clear and readable. JPG or PNG.</div>
-          </div>
+        <div className="space-y-2.5">
+          <DocUpload kind="pan" label="PAN card" hint="Front side, name and PAN clearly readable" has={details.hasPanPhoto} onSaved={onSaved} onError={setDocErr} />
+          <DocUpload kind="aadhaar_front" label="Aadhaar front (masked)" hint="First 8 digits hidden. Photo, name and last 4 digits readable" has={details.hasAadhaarFront} onSaved={onSaved} onError={setDocErr} />
+          <DocUpload kind="aadhaar_back" label="Aadhaar back" hint="Address side" has={details.hasAadhaarBack} onSaved={onSaved} onError={setDocErr} />
         </div>
-        {!editing && err && <div role="alert" className="rounded-xl p-3 mt-3 text-[13px]" style={{ background: 'rgba(239,68,68,.06)', color: '#dc2626' }}>{err}</div>}
+        <p className="text-[12px] mt-3 leading-relaxed" style={{ color: 'var(--soft)' }}>
+          <b style={{ color: 'var(--ink)' }}>How to get a masked Aadhaar:</b> go to{' '}
+          <a href="https://myaadhaar.uidai.gov.in/" target="_blank" rel="noopener noreferrer" className="underline">myaadhaar.uidai.gov.in</a>,
+          {' '}log in with your Aadhaar and OTP, choose “Download Aadhaar”, tick “masked Aadhaar”, and take a screenshot of the front and back.
+          Or cover the first 8 digits of your card before taking the photo.
+        </p>
+        {docErr && <div role="alert" className="rounded-xl p-3 mt-3 text-[13px]" style={{ background: 'rgba(239,68,68,.06)', color: '#dc2626' }}>{docErr}</div>}
       </div>
     </div>
   );
@@ -440,8 +477,8 @@ export default function PartnerDashboard() {
             style={{ background: 'linear-gradient(120deg,#fff7ed,#fff1f2)', border: '1px solid rgba(245,158,11,.35)' }}>
             <span className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(245,158,11,.15)' }}><AlertTriangle size={20} style={{ color: '#d97706' }} /></span>
             <span className="flex-1">
-              <span className="block font-black text-[15px]" style={{ color: '#92400e' }}>Add your bank details and PAN to get paid</span>
-              <span className="block text-[13px]" style={{ color: '#9a6b2f' }}>Without them, your payout is held until the next 10th. Takes 2 minutes.</span>
+              <span className="block font-black text-[15px]" style={{ color: '#92400e' }}>Add your bank and KYC details to get paid</span>
+              <span className="block text-[13px]" style={{ color: '#9a6b2f' }}>Bank account, PAN and Aadhaar (masked). Without them, your payout is held until the next 10th.</span>
             </span>
             <span className="hidden sm:block"><span className="gbtn text-[13px] px-4 py-2 inline-flex">Add now</span></span>
           </button>

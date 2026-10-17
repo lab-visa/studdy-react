@@ -1,7 +1,9 @@
 /**
- * Partner payout details (bank, UPI, PAN + PAN photo) and payout maths.
- * No Aadhaar, ever. PAN photos live in the PRIVATE 'partner-docs' storage
- * bucket and are only shown to the admin through short-lived signed links.
+ * Partner payout + KYC details (bank, UPI, PAN + PAN photo, masked Aadhaar
+ * front/back + last 4 digits) and payout maths. The full 12-digit Aadhaar
+ * number is never stored. Document photos live in the PRIVATE
+ * 'partner-docs' storage bucket and are only shown to the admin through
+ * short-lived signed links.
  */
 import { istMonth, REFUND_WINDOW_DAYS } from './partners.js';
 
@@ -13,6 +15,10 @@ export const DOCS_BUCKET = 'partner-docs';
 export const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 export const DEFAULT_TDS_RATE = 10;
 
+/** Document photos a partner uploads → the column that holds each one's storage path. */
+export const DOC_KINDS = { pan: 'pan_photo_path', aadhaar_front: 'aadhaar_front_path', aadhaar_back: 'aadhaar_back_path' };
+export const DOC_LABELS = { pan: 'PAN card', aadhaar_front: 'Aadhaar front', aadhaar_back: 'Aadhaar back' };
+
 const clip = (v, n) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, n) : '');
 
 /** Validates the partner's form. Returns { error } or { fields } ready to save. */
@@ -23,6 +29,7 @@ export function validatePayoutDetails(b = {}) {
   const ifsc = String(b.ifsc ?? '').trim().toUpperCase();
   const upi = clip(b.upi, 100).replace(/\s/g, '');
   const pan = String(b.pan ?? '').trim().toUpperCase();
+  const aadhaarLast4 = String(b.aadhaarLast4 ?? '').replace(/\D/g, '');
 
   if (holder.length < 3) return { error: 'Please enter the account holder name exactly as in your bank.' };
   if (!ACCOUNT_RE.test(account)) return { error: 'Account number should be 9 to 18 digits.' };
@@ -30,12 +37,14 @@ export function validatePayoutDetails(b = {}) {
   if (!IFSC_RE.test(ifsc)) return { error: 'IFSC looks wrong. It has 11 characters, like SBIN0001234.' };
   if (upi && !UPI_RE.test(upi)) return { error: 'UPI ID looks wrong. It looks like name@bank.' };
   if (!PAN_RE.test(pan)) return { error: 'PAN looks wrong. It has 10 characters, like ABCDE1234F.' };
+  if (!/^\d{4}$/.test(aadhaarLast4)) return { error: 'Enter only the LAST 4 digits of your Aadhaar number.' };
+  if (b.aadhaarConsent !== true) return { error: 'Please tick the Aadhaar consent box to continue.' };
 
   return {
     fields: {
       bank_holder: holder, bank_account: account, bank_ifsc: ifsc,
       bank_name: clip(b.bankName, 100) || null, bank_branch: clip(b.branch, 120) || null,
-      payout_upi: upi || null, pan,
+      payout_upi: upi || null, pan, aadhaar_last4: aadhaarLast4,
     },
   };
 }
@@ -43,8 +52,11 @@ export function validatePayoutDetails(b = {}) {
 export const maskAccount = (a) => (a ? `••••${String(a).slice(-4)}` : null);
 export const maskPan = (p) => (p ? `${p.slice(0, 2)}•••••${p.slice(7)}` : null);
 
-/** Ready to be paid = bank account + IFSC + PAN + PAN photo. */
-export const detailsComplete = (p) => Boolean(p.bank_account && p.bank_ifsc && p.bank_holder && p.pan && p.pan_photo_path);
+/** Ready to be paid = bank account + IFSC + PAN + PAN photo + Aadhaar (last 4, consent, front + back). */
+export const detailsComplete = (p) => Boolean(
+  p.bank_account && p.bank_ifsc && p.bank_holder && p.pan && p.pan_photo_path
+  && p.aadhaar_last4 && p.aadhaar_consent_at && p.aadhaar_front_path && p.aadhaar_back_path,
+);
 
 /** What the partner sees about their own details (masked). */
 export function publicDetails(p) {
@@ -58,6 +70,9 @@ export function publicDetails(p) {
     upi: p.payout_upi || null,
     pan: maskPan(p.pan),
     hasPanPhoto: Boolean(p.pan_photo_path),
+    aadhaar: p.aadhaar_last4 ? `XXXX XXXX ${p.aadhaar_last4}` : null,
+    hasAadhaarFront: Boolean(p.aadhaar_front_path),
+    hasAadhaarBack: Boolean(p.aadhaar_back_path),
     updatedAt: p.payout_details_updated_at || null,
   };
 }

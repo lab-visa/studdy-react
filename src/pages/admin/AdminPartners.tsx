@@ -16,7 +16,8 @@ interface Partner {
   experience: string | null; why_join: string | null; status: string; code: string | null;
   has_pin: boolean; pin_must_change: boolean; locked: boolean; last_login_at: string | null; sales_ever: number;
   bank_holder: string | null; bank_account: string | null; bank_ifsc: string | null; bank_name: string | null; bank_branch: string | null;
-  has_pan_photo: boolean; details_complete: boolean; details_updated_at: string | null; details_checked_at: string | null;
+  has_pan_photo: boolean; aadhaar_last4: string | null; has_aadhaar_front: boolean; has_aadhaar_back: boolean; aadhaar_consent_at: string | null;
+  details_complete: boolean; details_updated_at: string | null; details_checked_at: string | null;
   pan: string | null; payout_upi: string | null; notes: string | null; applied_at: string; approved_at: string | null;
   totals: { sales: number; earned: number; payable: number; pending: number; bonus: number };
 }
@@ -165,7 +166,11 @@ export default function AdminPartners() {
                       </div>
                     ) : <div style={{ color: '#b45309' }}><b>No bank details yet.</b> Payouts are held until they add them.</div>}
                     <div className="mt-1" style={{ color: 'var(--soft)' }}>
-                      PAN photo: {p.has_pan_photo ? 'uploaded' : <b style={{ color: '#b45309' }}>missing</b>}
+                      Aadhaar {p.aadhaar_last4 ? `XXXX XXXX ${p.aadhaar_last4}` : <b style={{ color: '#b45309' }}>not added</b>}
+                      {p.aadhaar_consent_at && ` (consent ${new Date(p.aadhaar_consent_at).toLocaleDateString('en-IN')})`}
+                      {' · '}photos: PAN {p.has_pan_photo ? '✓' : <b style={{ color: '#b45309' }}>missing</b>}
+                      , Aadhaar front {p.has_aadhaar_front ? '✓' : <b style={{ color: '#b45309' }}>missing</b>}
+                      , back {p.has_aadhaar_back ? '✓' : <b style={{ color: '#b45309' }}>missing</b>}
                       {p.details_updated_at && <> · details {p.details_checked_at ? <b style={{ color: '#16a34a' }}>checked ✓</b> : <b style={{ color: '#b45309' }}>changed, not checked yet</b>}</>}
                     </div>
                   </div>
@@ -174,16 +179,17 @@ export default function AdminPartners() {
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => copy(p.id + 'l', link)}>{copied === p.id + 'l' ? 'Copied ✓' : `Copy sales link (${p.code})`}</button>
                     <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={() => resetPin(p)}>Reset PIN</button>
-{p.has_pan_photo && (
-                      <button className={btn} style={{ border: '1px solid var(--border)' }} onClick={async () => {
+{([['pan', 'PAN', p.has_pan_photo], ['aadhaar_front', 'Aadhaar front', p.has_aadhaar_front], ['aadhaar_back', 'Aadhaar back', p.has_aadhaar_back]] as const)
+                      .filter(([, , has]) => has).map(([kind, label]) => (
+                      <button key={kind} className={btn} style={{ border: '1px solid var(--border)' }} onClick={async () => {
                         const w = window.open('', '_blank');
-                        const d = await act(p.id, { action: 'pan_photo_url' });
+                        const d = await act(p.id, { action: 'doc_url', kind });
                         if (d?.url && w) w.location.href = d.url; else w?.close();
-                      }}>View PAN photo</button>
-                    )}
+                      }}>View {label}</button>
+                    ))}
                     {p.details_complete && !p.details_checked_at && (
                       <button className={btn} style={{ background: '#16a34a', color: '#fff' }} onClick={() => {
-                        if (window.confirm(`Have you checked that the name on ${p.name}'s PAN photo matches the bank account holder "${p.bank_holder}"?`)) act(p.id, { action: 'details_checked' });
+                        if (window.confirm(`Have you checked ${p.name}'s PAN and Aadhaar photos: the name matches the bank account holder "${p.bank_holder}"?`)) act(p.id, { action: 'details_checked' });
                       }}>Mark details checked</button>
                     )}
                     {p.sales_ever === 0 && (

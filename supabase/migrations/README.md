@@ -28,7 +28,8 @@ This directory was not previously committed to GitHub (confirmed absent in CRM-0
 | 0021 | `india_orders.sql` | **APPLIED — run by Vish in production Oct 14, 2026** | Creates the `india_orders` table (one row per Cashfree order; RLS on, server-only). Partner earnings read from it. Additive and idempotent. |
 | 0022 | `partners.sql` | **APPLIED — run by Vish in production Oct 14, 2026 (partner sign-ups working)** | Creates the `partners` table (referral `code`, private `dashboard_token`, PAN/UPI). RLS on, server-only. Additive and idempotent. |
 | 0023 | `partner_login.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Partner login: PIN hash/salt, temporary-PIN flag, lockout columns on `partners`; new `partner_sessions` table (token hashes only). RLS on. Additive and idempotent. |
-| 0024 | `partner_payouts.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Partner bank details + PAN photo path on `partners`, `partner_payouts` (paid months with TDS + UTR), `settings.partner_tds_rate` (10), private storage bucket `partner-docs`. No Aadhaar. Additive and idempotent. |
+| 0024 | `partner_payouts.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Partner bank details + PAN photo path on `partners`, `partner_payouts` (paid months with TDS + UTR), `settings.partner_tds_rate` (10), private storage bucket `partner-docs`. Additive and idempotent. |
+| 0025 | `partner_aadhaar_kyc.sql` | **APPLIED — production Oct 17, 2026 (via Supabase connector)** | Partner KYC per CA: `aadhaar_last4` (DB-enforced 4 digits only, never the full number), masked Aadhaar front/back photo paths (private bucket), `aadhaar_consent_at`. Additive and idempotent. |
 
 ## Production execution order — migrations 0012–0019 are all applied
 

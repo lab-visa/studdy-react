@@ -318,7 +318,7 @@ const fakeStorage = { from: () => ({
 }) };
 const sdeps = () => ({ ...deps, storage: fakeStorage });
 const jpeg = 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from('ffd8ffe0', 'hex'), Buffer.alloc(3000, 7)]).toString('base64');
-const goodDetails = { action: 'save', holder: 'Priya Nair', account: '123456789012', account2: '123456789012', ifsc: 'sbin0001234', bankName: 'State Bank of India', upi: 'priya@okaxis', pan: 'abcde1234f' };
+const goodDetails = { action: 'save', holder: 'Priya Nair', account: '123456789012', account2: '123456789012', ifsc: 'sbin0001234', bankName: 'State Bank of India', upi: 'priya@okaxis', pan: 'abcde1234f', aadhaarLast4: '4321', aadhaarConsent: true };
 
 async function priyaCookie() {
   return cookieFrom(await post(auth, { action: 'login', phone: '9123456789', pin: '582039' }));
@@ -329,11 +329,12 @@ async function postDetails(body, cookie) {
   return r;
 }
 
-test('payout details: validated, saved, and only shown back masked; no Aadhaar field exists', async () => {
+test('payout details: validated, saved, only shown back masked; only the last 4 Aadhaar digits are ever stored', async () => {
   const cookie = await priyaCookie();
   for (const bad of [
     { ...goodDetails, account2: '123456789013' }, { ...goodDetails, ifsc: 'SBIN1234' },
     { ...goodDetails, pan: '1234' }, { ...goodDetails, upi: 'nope' }, { ...goodDetails, holder: 'P' },
+    { ...goodDetails, aadhaarLast4: '1234 5678 9012' }, { ...goodDetails, aadhaarLast4: '12' }, { ...goodDetails, aadhaarConsent: false },
   ]) assert.equal((await postDetails(bad, cookie)).statusCode, 400, JSON.stringify(bad));
 
   const ok = await postDetails(goodDetails, cookie);
@@ -341,36 +342,45 @@ test('payout details: validated, saved, and only shown back masked; no Aadhaar f
   assert.equal(ok._json.details.account, '••••9012');
   assert.equal(ok._json.details.pan, 'AB•••••34F');
   assert.equal(ok._json.details.ifsc, 'SBIN0001234');
-  assert.equal(ok._json.details.complete, false); // PAN photo still missing
+  assert.equal(ok._json.details.aadhaar, 'XXXX XXXX 4321');
+  assert.equal(ok._json.details.complete, false); // photos still missing
   assert.equal(JSON.stringify(ok._json).includes('123456789012'), false);
   assert.equal(JSON.stringify(ok._json).includes('ABCDE1234F'), false);
 
-  const cols = (await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name='partners'`)).rows.map(r => r.column_name);
-  assert.equal(cols.some(c => c.includes('aadhaar') || c.includes('aadhar')), false);
+  const { rows: [row] } = await pool.query(`SELECT aadhaar_last4, aadhaar_consent_at FROM partners WHERE phone='9123456789'`);
+  assert.equal(row.aadhaar_last4, '4321');
+  assert.ok(row.aadhaar_consent_at);
+  await assert.rejects(pool.query(`UPDATE partners SET aadhaar_last4='123456789012' WHERE phone='9123456789'`)); // DB refuses a full number
 });
 
-test('PAN photo: only real images accepted; stored privately; admin gets a 5-minute link', async () => {
+test('KYC photos (PAN, Aadhaar front/back): only real images; private; complete only when all three are in; admin gets 5-minute links', async () => {
   const cookie = await priyaCookie();
-  assert.equal((await postDetails({ action: 'pan_photo', photo: 'data:image/jpeg;base64,AAAA' }, cookie)).statusCode, 400);
-  assert.equal((await postDetails({ action: 'pan_photo', photo: 'data:application/pdf;base64,' + Buffer.alloc(3000).toString('base64') }, cookie)).statusCode, 400);
+  assert.equal((await postDetails({ action: 'photo', kind: 'pan', photo: 'data:image/jpeg;base64,AAAA' }, cookie)).statusCode, 400);
+  assert.equal((await postDetails({ action: 'photo', kind: 'pan', photo: 'data:application/pdf;base64,' + Buffer.alloc(3000).toString('base64') }, cookie)).statusCode, 400);
   const fake = 'data:image/jpeg;base64,' + Buffer.alloc(3000, 1).toString('base64'); // wrong magic bytes
-  assert.equal((await postDetails({ action: 'pan_photo', photo: fake }, cookie)).statusCode, 400);
+  assert.equal((await postDetails({ action: 'photo', kind: 'pan', photo: fake }, cookie)).statusCode, 400);
+  assert.equal((await postDetails({ action: 'photo', kind: 'voter_id', photo: jpeg }, cookie)).statusCode, 400);
 
-  const ok = await postDetails({ action: 'pan_photo', photo: jpeg }, cookie);
+  const ok = await postDetails({ action: 'photo', kind: 'pan', photo: jpeg }, cookie);
   assert.equal(ok.statusCode, 200);
-  assert.equal(ok._json.details.complete, true);
+  assert.equal(ok._json.details.complete, false); // Aadhaar photos still missing
   assert.match(uploads.at(-1), /^pan\/[0-9a-f-]+\/\d+\.jpg$/);
+  await postDetails({ action: 'photo', kind: 'aadhaar_front', photo: jpeg }, cookie);
+  const done = await postDetails({ action: 'photo', kind: 'aadhaar_back', photo: jpeg }, cookie);
+  assert.equal(done._json.details.complete, true);
+  assert.match(uploads.at(-1), /^aadhaar_back\//);
 
   const page = await getMe(cookie);
   assert.equal(page._json.payoutDetails.complete, true);
   assert.equal(page._json.payoutDetails.hasPanPhoto, true);
+  assert.equal(page._json.payoutDetails.hasAadhaarFront, true);
 
   const headers = await adminCookie();
   const { rows: [p] } = await pool.query(`SELECT id, payout_details_checked_at FROM partners WHERE phone='9123456789'`);
   assert.equal(p.payout_details_checked_at, null);
   const link = fakeRes();
-  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'pan_photo_url' } }), link, sdeps());
-  assert.match(link._json.url, /e=300$/);
+  await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'doc_url', kind: 'aadhaar_front' } }), link, sdeps());
+  assert.match(link._json.url, /aadhaar_front\/.*e=300$/);
   const chk = fakeRes();
   await adminPartners(fakeReq({ method: 'PATCH', headers, body: { id: p.id, action: 'details_checked' } }), chk, sdeps());
   assert.equal(chk.statusCode, 200);

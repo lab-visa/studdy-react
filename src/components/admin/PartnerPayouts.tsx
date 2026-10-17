@@ -115,10 +115,10 @@ export default function PartnerPayouts() {
                   {r.payout ? (
                     <span className="text-[12px] font-black px-2.5 py-1 rounded-full" style={{ background: 'rgba(22,163,74,.12)', color: '#16a34a' }}>Paid {r.payout.paid_on} · UTR {r.payout.utr}</span>
                   ) : !r.detailsComplete ? (
-                    <span className="text-[12px] font-black px-2.5 py-1 rounded-full" style={{ background: 'rgba(245,158,11,.12)', color: '#b45309' }}>Held: bank/PAN/photo missing</span>
+                    <span className="text-[12px] font-black px-2.5 py-1 rounded-full" style={{ background: 'rgba(245,158,11,.12)', color: '#b45309' }}>Held: bank or KYC details missing</span>
                   ) : (
                     <div className="flex flex-col items-end gap-1.5">
-                      {!r.detailsChecked && <span className="text-[11.5px] font-bold" style={{ color: '#b45309' }}>Check PAN photo first (Partners tab)</span>}
+                      {!r.detailsChecked && <span className="text-[11.5px] font-bold" style={{ color: '#b45309' }}>Check KYC photos first (Partners tab)</span>}
                       {paying === r.partnerId ? (
                         <div className="flex gap-1.5 flex-wrap justify-end">
                           <input value={utr} onChange={e => setUtr(e.target.value)} placeholder="Bank UTR" className="rounded-lg px-2.5 py-1.5 text-[12.5px] w-40" style={{ ...box, background: 'transparent', color: 'var(--ink)' }} />

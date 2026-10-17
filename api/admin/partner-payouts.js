@@ -84,7 +84,7 @@ export default async function handler(req, res, deps = {}) {
       const row = rows.find((r) => r.partnerId === partnerId);
       if (!row || row.gross <= 0) return res.status(400).json({ error: 'Nothing to pay this partner for that month.' });
       if (row.payout) return res.status(409).json({ error: 'Already marked paid for that month.' });
-      if (!row.detailsComplete) return res.status(400).json({ error: 'Bank details, PAN or PAN photo missing - hold this payout.' });
+      if (!row.detailsComplete) return res.status(400).json({ error: 'Bank or KYC details (PAN, Aadhaar, photos) missing - hold this payout.' });
 
       const { data, error } = await supabase.from('partner_payouts').insert({
         partner_id: partnerId, month, sales: row.sales, commission: row.commission, bonus: row.bonus,

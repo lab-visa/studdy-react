@@ -1,6 +1,6 @@
 -- ============================================================
 -- 0024_partner_payouts.sql — partner bank details, PAN photo, payouts, TDS rate
--- Safe to re-run. No Aadhaar is ever collected.
+-- Safe to re-run. (Aadhaar KYC fields are added in 0025.)
 -- ============================================================
 
 alter table partners add column if not exists bank_holder               text;
