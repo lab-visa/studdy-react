@@ -10,7 +10,9 @@ type EventName =
   | 'dashboard_opened'
   | 'whatsapp_support_click'
   | 'payment_form_thank_you'
-  | 'thank_you_whatsapp_click';
+  | 'thank_you_whatsapp_click'
+  | 'dashboard_open_studdy'
+  | 'dashboard_send_to_laptop';
 
 export function track(event: EventName, props?: Record<string, unknown>) {
   // Replace with GA4 / Meta Pixel calls when ready
